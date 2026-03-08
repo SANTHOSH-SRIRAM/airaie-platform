@@ -50,7 +50,7 @@ export default function Sidebar() {
         <SidebarSection title="WORKSPACE">
           <SidebarItem
             label="Active Boards"
-            path="/boards"
+            path={ROUTES.BOARDS}
             bullet
             bulletColor="bg-brand-secondary"
           />
@@ -72,12 +72,12 @@ export default function Sidebar() {
           <SidebarItem
             icon={<GitBranch size={17} />}
             label="Workflows"
-            path={ROUTES.WORKFLOWS}
+            path={ROUTES.WORKFLOW_STUDIO}
           />
           <SidebarItem
             icon={<Bot size={17} />}
             label="Agents"
-            path={ROUTES.AGENTS}
+            path={ROUTES.AGENT_STUDIO}
           />
         </SidebarSection>
 

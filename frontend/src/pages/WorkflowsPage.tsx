@@ -168,7 +168,7 @@ export default function WorkflowsPage() {
               {recentWorkflows.map((wf, i) => (
                 <div
                   key={wf.name}
-                  className={`flex items-start gap-3 py-3.5 ${
+                  className={`flex items-start gap-3 py-3.5 px-2 -mx-2 cursor-pointer hover:bg-surface-hover transition-colors ${
                     i < recentWorkflows.length - 1 ? 'border-b border-gray-100' : ''
                   }`}
                 >

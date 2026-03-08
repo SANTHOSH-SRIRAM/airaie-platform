@@ -7,30 +7,60 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Sidebar (White + Blue Theme)
         sidebar: {
           bg: '#ffffff',
           text: '#64748b',
-          'text-active': '#3b82f6',
-          hover: '#f1f5f9',
-          active: '#3b82f6',
+          'text-active': '#1e40af',
+          hover: '#f8fafc',
+          active: '#1e40af',
           border: '#e2e8f0',
           'section-header': '#94a3b8',
         },
-        // Main Content (Light Theme)
         surface: {
-          bg: '#f5f7fa',
+          bg: '#f8fafc',
           card: '#ffffff',
           border: '#e2e8f0',
+          hover: '#f8fafc',
         },
-        // Brand Colors
         brand: {
-          primary: '#0d9488',        // Teal/green (CTA buttons)
-          'primary-dark': '#0f766e',
-          secondary: '#3b82f6',      // Blue
-          'secondary-dark': '#2563eb',
+          primary: '#0f172a',
+          'primary-dark': '#1e293b',
+          secondary: '#1e40af',
+          'secondary-dark': '#1e293b',
         },
-        // Status Colors
+        gray: {
+          50: '#f8fafc',
+          100: '#e2e8f0',
+          200: '#cbd5e1',
+          300: '#94a3b8',
+          400: '#64748b',
+          500: '#334155',
+          600: '#1e293b',
+          700: '#0f172a',
+        },
+        slate: {
+          50: '#f8fafc',
+          100: '#e2e8f0',
+          200: '#cbd5e1',
+          300: '#94a3b8',
+          400: '#64748b',
+          500: '#334155',
+          600: '#1e293b',
+          700: '#0f172a',
+          800: '#0f172a',
+          900: '#0f172a',
+        },
+        blue: {
+          50: '#f8fafc',
+          100: '#e2e8f0',
+          200: '#cbd5e1',
+          300: '#94a3b8',
+          400: '#64748b',
+          500: '#1e40af',
+          600: '#1e40af',
+          700: '#1e293b',
+          800: '#0f172a',
+        },
         status: {
           success: '#22c55e',
           'success-light': '#dcfce7',
@@ -38,15 +68,14 @@ export default {
           'warning-light': '#fef3c7',
           danger: '#ef4444',
           'danger-light': '#fee2e2',
-          info: '#3b82f6',
-          'info-light': '#dbeafe',
+          info: '#1e40af',
+          'info-light': '#e2e8f0',
         },
-        // Text Colors
         content: {
-          primary: '#1a202c',
-          secondary: '#4a5568',
-          tertiary: '#718096',
-          muted: '#a0aec0',
+          primary: '#0f172a',
+          secondary: '#1e293b',
+          tertiary: '#334155',
+          muted: '#94a3b8',
         },
       },
       fontFamily: {

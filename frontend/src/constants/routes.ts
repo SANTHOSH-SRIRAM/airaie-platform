@@ -21,6 +21,11 @@ export const ROUTES = {
   TEMPLATES: '/templates',
   SETTINGS: '/settings',
   PROFILE: '/profile',
+
+  // Embedded studio routes
+  BOARDS: '/boards',
+  WORKFLOW_STUDIO: '/workflow-studio',
+  AGENT_STUDIO: '/agent-studio',
 } as const;
 
 /**

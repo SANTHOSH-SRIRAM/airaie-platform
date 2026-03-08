@@ -5,7 +5,7 @@ import ProgressBar from '@components/ui/ProgressBar';
 export default function SystemLoadCard() {
   return (
     <Card className="flex-1">
-      <div className="flex items-center justify-between px-5 py-4">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-surface-border bg-surface-bg">
         <h2 className="text-xs font-bold text-content-primary uppercase tracking-wider">
           System Load
         </h2>

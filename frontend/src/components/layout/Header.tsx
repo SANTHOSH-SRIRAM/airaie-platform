@@ -17,7 +17,7 @@ export default function Header() {
           <input
             type="text"
             placeholder="Search components, flows, or data..."
-            className="w-full pl-9 pr-14 py-1.5 text-sm bg-white border border-surface-border rounded-lg placeholder-content-muted text-content-primary focus:outline-none focus:ring-2 focus:ring-brand-secondary focus:border-transparent transition-all"
+            className="w-full pl-9 pr-14 py-1.5 text-sm bg-surface-bg border border-surface-border placeholder-content-muted text-content-primary focus:outline-none focus:ring-2 focus:ring-brand-secondary focus:border-transparent transition-all"
           />
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
             <Kbd>⌘K</Kbd>

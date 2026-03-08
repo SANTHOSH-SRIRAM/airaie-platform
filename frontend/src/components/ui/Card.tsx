@@ -23,7 +23,7 @@ export default function Card({ children, hover, className, ...props }: CardProps
 
 function CardHeader({ children, className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn('px-5 py-4 border-b border-surface-border', className)} {...props}>
+    <div className={cn('px-5 py-4 border-b border-surface-border bg-surface-bg', className)} {...props}>
       {children}
     </div>
   );

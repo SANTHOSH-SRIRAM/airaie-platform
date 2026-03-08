@@ -26,6 +26,14 @@
     min-height: 100vh;
   }
 
+  /* Themed grid background for main content area */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, #e2e8f0 1px, transparent 1px),
+      linear-gradient(to bottom, #e2e8f0 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
   /* Custom scrollbar */
   ::-webkit-scrollbar {
     width: 6px;

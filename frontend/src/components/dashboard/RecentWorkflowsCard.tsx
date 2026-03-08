@@ -38,7 +38,7 @@ const statusColor: Record<string, string> = {
 export default function RecentWorkflowsCard() {
   return (
     <Card className="flex-1">
-      <div className="flex items-center justify-between px-5 py-4">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-surface-border bg-surface-bg">
         <h2 className="text-xs font-bold text-content-primary uppercase tracking-wider">
           Recent Workflows
         </h2>
@@ -51,7 +51,7 @@ export default function RecentWorkflowsCard() {
           {workflows.map((wf, i) => (
             <div
               key={wf.name}
-              className={`flex items-start gap-3 py-3.5 ${
+              className={`flex items-start gap-3 py-3.5 px-2 -mx-2 cursor-pointer hover:bg-surface-hover transition-colors ${
                 i < workflows.length - 1 ? 'border-b border-gray-100' : ''
               }`}
             >

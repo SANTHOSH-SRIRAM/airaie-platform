@@ -11,7 +11,7 @@ export default function SidebarSection({ title, children, defaultOpen = true }: 
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div>
+    <div className="border-t border-surface-border pt-2 mt-2">
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-section-header hover:text-content-tertiary transition-colors"

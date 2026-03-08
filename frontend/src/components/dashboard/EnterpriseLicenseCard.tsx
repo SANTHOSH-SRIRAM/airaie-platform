@@ -8,7 +8,7 @@ export default function EnterpriseLicenseCard() {
       {/* Watermark circle decoration */}
       <div className="absolute -top-6 -right-6 w-28 h-28 rounded-full border-[14px] border-gray-100/60 pointer-events-none" />
 
-      <div className="flex items-center gap-2.5 px-5 py-4">
+      <div className="flex items-center gap-2.5 px-5 py-4 border-b border-surface-border bg-surface-bg">
         <Lock size={16} className="text-status-warning" />
         <h2 className="text-xs font-bold text-content-primary uppercase tracking-wider">
           Enterprise License

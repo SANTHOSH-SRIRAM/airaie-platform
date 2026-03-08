@@ -23,15 +23,24 @@ const quickActions = [
 export default function StartProjectCard() {
   return (
     <Card>
+      <div className="flex items-center gap-2.5 px-6 py-4 border-b border-surface-border bg-surface-bg">
+        <Settings2 size={20} className="text-content-primary" />
+        <h2 className="text-xs font-bold text-content-primary uppercase tracking-wider">
+          Start Project
+        </h2>
+        <div className="flex-1" />
+        <div className="flex items-center gap-2">
+          <div className="flex-1 h-px bg-surface-border" />
+          <span className="text-[10px] font-semibold text-content-tertiary uppercase tracking-widest">
+            Quick Actions
+          </span>
+          <div className="flex-1 h-px bg-surface-border" />
+        </div>
+      </div>
       <div className="flex">
         {/* Left: Start Project */}
         <div className="flex-1 p-6 border-r border-surface-border">
-          <div className="flex items-center gap-2.5 mb-3">
-            <Settings2 size={20} className="text-content-primary" />
-            <h2 className="text-sm font-bold text-content-primary uppercase tracking-wide">
-              Start Project
-            </h2>
-          </div>
+
           <p className="text-sm text-content-secondary leading-relaxed mb-6">
             Configure connection parameters, geometry data transfer protocols, and flow triggers.
           </p>
@@ -48,13 +57,6 @@ export default function StartProjectCard() {
 
         {/* Right: Quick Actions */}
         <div className="w-[380px] p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="flex-1 h-px bg-surface-border" />
-            <span className="text-[10px] font-semibold text-content-tertiary uppercase tracking-widest">
-              Quick Actions
-            </span>
-            <div className="flex-1 h-px bg-surface-border" />
-          </div>
           <div className="grid grid-cols-3 gap-3">
             {quickActions.map((action) => (
               <button

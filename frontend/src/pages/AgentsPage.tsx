@@ -169,7 +169,7 @@ export default function AgentsPage() {
               {recentAgents.map((agent, i) => (
                 <div
                   key={agent.name}
-                  className={`flex items-start gap-3 py-3.5 ${
+                  className={`flex items-start gap-3 py-3.5 px-2 -mx-2 cursor-pointer hover:bg-surface-hover transition-colors ${
                     i < recentAgents.length - 1 ? 'border-b border-gray-100' : ''
                   }`}
                 >
