@@ -17,7 +17,7 @@ export default function RegionDropdown() {
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 px-2 py-1.5 text-sm text-content-secondary hover:bg-gray-50 rounded-md transition-colors"
+        className="flex items-center gap-1 h-10 px-3 text-sm text-cds-text-secondary hover:bg-cds-background-hover rounded-sm transition-colors duration-100"
       >
         <MapPin size={14} />
         <span>{current?.label}</span>
@@ -26,7 +26,7 @@ export default function RegionDropdown() {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-surface-border rounded-lg shadow-dropdown z-50 py-1">
+          <div className="absolute right-0 top-full mt-0 w-48 bg-white border border-cds-border-subtle shadow-dropdown z-50">
             {regions.map((r) => (
               <button
                 key={r.value}
@@ -34,10 +34,10 @@ export default function RegionDropdown() {
                   setSelected(r.value);
                   setOpen(false);
                 }}
-                className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                className={`w-full text-left h-10 px-4 text-sm transition-colors duration-100 ${
                   r.value === selected
-                    ? 'text-brand-secondary bg-blue-50 font-medium'
-                    : 'text-content-primary hover:bg-gray-50'
+                    ? 'text-brand-primary bg-blue-10 font-medium'
+                    : 'text-cds-text-secondary hover:bg-cds-background-hover'
                 }`}
               >
                 {r.label}

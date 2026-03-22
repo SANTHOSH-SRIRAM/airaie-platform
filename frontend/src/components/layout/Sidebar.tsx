@@ -1,11 +1,6 @@
 import {
-  LayoutDashboard,
-  Globe,
-  Code2,
-  GitBranch,
-  Bot,
-  BarChart3,
-  Users,
+  LayoutDashboard, Globe, Code2, GitBranch, Bot, BarChart3, Users,
+  Wrench, Cpu, Database, Puzzle, Plug, Zap,
 } from 'lucide-react';
 import { ROUTES } from '@constants/routes';
 import SidebarSection from './SidebarSection';
@@ -14,89 +9,47 @@ import UserCard from './UserCard';
 
 export default function Sidebar() {
   return (
-    <aside className="w-[230px] h-screen bg-white border-r border-surface-border flex flex-col shrink-0">
-      {/* Logo */}
-      <div className="flex items-center gap-2.5 px-4 h-[52px] shrink-0">
-        <div className="w-7 h-7 bg-brand-secondary rounded-md flex items-center justify-center">
-          <span className="text-white font-bold text-xs">A</span>
+    <aside className="w-[256px] h-screen bg-sidebar-bg flex flex-col shrink-0">
+      <div className="flex items-center gap-2.5 px-4 h-12 shrink-0 border-b border-sidebar-border">
+        <div className="w-8 h-8 bg-brand-primary rounded-sm flex items-center justify-center">
+          <span className="text-white font-bold text-sm">A</span>
         </div>
-        <span className="font-bold text-content-primary text-[14px] tracking-tight">
-          AIRAIE<span className="text-content-tertiary font-bold">.CAD</span>
+        <span className="font-semibold text-sidebar-text-active text-[15px] tracking-tight">
+          AIRAIE<span className="text-sidebar-icon font-normal">.CAD</span>
         </span>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-2 space-y-2 scrollbar-hide">
-        {/* Dashboard */}
-        <div className="px-0">
-          <SidebarItem
-            icon={<LayoutDashboard size={17} />}
-            label="DASHBOARD"
-            path={ROUTES.DASHBOARD}
-          />
-        </div>
+      <nav className="flex-1 overflow-y-auto py-3 scrollbar-hide">
+        <SidebarItem icon={<LayoutDashboard size={16} />} label="Dashboard" path={ROUTES.DASHBOARD} />
+        <SidebarItem icon={<Globe size={16} />} label="Community" path="https://community.airaie.com" external />
 
-        {/* Community */}
-        <div className="px-0">
-          <SidebarItem
-            icon={<Globe size={17} />}
-            label="COMMUNITY"
-            path="https://community.airaie.com"
-            external
-          />
-        </div>
-
-        {/* Workspace */}
-        <SidebarSection title="WORKSPACE">
-          <SidebarItem
-            label="Active Boards"
-            path={ROUTES.BOARDS}
-            bullet
-            bulletColor="bg-brand-secondary"
-          />
-          <SidebarItem
-            label="Toolsets"
-            path="/toolsets"
-            bullet
-            bulletColor="bg-brand-secondary"
-          />
+        <SidebarSection title="Workspace">
+          <SidebarItem label="Active Boards" path={ROUTES.BOARDS} bullet bulletColor="bg-sidebar-text-active" />
+          <SidebarItem label="Toolsets" path="/toolsets" bullet bulletColor="bg-sidebar-icon" />
         </SidebarSection>
 
-        {/* Build */}
-        <SidebarSection title="BUILD">
-          <SidebarItem
-            icon={<Code2 size={17} />}
-            label="Parametric Logic"
-            path="/parametric"
-          />
-          <SidebarItem
-            icon={<GitBranch size={17} />}
-            label="Workflows"
-            path={ROUTES.WORKFLOW_STUDIO}
-          />
-          <SidebarItem
-            icon={<Bot size={17} />}
-            label="Agents"
-            path={ROUTES.AGENT_STUDIO}
-          />
+        <SidebarSection title="Build">
+          <SidebarItem icon={<Code2 size={16} />} label="Parametric Logic" path="/parametric" />
+          <SidebarItem icon={<GitBranch size={16} />} label="Workflows" path={ROUTES.WORKFLOW_STUDIO} />
+          <SidebarItem icon={<Bot size={16} />} label="Agents" path={ROUTES.AGENT_STUDIO} />
         </SidebarSection>
 
-        {/* Project Data */}
-        <SidebarSection title="PROJECT DATA">
-          <SidebarItem
-            icon={<BarChart3 size={17} />}
-            label="Analytics"
-            path="/analytics"
-          />
-          <SidebarItem
-            icon={<Users size={17} />}
-            label="User Access"
-            path="/access"
-          />
+        <SidebarSection title="Tools">
+          <SidebarItem icon={<Wrench size={16} />} label="FEA Solver" path="/tools/fea" />
+          <SidebarItem icon={<Cpu size={16} />} label="CFD Engine" path="/tools/cfd" />
+          <SidebarItem icon={<Database size={16} />} label="Material Library" path="/tools/materials" />
+          <SidebarItem icon={<Puzzle size={16} />} label="Generative Design" path="/tools/generative" />
+          <SidebarItem icon={<Zap size={16} />} label="Capabilities" path="/capabilities" />
+        </SidebarSection>
+
+        <SidebarItem icon={<Plug size={16} />} label="Integrations" path="/integrations" />
+
+        <SidebarSection title="Project Data">
+          <SidebarItem icon={<BarChart3 size={16} />} label="Analytics" path="/analytics" />
+          <SidebarItem icon={<Users size={16} />} label="User Access" path="/access" />
         </SidebarSection>
       </nav>
 
-      {/* User Card */}
       <UserCard name="John Doe" role="ENG-LEAD-01" />
     </aside>
   );

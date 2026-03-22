@@ -1,0 +1,251 @@
+/* ============================================
+   AIRAIE DESIGN TOKENS — Single Source of Truth
+   Cobalt + White + Black Theme
+   ============================================ */
+
+:root {
+  /* ========================================
+     COLOR PRIMITIVES
+     ======================================== */
+
+  /* Gray Scale (Neutral Black) */
+  --gray-10:  #f7f8fa;
+  --gray-20:  #e8ecf0;
+  --gray-30:  #c6cbd1;
+  --gray-40:  #a0a0a0;
+  --gray-50:  #808080;
+  --gray-60:  #6b6b6b;
+  --gray-70:  #3d3d3d;
+  --gray-80:  #2a2a2a;
+  --gray-90:  #1a1a1a;
+  --gray-100: #0a0a0a;
+
+  /* Blue Scale (Cobalt) */
+  --blue-10:  #eef3fb;
+  --blue-20:  #d6e4f7;
+  --blue-30:  #a3c2ec;
+  --blue-40:  #5a92d4;
+  --blue-50:  #1a6bc4;
+  --blue-60:  #0047AB;
+  --blue-70:  #003d96;
+  --blue-80:  #002d6b;
+  --blue-90:  #001e47;
+  --blue-100: #001030;
+
+  /* Green Scale */
+  --green-10: #defbe6;
+  --green-20: #a7f0ba;
+  --green-30: #6fdc8c;
+  --green-40: #42be65;
+  --green-50: #24a148;
+  --green-60: #198038;
+  --green-70: #0e6027;
+  --green-80: #044317;
+
+  /* Red Scale */
+  --red-10:   #fff1f1;
+  --red-20:   #ffd7d9;
+  --red-30:   #ffb3b8;
+  --red-40:   #ff8389;
+  --red-50:   #fa4d56;
+  --red-60:   #da1e28;
+  --red-70:   #a2191f;
+  --red-80:   #750e13;
+
+  /* Yellow Scale */
+  --yellow-20: #fdd13a;
+  --yellow-30: #f1c21b;
+
+  /* Purple */
+  --purple-60: #8a3ffc;
+
+  /* Teal */
+  --teal-50:  #009d9a;
+  --teal-60:  #007d79;
+
+  /* ========================================
+     TYPOGRAPHY
+     ======================================== */
+
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', Menlo, Monaco, monospace;
+
+  /* ========================================
+     LAYOUT
+     ======================================== */
+
+  --sidebar-width: 256px;
+  --header-height: 48px;
+  --content-max-width: 1584px;
+
+  /* ========================================
+     Z-INDEX
+     ======================================== */
+
+  --z-dropdown: 100;
+  --z-sticky:   200;
+  --z-fixed:    300;
+  --z-overlay:  400;
+  --z-modal:    500;
+  --z-popover:  600;
+  --z-tooltip:  700;
+  --z-toast:    800;
+
+  /* ========================================
+     TRANSITIONS
+     ======================================== */
+
+  --duration-fast:   75ms;
+  --duration-normal: 100ms;
+  --duration-slow:   150ms;
+  --duration-slower:  200ms;
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================
+   LIGHT THEME (Default)
+   ============================================ */
+
+:root,
+[data-theme="light"] {
+  /* Brand (Black + White — no cobalt accent) */
+  --color-brand-primary:       #0a0a0a;
+  --color-brand-primary-hover:  #1a1a1a;
+  --color-brand-primary-active: #2a2a2a;
+  --color-brand-primary-muted:  #f7f8fa;
+  --color-brand-danger:         var(--red-60);
+  --color-brand-danger-hover:   var(--red-70);
+
+  /* Surfaces */
+  --color-surface-bg:           #ffffff;
+  --color-surface:              #ffffff;
+  --color-surface-raised:       #ffffff;
+  --color-surface-layer:        var(--gray-10);
+  --color-surface-hover:        #f5f5f5;
+  --color-surface-active:       #e8e8e8;
+  --color-surface-overlay:      rgba(10, 10, 10, 0.5);
+
+  /* Card */
+  --color-card-bg:              #ffffff;
+  --color-card-header:          var(--gray-10);
+  --color-card-border:          #e2e5ea;
+  --color-card-border-inner:    #eef0f3;
+  --color-card-shadow:          0 1px 3px rgba(0, 0, 0, 0.06);
+  --color-card-shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --color-card-shadow-hover:    0 8px 24px rgba(0, 0, 0, 0.1);
+
+  /* Sidebar (Always dark — direct hex, no var() indirection) */
+  --color-sidebar-bg:           #0a0a0a;
+  --color-sidebar-hover:        #1a1a1a;
+  --color-sidebar-text:         #b0b0b0;
+  --color-sidebar-text-active:  #ffffff;
+  --color-sidebar-icon:         #808080;
+  --color-sidebar-border:       #2a2a2a;
+  --color-sidebar-section:      #606060;
+  --color-sidebar-active-border: #0a0a0a;
+
+  /* Text */
+  --color-text-primary:   var(--gray-100);
+  --color-text-secondary: var(--gray-70);
+  --color-text-helper:    var(--gray-60);
+  --color-text-placeholder: var(--gray-40);
+  --color-text-disabled:  var(--gray-30);
+  --color-text-inverse:   #ffffff;
+  --color-text-on-color:  #ffffff;
+
+  /* Borders */
+  --color-border:         #e2e5ea;
+  --color-border-subtle:  #eef0f3;
+  --color-border-strong:  var(--gray-50);
+  --color-border-focus:   #0a0a0a;
+
+  /* Status */
+  --color-status-success:     var(--green-50);
+  --color-status-success-bg:  var(--green-10);
+  --color-status-success-text: var(--green-60);
+
+  --color-status-warning:     var(--yellow-30);
+  --color-status-warning-bg:  rgba(253, 209, 58, 0.15);
+  --color-status-warning-text: var(--gray-100);
+
+  --color-status-danger:      var(--red-60);
+  --color-status-danger-bg:   var(--red-10);
+  --color-status-danger-text:  var(--red-70);
+
+  --color-status-info:        #3d3d3d;
+  --color-status-info-bg:     #f7f8fa;
+  --color-status-info-text:   #0a0a0a;
+
+  /* Focus */
+  --color-focus: #0a0a0a;
+
+  /* Shadows */
+  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-lg:  0 8px 24px rgba(0, 0, 0, 0.1);
+  --shadow-xl:  0 16px 48px rgba(0, 0, 0, 0.12);
+}
+
+/* ============================================
+   DARK THEME (Scaffolded)
+   ============================================ */
+
+[data-theme="dark"] {
+  /* Brand */
+  --color-brand-primary:       var(--blue-50);
+  --color-brand-primary-hover:  var(--blue-40);
+  --color-brand-primary-active: var(--blue-60);
+  --color-brand-primary-muted:  rgba(0, 71, 171, 0.15);
+
+  /* Surfaces */
+  --color-surface-bg:           var(--gray-100);
+  --color-surface:              var(--gray-90);
+  --color-surface-raised:       var(--gray-80);
+  --color-surface-layer:        var(--gray-90);
+  --color-surface-hover:        var(--gray-80);
+  --color-surface-active:       var(--gray-70);
+  --color-surface-overlay:      rgba(0, 0, 0, 0.6);
+
+  /* Card */
+  --color-card-bg:              var(--gray-90);
+  --color-card-header:          var(--gray-80);
+  --color-card-border:          var(--gray-80);
+  --color-card-border-inner:    var(--gray-70);
+  --color-card-shadow:          0 1px 3px rgba(0, 0, 0, 0.3);
+  --color-card-shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --color-card-shadow-hover:    0 8px 24px rgba(0, 0, 0, 0.5);
+
+  /* Text */
+  --color-text-primary:   var(--gray-10);
+  --color-text-secondary: var(--gray-40);
+  --color-text-helper:    var(--gray-50);
+  --color-text-placeholder: var(--gray-60);
+  --color-text-disabled:  var(--gray-70);
+  --color-text-inverse:   var(--gray-100);
+
+  /* Borders */
+  --color-border:         var(--gray-70);
+  --color-border-subtle:  var(--gray-80);
+  --color-border-strong:  var(--gray-60);
+  --color-border-focus:   var(--blue-50);
+
+  /* Status (adjusted for dark) */
+  --color-status-success-bg:  rgba(36, 161, 72, 0.1);
+  --color-status-success-text: var(--green-30);
+  --color-status-warning-bg:  rgba(241, 194, 27, 0.1);
+  --color-status-danger-bg:   rgba(218, 30, 40, 0.1);
+  --color-status-danger-text: var(--red-30);
+  --color-status-info-bg:     rgba(0, 71, 171, 0.1);
+  --color-status-info-text:   var(--blue-30);
+
+  /* Focus */
+  --color-focus: var(--blue-50);
+
+  /* Shadows */
+  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg:  0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-xl:  0 16px 48px rgba(0, 0, 0, 0.6);
+}

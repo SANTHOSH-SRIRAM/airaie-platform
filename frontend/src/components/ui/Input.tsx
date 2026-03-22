@@ -3,22 +3,24 @@ import { cn } from '@utils/cn';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
+  helperText?: string;
   icon?: ReactNode;
   error?: string;
+  warn?: string;
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, icon, error, id, ...props }, ref) => {
+  ({ className, label, helperText, icon, error, warn, id, ...props }, ref) => {
     return (
-      <div>
+      <div className="flex flex-col gap-1">
         {label && (
-          <label htmlFor={id} className="block text-sm font-medium text-content-secondary mb-1">
+          <label htmlFor={id} className="text-xs text-cds-text-secondary tracking-wide">
             {label}
           </label>
         )}
         <div className="relative">
           {icon && (
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-cds-icon-secondary [&>svg]:h-4 [&>svg]:w-4">
               {icon}
             </div>
           )}
@@ -26,18 +28,32 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={id}
             className={cn(
-              'w-full px-4 py-2 rounded-lg border border-surface-border',
-              'bg-white text-content-primary placeholder-content-muted',
-              'focus:outline-none focus:ring-2 focus:ring-brand-secondary focus:border-transparent',
-              'transition-all duration-200 text-sm',
+              'w-full h-10 px-4 bg-cds-field-01 text-sm text-cds-text-primary',
+              'placeholder:text-cds-text-placeholder',
+              'border-0 border-b border-cds-border-strong',
+              'focus:outline-2 focus:outline-cds-focus focus:outline-offset-[-2px]',
+              'transition-colors duration-75',
               icon && 'pl-10',
-              error && 'border-status-danger focus:ring-status-danger',
+              error && 'border-b-2 border-cds-support-error outline outline-2 outline-cds-support-error outline-offset-[-2px]',
+              warn && 'border-b-2 border-cds-support-warning',
               className
             )}
+            aria-invalid={error ? 'true' : undefined}
+            aria-describedby={error ? `${id}-error` : helperText ? `${id}-helper` : undefined}
             {...props}
           />
         </div>
-        {error && <p className="mt-1 text-xs text-status-danger">{error}</p>}
+        {error && (
+          <p id={`${id}-error`} className="text-xs text-cds-text-error" role="alert">
+            {error}
+          </p>
+        )}
+        {warn && !error && (
+          <p className="text-xs text-cds-support-warning">{warn}</p>
+        )}
+        {helperText && !error && !warn && (
+          <p id={`${id}-helper`} className="text-xs text-cds-text-helper">{helperText}</p>
+        )}
       </div>
     );
   }

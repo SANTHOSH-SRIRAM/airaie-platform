@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
+import { useUiStore } from '@store/uiStore';
 
 interface StudioFrameProps {
-  /** Base URL of the studio dev server (e.g. http://localhost:3003) */
   studioUrl: string;
-  /** Initial path to load inside the studio */
   initialPath?: string;
 }
 
@@ -11,6 +10,7 @@ export default function StudioFrame({ studioUrl, initialPath = '/' }: StudioFram
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const setStudioFullscreen = useUiStore((s) => s.setStudioFullscreen);
 
   const src = `${studioUrl}${initialPath}${initialPath.includes('?') ? '&' : '?'}embedded=true`;
 
@@ -19,19 +19,31 @@ export default function StudioFrame({ studioUrl, initialPath = '/' }: StudioFram
     setError(false);
   }, [src]);
 
+  // Listen for fullscreen messages from the embedded studio
+  useEffect(() => {
+    function handleMessage(e: MessageEvent) {
+      if (e.data?.type === 'airaie:studio:fullscreen') {
+        setStudioFullscreen(!!e.data.fullscreen);
+      }
+    }
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [setStudioFullscreen]);
+
+  // Reset fullscreen only when navigating AWAY from boards (not on re-render)
+  // The board-studio iframe sends fullscreen:false via postMessage when going back to list
+
   return (
     <div className="relative w-full h-full">
-      {/* Loading state */}
       {loading && !error && (
         <div className="absolute inset-0 flex items-center justify-center bg-surface-bg">
           <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-2 border-surface-border border-t-brand-secondary animate-spin" />
-            <span className="text-xs text-content-muted font-mono">Loading studio...</span>
+            <div className="w-8 h-8 border-2 border-card-border border-t-brand-primary animate-spin" />
+            <span className="text-xs text-content-placeholder font-mono">Loading studio...</span>
           </div>
         </div>
       )}
 
-      {/* Error state */}
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-surface-bg">
           <div className="flex flex-col items-center gap-3 text-center">
@@ -39,18 +51,12 @@ export default function StudioFrame({ studioUrl, initialPath = '/' }: StudioFram
               <span className="text-status-danger font-bold text-lg">!</span>
             </div>
             <p className="text-sm text-content-secondary">Failed to load studio</p>
-            <p className="text-xs text-content-muted font-mono">
+            <p className="text-xs text-content-placeholder font-mono">
               Make sure the studio dev server is running at {studioUrl}
             </p>
             <button
-              onClick={() => {
-                setError(false);
-                setLoading(true);
-                if (iframeRef.current) {
-                  iframeRef.current.src = src;
-                }
-              }}
-              className="mt-2 px-4 py-2 text-xs font-medium text-brand-secondary border border-brand-secondary hover:bg-blue-50 transition-colors"
+              onClick={() => { setError(false); setLoading(true); if (iframeRef.current) iframeRef.current.src = src; }}
+              className="mt-2 px-4 py-2 text-xs font-medium text-brand-primary border border-brand-primary hover:bg-surface-hover transition-colors"
             >
               Retry
             </button>
@@ -64,10 +70,7 @@ export default function StudioFrame({ studioUrl, initialPath = '/' }: StudioFram
         className="w-full h-full border-0"
         title="Studio"
         onLoad={() => setLoading(false)}
-        onError={() => {
-          setLoading(false);
-          setError(true);
-        }}
+        onError={() => { setLoading(false); setError(true); }}
         allow="clipboard-read; clipboard-write"
       />
     </div>

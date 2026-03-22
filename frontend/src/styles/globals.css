@@ -1,14 +1,10 @@
+@import './tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --sidebar-width: 230px;
-    --sidebar-collapsed-width: 72px;
-    --header-height: 52px;
-  }
-
   * {
     box-sizing: border-box;
     margin: 0;
@@ -16,122 +12,42 @@
   }
 
   html {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: var(--font-sans);
+    font-size: 16px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
   body {
-    @apply bg-surface-bg text-content-primary;
+    background-color: var(--color-surface-bg);
+    color: var(--color-text-primary);
     min-height: 100vh;
   }
 
-  /* Themed grid background for main content area */
   .bg-grid {
     background-image:
-      linear-gradient(to right, #e2e8f0 1px, transparent 1px),
-      linear-gradient(to bottom, #e2e8f0 1px, transparent 1px);
+      linear-gradient(to right, rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
     background-size: 32px 32px;
   }
 
-  /* Custom scrollbar */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background-color: var(--gray-30); border: 2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background-color: var(--gray-50); }
+
+  *:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: -2px;
   }
 
-  ::-webkit-scrollbar-track {
-    @apply bg-transparent;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    @apply bg-gray-300 rounded-full;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-400;
-  }
-}
-
-@layer components {
-  /* Button base styles */
-  .btn {
-    @apply inline-flex items-center justify-center font-medium transition-all duration-200;
-    @apply focus:outline-none focus:ring-2 focus:ring-offset-2;
-    @apply disabled:opacity-50 disabled:cursor-not-allowed;
-  }
-
-  .btn-primary {
-    @apply btn bg-brand-primary text-white hover:bg-brand-primary-dark;
-    @apply focus:ring-brand-primary;
-  }
-
-  .btn-secondary {
-    @apply btn bg-white border border-gray-300 text-content-primary;
-    @apply hover:bg-gray-50 hover:border-gray-400;
-    @apply focus:ring-gray-300;
-  }
-
-  .btn-ghost {
-    @apply btn text-content-secondary hover:bg-gray-100;
-    @apply focus:ring-gray-300;
-  }
-
-  /* Card styles */
-  .card {
-    @apply bg-surface-card shadow-card border border-surface-border;
-  }
-
-  .card-hover {
-    @apply card hover:shadow-card-hover transition-shadow duration-200;
-  }
-
-  /* Input styles */
-  .input {
-    @apply w-full px-4 py-2 rounded-lg border border-surface-border;
-    @apply bg-white text-content-primary placeholder-content-muted;
-    @apply focus:outline-none focus:ring-2 focus:ring-brand-secondary focus:border-transparent;
-    @apply transition-all duration-200;
-  }
-
-  /* Badge styles */
-  .badge {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
-  }
-
-  .badge-success {
-    @apply badge bg-status-success-light text-green-800;
-  }
-
-  .badge-warning {
-    @apply badge bg-status-warning-light text-yellow-800;
-  }
-
-  .badge-danger {
-    @apply badge bg-status-danger-light text-red-800;
-  }
-
-  .badge-info {
-    @apply badge bg-status-info-light text-blue-800;
+  ::selection {
+    background-color: var(--blue-20);
+    color: var(--gray-100);
   }
 }
 
 @layer utilities {
-  /* Sidebar navigation item */
-  .nav-item {
-    @apply flex items-center gap-3 px-3 py-2 rounded-md;
-    @apply text-sidebar-text hover:bg-sidebar-hover hover:text-content-primary;
-    @apply transition-colors duration-150 cursor-pointer text-sm;
-  }
-
-  .nav-item-active {
-    @apply flex items-center gap-3 px-3 py-2 rounded-md;
-    @apply text-sidebar-text-active bg-blue-50 font-medium;
-    @apply border-l-[3px] border-sidebar-active;
-    @apply cursor-pointer text-sm;
-  }
-
-  /* Truncate text */
   .truncate-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -146,23 +62,25 @@
     overflow: hidden;
   }
 
-  /* Loading skeleton */
   .skeleton {
-    @apply bg-gray-200 animate-pulse rounded;
+    background-color: var(--gray-20);
+    animation: skeletonPulse 1s ease-in-out infinite alternate;
   }
 
-  /* Hide scrollbar but keep functionality */
+  @keyframes skeletonPulse {
+    0%   { opacity: 0.3; }
+    100% { opacity: 1; }
+  }
+
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
 
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-
-  /* Focus visible */
-  .focus-ring {
-    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-secondary focus-visible:ring-offset-2;
+  .cds-divider {
+    width: 100%;
+    height: 1px;
+    background-color: var(--color-border);
   }
 }

@@ -5,6 +5,8 @@ interface DropdownItem {
   label: string;
   value: string;
   icon?: ReactNode;
+  divider?: boolean;
+  disabled?: boolean;
 }
 
 interface DropdownProps {
@@ -36,26 +38,41 @@ export default function Dropdown({ trigger, items, onSelect, align = 'left', cla
       </div>
       {open && (
         <div
+          role="menu"
           className={cn(
-            'absolute top-full mt-1 min-w-[160px] py-1',
-            'bg-white border border-surface-border rounded-lg shadow-dropdown z-50',
+            'absolute top-full mt-0 min-w-[160px] py-1',
+            'bg-cds-layer-02 border border-cds-border-subtle shadow-dropdown z-50',
             'animate-fade-in',
             align === 'right' ? 'right-0' : 'left-0'
           )}
         >
-          {items.map((item) => (
-            <button
-              key={item.value}
-              onClick={() => {
-                onSelect(item.value);
-                setOpen(false);
-              }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-content-primary hover:bg-gray-50 transition-colors"
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ))}
+          {items.map((item) =>
+            item.divider ? (
+              <div key={item.value} className="h-px bg-cds-border-subtle my-1" />
+            ) : (
+              <button
+                key={item.value}
+                role="menuitem"
+                disabled={item.disabled}
+                onClick={() => {
+                  if (!item.disabled) {
+                    onSelect(item.value);
+                    setOpen(false);
+                  }
+                }}
+                className={cn(
+                  'w-full flex items-center gap-2 h-10 px-4 text-sm',
+                  'text-cds-text-secondary transition-colors duration-100',
+                  item.disabled
+                    ? 'text-cds-text-disabled cursor-not-allowed'
+                    : 'hover:bg-cds-layer-hover-02 active:bg-cds-layer-active-01 cursor-pointer'
+                )}
+              >
+                {item.icon && <span className="shrink-0 [&>svg]:h-4 [&>svg]:w-4">{item.icon}</span>}
+                {item.label}
+              </button>
+            )
+          )}
         </div>
       )}
     </div>

@@ -1,42 +1,23 @@
 import {
-  Bot,
-  ExternalLink,
-  Plus,
-  RotateCcw,
-  Layers,
-  FileInput,
-  MessageSquare,
-  MoreHorizontal,
-  BookOpen,
-  Link2,
-  Zap,
+  Bot, ExternalLink, Plus, RotateCcw, Layers, FileInput, MessageSquare,
+  MoreHorizontal, BookOpen, Link2, Zap, ArrowRight,
 } from 'lucide-react';
 import Card from '@components/ui/Card';
 import Button from '@components/ui/Button';
 import Badge from '@components/ui/Badge';
 import ProgressBar from '@components/ui/ProgressBar';
 
-/* ── Sample data ───────────────────────────────────────────── */
-
-interface AgentItem {
-  name: string;
-  status: 'success' | 'warning' | 'danger';
-  type: string;
-  detail: string;
-  time: string;
-}
-
-const recentAgents: AgentItem[] = [
-  { name: 'Support_Bot_V2', status: 'success', type: 'Conversational', detail: 'Active — 12 sessions', time: '10m ago' },
-  { name: 'Data_Analyst_Agent', status: 'success', type: 'Task', detail: 'Active — idle', time: '1h ago' },
-  { name: 'Code_Review_Agent', status: 'warning', type: 'Autonomous', detail: 'Pending deployment', time: '3h ago' },
-  { name: 'Email_Classifier', status: 'danger', type: 'Task', detail: 'Error: API timeout', time: '1d ago' },
+const recentAgents = [
+  { name: 'Support_Bot_V2', status: 'success' as const, type: 'Conversational', detail: 'Active — 12 sessions', time: '10m ago' },
+  { name: 'Data_Analyst_Agent', status: 'success' as const, type: 'Task', detail: 'Active — idle', time: '1h ago' },
+  { name: 'Code_Review_Agent', status: 'warning' as const, type: 'Autonomous', detail: 'Pending deployment', time: '3h ago' },
+  { name: 'Email_Classifier', status: 'danger' as const, type: 'Task', detail: 'Error: API timeout', time: '1d ago' },
 ];
 
-const statusColor: Record<string, string> = {
-  success: 'bg-status-success',
-  warning: 'bg-slate-400',
-  danger: 'bg-status-warning',
+const statusConfig: Record<string, { dot: string; hoverBg: string }> = {
+  success: { dot: 'bg-status-success', hoverBg: 'hover:bg-status-success-bg' },
+  warning: { dot: 'bg-status-warning', hoverBg: 'hover:bg-status-warning-bg' },
+  danger:  { dot: 'bg-status-danger',  hoverBg: 'hover:bg-status-danger-bg' },
 };
 
 const quickActions = [
@@ -45,12 +26,7 @@ const quickActions = [
   { icon: MessageSquare, title: 'View Sessions', description: 'Activity Log' },
 ];
 
-const stats = {
-  active: 8,
-  inactive: 3,
-  error: 1,
-  total: 12,
-};
+const stats = { active: 8, inactive: 3, error: 1, total: 12 };
 
 const quickLinks = [
   { label: 'Open Agent Studio', icon: ExternalLink, onClick: () => window.open('http://localhost:3002', '_blank') },
@@ -59,91 +35,51 @@ const quickLinks = [
   { label: 'Agent Marketplace', icon: Zap, onClick: () => {} },
 ];
 
-/* ── Page ──────────────────────────────────────────────────── */
-
 export default function AgentsPage() {
   const openStudio = () => window.open('http://localhost:3002', '_blank');
 
   return (
-    <div className="p-6 space-y-6">
-      {/* ── Title Row ─────────────────────────────────────── */}
+    <div className="p-6 space-y-6 max-w-[1584px]">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-[28px] font-light text-content-primary leading-tight">
-            Agents <span className="text-brand-secondary">| Management</span>
-          </h1>
-          <p className="text-sm text-content-secondary mt-1.5">
-            Build, deploy, and monitor intelligent agents across your platform.
-          </p>
+          <h1 className="text-[2rem] font-light text-content-primary leading-tight tracking-tight">Agents</h1>
+          <p className="text-sm text-content-helper mt-1.5">Build, deploy, and monitor intelligent agents across your platform.</p>
         </div>
-        <div className="flex items-start gap-5 shrink-0">
+        <div className="flex items-start gap-4 shrink-0">
           <div className="text-right">
-            <p className="text-[10px] text-content-tertiary uppercase tracking-widest font-medium mb-1.5">
-              Studio Status
-            </p>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 border border-surface-border rounded-md">
-              <span className="w-2 h-2 bg-status-success rounded-sm" />
+            <p className="text-[11px] text-content-placeholder uppercase tracking-wider mb-1.5 font-medium">Studio Status</p>
+            <div className="inline-flex items-center gap-2 h-8 px-4 bg-card-bg border border-card-border rounded-md shadow-xs">
+              <span className="w-2 h-2 bg-status-success rounded-full" />
               <span className="text-xs font-medium text-content-primary tracking-wide">ONLINE</span>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="md"
-            iconRight={<ExternalLink size={14} />}
-            onClick={openStudio}
-          >
-            Open Agent Studio
-          </Button>
+          <Button variant="tertiary" size="md" iconRight={<ExternalLink size={14} />} onClick={openStudio}>Open Agent Studio</Button>
         </div>
       </div>
 
-      {/* ── Start Card + Quick Actions ────────────────────── */}
-      <Card>
+      <Card variant="accent">
         <div className="flex">
-          {/* Left: Start Agent */}
-          <div className="flex-1 p-6 border-r border-surface-border">
-            <div className="flex items-center gap-2.5 mb-3">
-              <Bot size={20} className="text-content-primary" />
-              <h2 className="text-sm font-bold text-content-primary uppercase tracking-wide">
-                Start Agent
-              </h2>
+          <div className="flex-1 px-5 py-6 border-r border-card-border-inner">
+            <div className="flex items-center gap-2 mb-3">
+              <Bot size={20} className="text-brand-primary" />
+              <h2 className="text-sm font-semibold text-content-primary uppercase tracking-wide">Start Agent</h2>
             </div>
-            <p className="text-sm text-content-secondary leading-relaxed mb-6">
-              Create new intelligent agents, configure capabilities, and define interaction patterns.
-            </p>
+            <p className="text-sm text-content-secondary leading-relaxed mb-6">Create new intelligent agents, configure capabilities, and define interaction patterns.</p>
             <div className="flex items-center gap-3">
-              <Button variant="primary" size="md" icon={<Plus size={16} />} onClick={openStudio}>
-                NEW AGENT
-              </Button>
-              <Button variant="secondary" size="md" icon={<RotateCcw size={14} />}>
-                OPEN RECENT
-              </Button>
-              <span className="text-xs text-content-muted font-mono ml-1">#AG_STUDIO_V1</span>
+              <Button variant="primary" size="md" icon={<Plus size={16} />} onClick={openStudio}>NEW AGENT</Button>
+              <Button variant="tertiary" size="md" icon={<RotateCcw size={14} />}>OPEN RECENT</Button>
+              <span className="text-xs text-content-placeholder font-mono ml-1">#AG_STUDIO_V1</span>
             </div>
           </div>
-
-          {/* Right: Quick Actions */}
-          <div className="w-[380px] p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="flex-1 h-px bg-surface-border" />
-              <span className="text-[10px] font-semibold text-content-tertiary uppercase tracking-widest">
-                Quick Actions
-              </span>
-              <div className="flex-1 h-px bg-surface-border" />
-            </div>
+          <div className="w-[380px] px-5 py-6">
+            <p className="text-[11px] text-content-helper uppercase tracking-wider mb-4 text-center font-medium">Quick Actions</p>
             <div className="grid grid-cols-3 gap-3">
               {quickActions.map((action) => (
-                <button
-                  key={action.title}
-                  className="flex flex-col items-center gap-2.5 p-4 border border-surface-border hover:border-brand-secondary hover:bg-blue-50 transition-all group"
-                >
-                  <action.icon
-                    size={24}
-                    className="text-content-tertiary group-hover:text-brand-secondary transition-colors"
-                  />
+                <button key={action.title} className="flex flex-col items-center gap-2.5 p-4 rounded-md border border-card-border bg-card-header hover:bg-card-bg hover:border-brand-primary hover:shadow-elevated transition-all duration-150 group">
+                  <action.icon size={22} strokeWidth={1.5} className="text-content-helper group-hover:text-brand-primary transition-colors duration-150" />
                   <div className="text-center">
-                    <p className="text-xs font-semibold text-content-primary leading-tight">{action.title}</p>
-                    <p className="text-[11px] text-content-muted mt-0.5 font-mono">{action.description}</p>
+                    <p className="text-xs font-medium text-content-primary leading-tight">{action.title}</p>
+                    <p className="text-[11px] text-content-placeholder mt-0.5 font-mono">{action.description}</p>
                   </div>
                 </button>
               ))}
@@ -152,92 +88,63 @@ export default function AgentsPage() {
         </div>
       </Card>
 
-      {/* ── Bottom 3-Column Grid ──────────────────────────── */}
-      <div className="grid grid-cols-3 gap-5">
-        {/* Recent Agents */}
-        <Card className="flex-1">
-          <div className="flex items-center justify-between px-5 py-4">
-            <h2 className="text-xs font-bold text-content-primary uppercase tracking-wider">
-              Recent Agents
-            </h2>
-            <button className="p-1 text-content-muted hover:text-content-secondary transition-colors">
+      <div className="grid grid-cols-3 gap-4">
+        <Card variant="elevated" className="flex-1">
+          <div className="flex items-center justify-between px-5 h-12 border-b border-card-border-inner bg-card-header">
+            <h2 className="text-xs font-semibold text-content-primary uppercase tracking-wider">Recent Agents</h2>
+            <button className="w-8 h-8 flex items-center justify-center text-content-placeholder hover:text-content-secondary hover:bg-surface-hover rounded-md transition-colors duration-100">
               <MoreHorizontal size={16} />
             </button>
           </div>
-          <div className="px-5 pb-5">
-            <div className="space-y-0">
-              {recentAgents.map((agent, i) => (
-                <div
-                  key={agent.name}
-                  className={`flex items-start gap-3 py-3.5 px-2 -mx-2 cursor-pointer hover:bg-surface-hover transition-colors ${
-                    i < recentAgents.length - 1 ? 'border-b border-gray-100' : ''
-                  }`}
-                >
-                  <span className={`w-[7px] h-[7px] rounded-sm mt-1.5 shrink-0 ${statusColor[agent.status]}`} />
+          <div>
+            {recentAgents.map((agent) => {
+              const cfg = statusConfig[agent.status];
+              return (
+                <div key={agent.name} className={`flex items-start gap-3 px-5 py-3.5 border-b border-border-subtle last:border-b-0 cursor-pointer ${cfg.hoverBg} transition-colors duration-100`}>
+                  <span className={`w-2 h-2 mt-[7px] rounded-full shrink-0 ${cfg.dot}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium text-content-primary font-mono truncate">{agent.name}</p>
-                      <Badge variant="info" className="text-[9px] px-1.5 py-0">{agent.type}</Badge>
+                      <Badge variant="info" className="text-[10px] px-1.5 h-[18px]">{agent.type}</Badge>
                     </div>
-                    <p className="text-xs text-content-tertiary mt-0.5">{agent.detail}</p>
+                    <p className="text-xs text-content-helper mt-0.5">{agent.detail}</p>
                   </div>
-                  <span className="text-xs text-content-muted font-mono shrink-0">{agent.time}</span>
+                  <span className="text-[11px] text-content-placeholder font-mono shrink-0 mt-0.5">{agent.time}</span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        <Card variant="elevated" className="flex-1">
+          <div className="flex items-center justify-between px-5 h-12 border-b border-card-border-inner bg-card-header">
+            <h2 className="text-xs font-semibold text-content-primary uppercase tracking-wider">Agent Stats</h2>
+            <Badge variant="success" badgeStyle="outline">HEALTHY</Badge>
+          </div>
+          <div className="px-5 py-5 space-y-5">
+            <ProgressBar label="Active Rate" value={Math.round((stats.active / stats.total) * 100)} variant="blue" striped />
+            <ProgressBar label="Error Rate" value={Math.round((stats.error / stats.total) * 100)} variant="red" striped />
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              {Object.entries(stats).map(([key, val]) => (
+                <div key={key} className="p-3 rounded-md bg-surface-layer border border-border-subtle">
+                  <p className="text-[11px] text-content-helper uppercase tracking-wider font-medium">{key}</p>
+                  <p className="text-base font-semibold text-content-primary font-mono mt-0.5">{val}</p>
                 </div>
               ))}
             </div>
           </div>
         </Card>
 
-        {/* Agent Stats */}
-        <Card className="flex-1">
-          <div className="flex items-center justify-between px-5 py-4">
-            <h2 className="text-xs font-bold text-content-primary uppercase tracking-wider">
-              Agent Stats
-            </h2>
-            <Badge variant="success" badgeStyle="outline">HEALTHY</Badge>
+        <Card variant="elevated" className="flex-1">
+          <div className="flex items-center px-5 h-12 border-b border-card-border-inner bg-card-header">
+            <h2 className="text-xs font-semibold text-content-primary uppercase tracking-wider">Quick Links</h2>
           </div>
-          <div className="px-5 pb-5 space-y-5">
-            <ProgressBar label="Active Rate" value={Math.round((stats.active / stats.total) * 100)} striped />
-            <ProgressBar label="Error Rate" value={Math.round((stats.error / stats.total) * 100)} striped />
-            <div className="grid grid-cols-2 gap-4 pt-3">
-              <div>
-                <p className="text-[10px] text-content-tertiary uppercase tracking-widest font-medium">Active</p>
-                <p className="text-sm font-semibold text-content-primary font-mono mt-1">{stats.active}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-content-tertiary uppercase tracking-widest font-medium">Inactive</p>
-                <p className="text-sm font-semibold text-content-primary font-mono mt-1">{stats.inactive}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-content-tertiary uppercase tracking-widest font-medium">Error</p>
-                <p className="text-sm font-semibold text-content-primary font-mono mt-1">{stats.error}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-content-tertiary uppercase tracking-widest font-medium">Total</p>
-                <p className="text-sm font-semibold text-content-primary font-mono mt-1">{stats.total}</p>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* Quick Links */}
-        <Card className="flex-1">
-          <div className="flex items-center justify-between px-5 py-4">
-            <h2 className="text-xs font-bold text-content-primary uppercase tracking-wider">
-              Quick Links
-            </h2>
-          </div>
-          <div className="px-5 pb-5 space-y-1">
+          <div>
             {quickLinks.map((link) => (
-              <button
-                key={link.label}
-                onClick={link.onClick}
-                className="flex items-center gap-3 w-full px-3 py-3 hover:bg-blue-50 transition-colors group"
-              >
-                <link.icon size={16} className="text-content-tertiary group-hover:text-brand-secondary transition-colors shrink-0" />
-                <span className="text-sm text-content-primary group-hover:text-brand-secondary transition-colors">
-                  {link.label}
-                </span>
+              <button key={link.label} onClick={link.onClick} className="flex items-center gap-3 w-full h-12 px-5 border-b border-border-subtle last:border-b-0 hover:bg-surface-hover transition-colors duration-100 group">
+                <link.icon size={16} className="text-content-placeholder group-hover:text-brand-primary transition-colors duration-100 shrink-0" />
+                <span className="flex-1 text-left text-sm text-content-secondary group-hover:text-brand-primary transition-colors duration-100">{link.label}</span>
+                <ArrowRight size={14} className="text-content-disabled group-hover:text-brand-primary transition-colors duration-100" />
               </button>
             ))}
           </div>

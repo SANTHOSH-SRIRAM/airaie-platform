@@ -6,15 +6,10 @@ import EnterpriseLicenseCard from '@components/dashboard/EnterpriseLicenseCard';
 
 export default function DashboardPage() {
   return (
-    <div className="p-6 space-y-6">
-      {/* Studio Title + Status */}
+    <div className="p-6 space-y-6 max-w-[1584px]">
       <StudioHeader />
-
-      {/* Start Project + Quick Actions (single card) */}
       <StartProjectCard />
-
-      {/* Bottom 3-column grid */}
-      <div className="grid grid-cols-3 gap-5">
+      <div className="grid grid-cols-3 gap-4">
         <RecentWorkflowsCard />
         <SystemLoadCard />
         <EnterpriseLicenseCard />

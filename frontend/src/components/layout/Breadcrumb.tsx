@@ -1,4 +1,3 @@
-import { LayoutGrid } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
 interface BreadcrumbProps {
@@ -24,15 +23,16 @@ export default function Breadcrumb({ org = 'ABCworld', project = 'ENGINEERING' }
   const studioLabel = useStudioLabel();
 
   return (
-    <div className="flex items-center gap-2 text-sm shrink-0">
-      <LayoutGrid size={16} className="text-content-tertiary" />
-      <span className="font-medium text-content-primary">{org}</span>
-      <span className="text-content-muted">/</span>
-      <span className="font-medium text-brand-secondary">{project}</span>
+    <div className="flex items-center gap-1.5 text-sm shrink-0">
+      <span className="text-cds-text-secondary hover:text-cds-text-primary cursor-pointer transition-colors duration-100">
+        {org}
+      </span>
+      <span className="text-gray-30">/</span>
+      <span className="text-cds-text-primary font-medium">{project}</span>
       {studioLabel && (
         <>
-          <span className="text-content-muted">/</span>
-          <span className="font-medium text-content-primary">{studioLabel}</span>
+          <span className="text-gray-30">/</span>
+          <span className="text-brand-primary font-medium">{studioLabel}</span>
         </>
       )}
     </div>
