@@ -1,0 +1,58 @@
+/* Dark mode CSS variable overrides for AIRAIE Platform */
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --color-bg-primary: #0f172a;
+    --color-bg-secondary: #1e293b;
+    --color-bg-tertiary: #334155;
+    --color-text-primary: #f1f5f9;
+    --color-text-secondary: #94a3b8;
+    --color-text-muted: #64748b;
+    --color-border: #334155;
+    --color-border-light: #1e293b;
+    --color-surface: #1e293b;
+    --color-surface-hover: #334155;
+  }
+}
+
+/* Manual dark mode via class toggle */
+.dark {
+  --color-bg-primary: #0f172a;
+  --color-bg-secondary: #1e293b;
+  --color-bg-tertiary: #334155;
+  --color-text-primary: #f1f5f9;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  --color-border: #334155;
+  --color-border-light: #1e293b;
+  --color-surface: #1e293b;
+  --color-surface-hover: #334155;
+  color-scheme: dark;
+}
+
+/* ReactFlow canvas dark mode */
+.dark .react-flow__background {
+  background-color: #0f172a;
+}
+
+.dark .react-flow__minimap {
+  background-color: #1e293b;
+}
+
+.dark .react-flow__controls button {
+  background-color: #334155;
+  color: #f1f5f9;
+  border-color: #475569;
+}
+
+.dark .react-flow__controls button:hover {
+  background-color: #475569;
+}
+
+.dark .react-flow__edge-path {
+  stroke: #64748b;
+}
+
+.dark .react-flow__node {
+  color: #f1f5f9;
+}

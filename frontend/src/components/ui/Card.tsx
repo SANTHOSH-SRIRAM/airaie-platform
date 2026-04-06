@@ -20,7 +20,7 @@ export default function Card({ children, hover, variant = 'default', className, 
   return (
     <div
       className={cn(
-        'rounded-md overflow-hidden',
+        'rounded-xl overflow-hidden',
         variantStyles[variant],
         hover && 'hover:shadow-card-hover hover:border-border-strong transition-all duration-200 cursor-pointer',
         className

@@ -1,0 +1,205 @@
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { Zap, Loader2, RotateCcw } from 'lucide-react';
+import { useUiStore } from '@store/uiStore';
+import { useAgentPlaygroundStore } from '@store/agentPlaygroundStore';
+import { useSessions } from '@hooks/useAgentPlayground';
+import { useAgentExecution } from '@hooks/useRunAgent';
+import AgentPlaygroundTopBar from '@components/agents/AgentPlaygroundTopBar';
+import ChatInterface from '@components/agents/ChatInterface';
+import ProposalViewer from '@components/agents/execution/ProposalViewer';
+import PolicyDecisionDisplay from '@components/agents/execution/PolicyDecisionDisplay';
+import ApprovalFlow from '@components/agents/execution/ApprovalFlow';
+import EvalTab from '@components/agents/eval/EvalTab';
+import Button from '@components/ui/Button';
+import Badge from '@components/ui/Badge';
+
+const DEFAULT_AGENT_ID = 'agent_fea_opt';
+const DEFAULT_VERSION = 3;
+
+export default function AgentPlaygroundPage() {
+  const { agentId } = useParams<{ agentId?: string }>();
+  const resolvedAgentId = agentId ?? DEFAULT_AGENT_ID;
+
+  const setSidebarContentType = useUiStore((s) => s.setSidebarContentType);
+  const setBottomBar = useUiStore((s) => s.setBottomBar);
+  const hideBottomBar = useUiStore((s) => s.hideBottomBar);
+  const openRightPanel = useUiStore((s) => s.openRightPanel);
+  const closeRightPanel = useUiStore((s) => s.closeRightPanel);
+
+  const setSessions = useAgentPlaygroundStore((s) => s.setSessions);
+  const { data: sessions } = useSessions(resolvedAgentId);
+
+  const [activeTab, setActiveTab] = useState('playground');
+
+  // Execution flow state
+  const execution = useAgentExecution(resolvedAgentId, DEFAULT_VERSION);
+  const [showProposal, setShowProposal] = useState(false);
+
+  // Sync sessions into store
+  useEffect(() => {
+    if (sessions) {
+      setSessions(sessions);
+    }
+  }, [sessions, setSessions]);
+
+  // Set layout on mount, clean up on unmount
+  useEffect(() => {
+    setSidebarContentType('sessions');
+    setBottomBar('agent-playground');
+    openRightPanel('inspector');
+
+    return () => {
+      setSidebarContentType('navigation');
+      hideBottomBar();
+      closeRightPanel();
+    };
+  }, [setSidebarContentType, setBottomBar, hideBottomBar, openRightPanel, closeRightPanel]);
+
+  // Show proposal panel when reviewing
+  useEffect(() => {
+    if (execution.phase === 'reviewing') {
+      setShowProposal(true);
+    }
+  }, [execution.phase]);
+
+  const handleDryRun = () => {
+    execution.propose({ goal: 'Analyze bracket for structural integrity' });
+  };
+
+  const handleApprove = () => {
+    execution.approve();
+    setShowProposal(false);
+  };
+
+  const handleReject = () => {
+    execution.reject();
+    setShowProposal(false);
+  };
+
+  const handleReset = () => {
+    execution.reset();
+    setShowProposal(false);
+  };
+
+  // Determine if policy decision needs approval flow
+  const needsApproval = execution.policyDecision?.overall_verdict === 'needs_approval';
+  const pendingActions = execution.policyDecision?.action_decisions.filter(
+    (a) => a.verdict === 'needs_approval' || a.verdict === 'blocked'
+  ) ?? [];
+
+  // Render evals tab
+  if (activeTab === 'evals') {
+    return (
+      <div data-testid="agent-playground-page" className="flex flex-col h-full">
+        <AgentPlaygroundTopBar
+          agentName="FEA Optimizer Agent"
+          agentVersion="v2"
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
+        <EvalTab agentId={resolvedAgentId} />
+      </div>
+    );
+  }
+
+  return (
+    <div data-testid="agent-playground-page" className="flex flex-col h-full">
+      <AgentPlaygroundTopBar
+        agentName="FEA Optimizer Agent"
+        agentVersion="v2"
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
+
+      {/* Execution controls bar */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-cds-border-subtle bg-cds-layer-01 shrink-0">
+        <Button
+          data-testid="dry-run-btn"
+          variant="tertiary"
+          size="sm"
+          icon={execution.isLoading ? <Loader2 className="animate-spin" /> : <Zap />}
+          onClick={handleDryRun}
+          disabled={execution.isLoading || execution.phase === 'proposing'}
+        >
+          Dry Run
+        </Button>
+
+        {execution.phase !== 'idle' && (
+          <Badge
+            variant={
+              execution.phase === 'completed' ? 'success' :
+              execution.phase === 'failed' ? 'danger' :
+              execution.phase === 'executing' ? 'warning' :
+              'info'
+            }
+          >
+            {execution.phase}
+          </Badge>
+        )}
+
+        {execution.error && (
+          <span className="text-xs text-red-50 ml-2">{execution.error}</span>
+        )}
+
+        {(execution.phase === 'completed' || execution.phase === 'failed') && (
+          <Button
+            data-testid="execution-reset-btn"
+            variant="ghost"
+            size="sm"
+            icon={<RotateCcw />}
+            onClick={handleReset}
+          >
+            Reset
+          </Button>
+        )}
+
+        {execution.runId && (
+          <span className="text-xs text-cds-text-secondary ml-auto font-mono">
+            Run: {execution.runId}
+          </span>
+        )}
+      </div>
+
+      {/* Main content area */}
+      <div className="flex-1 flex min-h-0">
+        {/* Chat area */}
+        <div className="flex-1 flex flex-col min-h-0">
+          <ChatInterface />
+        </div>
+
+        {/* Proposal / Policy panel (shown when reviewing) */}
+        {showProposal && execution.proposal && (
+          <div
+            data-testid="execution-panel"
+            className="w-[480px] border-l border-cds-border-subtle overflow-y-auto bg-cds-layer-01 shrink-0"
+          >
+            <div className="p-4 space-y-4">
+              {/* Proposal Viewer */}
+              <ProposalViewer
+                proposal={execution.proposal}
+                onApprove={handleApprove}
+                onReject={handleReject}
+              />
+
+              {/* Policy Decision */}
+              {execution.policyDecision && (
+                <PolicyDecisionDisplay decision={execution.policyDecision} />
+              )}
+
+              {/* Approval Flow (if needs_approval) */}
+              {needsApproval && pendingActions.length > 0 && execution.proposal.status === 'draft' && (
+                <ApprovalFlow
+                  proposalId={execution.proposal.id}
+                  actions={pendingActions}
+                  onApproved={handleApprove}
+                  onRejected={handleReject}
+                />
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -17,16 +17,40 @@ export const ROUTES = {
   WORKFLOWS: '/workflows',
   WORKFLOW_DETAIL: '/workflows/:id',
   AGENTS: '/agents',
+  TOOLS: '/tools',
   AGENT_DETAIL: '/agents/:id',
   TEMPLATES: '/templates',
   SETTINGS: '/settings',
   PROFILE: '/profile',
+
+  // Community
+  COMMUNITY: '/community',
 
   // Embedded studio routes
   BOARDS: '/boards',
   WORKFLOW_STUDIO: '/workflow-studio',
   AGENT_STUDIO: '/agent-studio',
 } as const;
+
+/** Top navigation page tabs — order matches tab bar left-to-right */
+export const PAGE_TABS = [
+  { label: 'Dashboard', path: ROUTES.DASHBOARD, matchPrefix: '/dashboard' },
+  { label: 'Workflows', path: ROUTES.WORKFLOWS, matchPrefix: '/workflow' },
+  { label: 'Agents', path: ROUTES.AGENTS, matchPrefix: '/agent' },
+  { label: 'Tools', path: ROUTES.TOOLS, matchPrefix: '/tools' },
+  { label: 'Boards', path: ROUTES.BOARDS, matchPrefix: '/boards' },
+] as const;
+
+/** Map route prefixes to sidebar content types */
+export const ROUTE_SIDEBAR_MAP: Record<string, 'navigation' | 'nodePalette' | 'sessions' | 'filters'> = {
+  '/dashboard': 'navigation',
+  '/workflow-studio': 'nodePalette',
+  '/agent-studio': 'sessions',
+  '/tools': 'navigation',
+  '/boards': 'navigation',
+  '/workflows': 'navigation',
+  '/agents': 'navigation',
+};
 
 /**
  * Generate route with parameters

@@ -1,82 +1,96 @@
 /* ============================================
-   AIRAIE DESIGN TOKENS — Single Source of Truth
-   Cobalt + White + Black Theme
+   AIRAIE DESIGN TOKENS — Figma V2 Design System
+   Warm Cream + IBM Plex + Material Accents
    ============================================ */
 
 :root {
   /* ========================================
-     COLOR PRIMITIVES
+     COLOR PRIMITIVES (from Figma)
      ======================================== */
 
-  /* Gray Scale (Neutral Black) */
-  --gray-10:  #f7f8fa;
-  --gray-20:  #e8ecf0;
-  --gray-30:  #c6cbd1;
-  --gray-40:  #a0a0a0;
-  --gray-50:  #808080;
+  /* Warm Neutrals */
+  --gray-05:  #fbfaf9;
+  --gray-10:  #f8f8f7;
+  --gray-15:  #f5f5f0;
+  --gray-20:  #f0f0ec;
+  --gray-25:  #e8e8e8;
+  --gray-30:  #d5d5cf;
+  --gray-35:  #d3d3d3;
+  --gray-40:  #acacac;
+  --gray-50:  #949494;
   --gray-60:  #6b6b6b;
-  --gray-70:  #3d3d3d;
-  --gray-80:  #2a2a2a;
-  --gray-90:  #1a1a1a;
-  --gray-100: #0a0a0a;
+  --gray-80:  #2d2d2d;
+  --gray-90:  #242424;
+  --gray-100: #1a1a1a;
 
-  /* Blue Scale (Cobalt) */
-  --blue-10:  #eef3fb;
-  --blue-20:  #d6e4f7;
-  --blue-30:  #a3c2ec;
-  --blue-40:  #5a92d4;
-  --blue-50:  #1a6bc4;
-  --blue-60:  #0047AB;
-  --blue-70:  #003d96;
-  --blue-80:  #002d6b;
-  --blue-90:  #001e47;
-  --blue-100: #001030;
+  /* Material Blue */
+  --blue-10:  #e3f2fd;
+  --blue-50:  #2196f3;
+  --blue-60:  #1976d2;
+  --blue-70:  #1565c0;
 
-  /* Green Scale */
-  --green-10: #defbe6;
-  --green-20: #a7f0ba;
-  --green-30: #6fdc8c;
-  --green-40: #42be65;
-  --green-50: #24a148;
-  --green-60: #198038;
-  --green-70: #0e6027;
-  --green-80: #044317;
+  /* Material Green */
+  --green-10: #e8f5e9;
+  --green-50: #4caf50;
+  --green-60: #43a047;
 
-  /* Red Scale */
-  --red-10:   #fff1f1;
-  --red-20:   #ffd7d9;
-  --red-30:   #ffb3b8;
-  --red-40:   #ff8389;
-  --red-50:   #fa4d56;
-  --red-60:   #da1e28;
-  --red-70:   #a2191f;
-  --red-80:   #750e13;
+  /* Material Red */
+  --red-10:   #ffebee;
+  --red-50:   #e74c3c;
+  --red-60:   #d32f2f;
 
-  /* Yellow Scale */
-  --yellow-20: #fdd13a;
-  --yellow-30: #f1c21b;
+  /* Material Orange */
+  --orange-10: #fff3e0;
+  --orange-15: #fff8f0;
+  --orange-50: #ff9800;
+  --orange-60: #f57c00;
 
-  /* Purple */
-  --purple-60: #8a3ffc;
+  /* Material Purple */
+  --purple-10: #f3e5f5;
+  --purple-50: #9c27b0;
+  --purple-60: #7b1fa2;
+
+  /* Material Yellow */
+  --yellow-20: #fff9c4;
+  --yellow-50: #ffeb3b;
 
   /* Teal */
   --teal-50:  #009d9a;
-  --teal-60:  #007d79;
 
   /* ========================================
-     TYPOGRAPHY
+     TYPOGRAPHY (from Figma)
      ======================================== */
 
   --font-sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
-  --font-mono: 'IBM Plex Mono', Menlo, Monaco, monospace;
+  --font-mono: 'IBM Plex Mono', 'SF Mono', Menlo, Monaco, monospace;
 
   /* ========================================
      LAYOUT
      ======================================== */
 
-  --sidebar-width: 256px;
-  --header-height: 48px;
-  --content-max-width: 1584px;
+  --sidebar-width: 230px;
+  --header-height: 52px;
+  --content-max-width: 1409px;
+  --right-panel-width-default: 300px;
+  --bottom-bar-height: 48px;
+  --vertical-toolbar-width: 48px;
+
+  /* ========================================
+     BORDER RADIUS (from Figma)
+     ======================================== */
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-full: 999px;
+
+  /* ========================================
+     SHADOWS (from Figma — consistent everywhere)
+     ======================================== */
+
+  --shadow-card: 0px 1px 8px 0px rgba(0, 0, 0, 0.05);
 
   /* ========================================
      Z-INDEX
@@ -103,149 +117,135 @@
 }
 
 /* ============================================
-   LIGHT THEME (Default)
+   LIGHT THEME (Default — Figma V2)
    ============================================ */
 
 :root,
 [data-theme="light"] {
-  /* Brand (Black + White — no cobalt accent) */
-  --color-brand-primary:       #0a0a0a;
-  --color-brand-primary-hover:  #1a1a1a;
-  --color-brand-primary-active: #2a2a2a;
-  --color-brand-primary-muted:  #f7f8fa;
-  --color-brand-danger:         var(--red-60);
-  --color-brand-danger-hover:   var(--red-70);
+  /* Brand */
+  --color-brand-primary:       var(--gray-80);
+  --color-brand-primary-hover:  var(--gray-90);
+  --color-brand-primary-active: var(--gray-100);
+  --color-brand-primary-muted:  var(--gray-15);
+  --color-brand-danger:         var(--red-50);
+  --color-brand-danger-hover:   var(--red-60);
 
-  /* Surfaces */
-  --color-surface-bg:           #ffffff;
-  --color-surface:              #ffffff;
-  --color-surface-raised:       #ffffff;
+  /* Surfaces (warm cream tones from Figma) */
+  --color-surface-bg:           var(--gray-15);
+  --color-surface:              var(--gray-05);
+  --color-surface-raised:       var(--gray-05);
   --color-surface-layer:        var(--gray-10);
-  --color-surface-hover:        #f5f5f5;
-  --color-surface-active:       #e8e8e8;
+  --color-surface-hover:        var(--gray-25);
+  --color-surface-active:       var(--gray-30);
   --color-surface-overlay:      rgba(10, 10, 10, 0.5);
 
   /* Card */
-  --color-card-bg:              #ffffff;
+  --color-card-bg:              var(--gray-05);
   --color-card-header:          var(--gray-10);
-  --color-card-border:          #e2e5ea;
-  --color-card-border-inner:    #eef0f3;
-  --color-card-shadow:          0 1px 3px rgba(0, 0, 0, 0.06);
-  --color-card-shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.08);
-  --color-card-shadow-hover:    0 8px 24px rgba(0, 0, 0, 0.1);
+  --color-card-border:          #ece9e3;
+  --color-card-border-inner:    #f0ede7;
+  --color-card-shadow:          var(--shadow-card);
+  --color-card-shadow-elevated: var(--shadow-card);
+  --color-card-shadow-hover:    0 3px 12px rgba(0, 0, 0, 0.08);
 
-  /* Sidebar (Always dark — direct hex, no var() indirection) */
-  --color-sidebar-bg:           #0a0a0a;
-  --color-sidebar-hover:        #1a1a1a;
-  --color-sidebar-text:         #b0b0b0;
-  --color-sidebar-text-active:  #ffffff;
-  --color-sidebar-icon:         #808080;
-  --color-sidebar-border:       #2a2a2a;
-  --color-sidebar-section:      #606060;
-  --color-sidebar-active-border: #0a0a0a;
+  /* Sidebar */
+  --color-sidebar-bg:           var(--gray-05);
+  --color-sidebar-hover:        var(--gray-25);
+  --color-sidebar-text:         var(--gray-100);
+  --color-sidebar-text-active:  var(--gray-100);
+  --color-sidebar-icon:         var(--gray-50);
+  --color-sidebar-border:       var(--gray-25);
+  --color-sidebar-section:      var(--gray-40);
+  --color-sidebar-active-border: var(--gray-80);
 
   /* Text */
   --color-text-primary:   var(--gray-100);
-  --color-text-secondary: var(--gray-70);
+  --color-text-secondary: var(--gray-50);
   --color-text-helper:    var(--gray-60);
   --color-text-placeholder: var(--gray-40);
-  --color-text-disabled:  var(--gray-30);
+  --color-text-disabled:  var(--gray-35);
   --color-text-inverse:   #ffffff;
   --color-text-on-color:  #ffffff;
 
   /* Borders */
-  --color-border:         #e2e5ea;
-  --color-border-subtle:  #eef0f3;
-  --color-border-strong:  var(--gray-50);
-  --color-border-focus:   #0a0a0a;
+  --color-border:         #ece9e3;
+  --color-border-subtle:  #f0ede7;
+  --color-border-strong:  var(--gray-35);
+  --color-border-focus:   var(--gray-80);
+
+  /* Node colors (Material Design from Figma) */
+  --color-node-trigger:   var(--green-50);
+  --color-node-tool:      var(--blue-50);
+  --color-node-agent:     var(--purple-50);
+  --color-node-logic:     var(--orange-50);
+  --color-node-governance: var(--orange-50);
+  --color-node-data:      var(--teal-50);
 
   /* Status */
   --color-status-success:     var(--green-50);
   --color-status-success-bg:  var(--green-10);
   --color-status-success-text: var(--green-60);
 
-  --color-status-warning:     var(--yellow-30);
-  --color-status-warning-bg:  rgba(253, 209, 58, 0.15);
-  --color-status-warning-text: var(--gray-100);
+  --color-status-warning:     var(--orange-50);
+  --color-status-warning-bg:  var(--orange-10);
+  --color-status-warning-text: var(--orange-60);
 
-  --color-status-danger:      var(--red-60);
+  --color-status-danger:      var(--red-50);
   --color-status-danger-bg:   var(--red-10);
-  --color-status-danger-text:  var(--red-70);
+  --color-status-danger-text:  var(--red-60);
 
-  --color-status-info:        #3d3d3d;
-  --color-status-info-bg:     #f7f8fa;
-  --color-status-info-text:   #0a0a0a;
+  --color-status-info:        var(--blue-50);
+  --color-status-info-bg:     var(--blue-10);
+  --color-status-info-text:   var(--blue-60);
 
   /* Focus */
-  --color-focus: #0a0a0a;
+  --color-focus: var(--gray-80);
 
-  /* Shadows */
-  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.06);
-  --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.08);
-  --shadow-lg:  0 8px 24px rgba(0, 0, 0, 0.1);
-  --shadow-xl:  0 16px 48px rgba(0, 0, 0, 0.12);
+  /* CDS compat aliases */
+  --color-cds-field-01: var(--gray-10);
+  --color-cds-background-hover: var(--gray-25);
+  --color-cds-background-active: var(--gray-30);
+  --color-cds-icon-secondary: var(--gray-50);
+  --color-cds-text-primary: var(--gray-100);
+  --color-cds-text-secondary: var(--gray-50);
+  --color-cds-text-placeholder: var(--gray-40);
+  --color-cds-border-subtle: var(--gray-25);
+  --color-cds-focus: var(--gray-80);
 }
 
 /* ============================================
-   DARK THEME (Scaffolded)
+   DARK THEME
    ============================================ */
 
 [data-theme="dark"] {
-  /* Brand */
-  --color-brand-primary:       var(--blue-50);
-  --color-brand-primary-hover:  var(--blue-40);
-  --color-brand-primary-active: var(--blue-60);
-  --color-brand-primary-muted:  rgba(0, 71, 171, 0.15);
-
-  /* Surfaces */
-  --color-surface-bg:           var(--gray-100);
-  --color-surface:              var(--gray-90);
-  --color-surface-raised:       var(--gray-80);
-  --color-surface-layer:        var(--gray-90);
-  --color-surface-hover:        var(--gray-80);
-  --color-surface-active:       var(--gray-70);
+  --color-surface-bg:           #121212;
+  --color-surface:              #1e1e1e;
+  --color-surface-raised:       #252525;
+  --color-surface-layer:        #1e1e1e;
+  --color-surface-hover:        #2a2a2a;
+  --color-surface-active:       #333333;
   --color-surface-overlay:      rgba(0, 0, 0, 0.6);
 
-  /* Card */
-  --color-card-bg:              var(--gray-90);
-  --color-card-header:          var(--gray-80);
-  --color-card-border:          var(--gray-80);
-  --color-card-border-inner:    var(--gray-70);
-  --color-card-shadow:          0 1px 3px rgba(0, 0, 0, 0.3);
-  --color-card-shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.4);
-  --color-card-shadow-hover:    0 8px 24px rgba(0, 0, 0, 0.5);
+  --color-card-bg:              #1e1e1e;
+  --color-card-header:          #252525;
+  --color-card-border:          #333333;
 
-  /* Text */
-  --color-text-primary:   var(--gray-10);
-  --color-text-secondary: var(--gray-40);
-  --color-text-helper:    var(--gray-50);
-  --color-text-placeholder: var(--gray-60);
-  --color-text-disabled:  var(--gray-70);
-  --color-text-inverse:   var(--gray-100);
+  --color-text-primary:   #e8e8e8;
+  --color-text-secondary: #949494;
+  --color-text-helper:    #6b6b6b;
+  --color-text-placeholder: #4a4a4a;
+  --color-text-disabled:  #333333;
 
-  /* Borders */
-  --color-border:         var(--gray-70);
-  --color-border-subtle:  var(--gray-80);
-  --color-border-strong:  var(--gray-60);
+  --color-border:         #333333;
+  --color-border-subtle:  #2a2a2a;
+  --color-border-strong:  #4a4a4a;
   --color-border-focus:   var(--blue-50);
 
-  /* Status (adjusted for dark) */
-  --color-status-success-bg:  rgba(36, 161, 72, 0.1);
-  --color-status-success-text: var(--green-30);
-  --color-status-warning-bg:  rgba(241, 194, 27, 0.1);
-  --color-status-danger-bg:   rgba(218, 30, 40, 0.1);
-  --color-status-danger-text: var(--red-30);
-  --color-status-info-bg:     rgba(0, 71, 171, 0.1);
-  --color-status-info-text:   var(--blue-30);
-
-  /* Focus */
   --color-focus: var(--blue-50);
 
-  /* Shadows */
-  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.4);
-  --shadow-lg:  0 8px 24px rgba(0, 0, 0, 0.5);
-  --shadow-xl:  0 16px 48px rgba(0, 0, 0, 0.6);
+  --color-cds-field-01: #252525;
+  --color-cds-background-hover: #2a2a2a;
+  --color-cds-text-primary: #e8e8e8;
+  --color-cds-text-secondary: #949494;
+  --color-cds-border-subtle: #2a2a2a;
 }

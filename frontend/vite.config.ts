@@ -35,12 +35,14 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           query: ['@tanstack/react-query'],
           ui: ['lucide-react', 'recharts'],
+          reactflow: ['@xyflow/react'],
         },
       },
     },

@@ -8,13 +8,13 @@ interface UserCardProps {
 
 export default function UserCard({ name, role }: UserCardProps) {
   return (
-    <div className="flex items-center gap-2.5 px-4 py-3 border-t border-sidebar-border">
-      <Avatar name={name} size="sm" className="bg-brand-primary" />
+    <div className="flex items-center gap-2.5 py-3 border-t border-[#e8e8e8] mt-auto">
+      <Avatar name={name} size="sm" className="bg-[#2d2d2d]" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-sidebar-text-active truncate">{name}</p>
-        <p className="text-xs text-sidebar-icon font-mono truncate">{role}</p>
+        <p className="text-[13px] font-medium text-[#1a1a1a] truncate">{name}</p>
+        <p className="text-[11px] text-[#949494] font-mono truncate">{role}</p>
       </div>
-      <button className="shrink-0 w-8 h-8 flex items-center justify-center text-sidebar-icon hover:bg-sidebar-hover hover:text-sidebar-text-active transition-colors duration-100 rounded-sm">
+      <button className="shrink-0 w-8 h-8 flex items-center justify-center text-[#949494] hover:bg-[#e8e8e8] hover:text-[#1a1a1a] transition-colors duration-100 rounded-md">
         <Settings size={16} />
       </button>
     </div>

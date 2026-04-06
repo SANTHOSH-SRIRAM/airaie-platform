@@ -26,7 +26,7 @@ export default function RegionDropdown() {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-0 w-48 bg-white border border-cds-border-subtle shadow-dropdown z-50">
+          <div className="absolute right-0 top-full mt-0 w-48 bg-surface border border-cds-border-subtle shadow-dropdown z-50">
             {regions.map((r) => (
               <button
                 key={r.value}

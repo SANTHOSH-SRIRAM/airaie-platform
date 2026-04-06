@@ -79,6 +79,35 @@ export interface WorkflowRunResult {
   error?: string;
 }
 
+// --- ReactFlow editor types (Phase 3) ---
+
+import type { Node, Edge } from '@xyflow/react';
+import type { WorkflowNodeType } from '@constants/nodeCategories';
+
+export interface WorkflowNodeData {
+  label: string;
+  subtype: string;
+  nodeType: WorkflowNodeType;
+  version?: string;
+  status?: 'idle' | 'running' | 'completed' | 'failed';
+  inputs: Record<string, unknown>;
+  resourceLimits?: { cpu: number; memoryMb: number; timeoutSeconds: number };
+  retryPolicy?: { maxRetries: number; waitBetweenSeconds: number };
+  metadata?: { createdAt?: string; lastRunAt?: string; avgCostUsd?: number };
+}
+
+export type WorkflowEditorNode = Node<WorkflowNodeData>;
+export type WorkflowEditorEdge = Edge;
+
+export interface WorkflowEditorMetadata {
+  id: string;
+  name: string;
+  version: string;
+  versionStatus: 'draft' | 'published';
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WorkflowStepResult {
   stepId: string;
   status: 'completed' | 'failed' | 'skipped';

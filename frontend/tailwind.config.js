@@ -119,24 +119,30 @@ export default {
           20:  'var(--yellow-20)',
           30:  'var(--yellow-30)',
         },
-        purple: { 60: 'var(--purple-60)' },
+        orange: {
+          10: 'var(--orange-10)',
+          50: 'var(--orange-50)',
+          60: 'var(--orange-60)',
+        },
+        purple: { 50: 'var(--purple-50)', 60: 'var(--purple-60)' },
         teal:   { 50: 'var(--teal-50)', 60: 'var(--teal-60)' },
       },
 
       fontFamily: {
-        sans: ['var(--font-sans)'],
-        mono: ['var(--font-mono)'],
+        sans: ['IBM Plex Sans', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['IBM Plex Mono', 'SF Mono', 'Menlo', 'Monaco', 'monospace'],
       },
 
       fontSize: {
-        'xs':   ['0.75rem',  { lineHeight: '1rem',     letterSpacing: '0.32px' }],
-        'sm':   ['0.875rem', { lineHeight: '1.25rem',  letterSpacing: '0.16px' }],
-        'base': ['1rem',     { lineHeight: '1.375rem' }],
-        'lg':   ['1.125rem', { lineHeight: '1.5rem' }],
-        'xl':   ['1.25rem',  { lineHeight: '1.75rem' }],
-        '2xl':  ['1.5rem',   { lineHeight: '2rem' }],
-        '3xl':  ['1.875rem', { lineHeight: '2.25rem' }],
-        '4xl':  ['2.25rem',  { lineHeight: '2.5rem' }],
+        '2xs':  ['0.6875rem', { lineHeight: '1rem' }],       // 11px — section labels
+        'xs':   ['0.75rem',   { lineHeight: '1rem' }],       // 12px — helper
+        'sm':   ['0.8125rem', { lineHeight: '1.25rem' }],    // 13px — body
+        'base': ['0.875rem',  { lineHeight: '1.25rem' }],    // 14px — titles
+        'lg':   ['1rem',      { lineHeight: '1.375rem' }],   // 16px — headings
+        'xl':   ['1.25rem',   { lineHeight: '1.75rem' }],
+        '2xl':  ['1.5rem',    { lineHeight: '2rem' }],
+        '3xl':  ['1.75rem',   { lineHeight: '2.25rem' }],    // 28px — hero
+        '4xl':  ['2.25rem',   { lineHeight: '2.5rem' }],
       },
 
       spacing: {
@@ -145,20 +151,24 @@ export default {
       },
 
       boxShadow: {
-        'xs':         'var(--shadow-xs)',
-        'card':       'var(--color-card-shadow)',
-        'card-hover': 'var(--color-card-shadow-hover)',
-        'elevated':   'var(--color-card-shadow-elevated)',
-        'dropdown':   'var(--shadow-lg)',
-        'raised':     'var(--shadow-lg)',
+        'xs':         '0 1px 2px rgba(0,0,0,0.04)',
+        'card':       '0px 1px 8px 0px rgba(0, 0, 0, 0.05)',
+        'card-hover': '0 3px 12px rgba(0, 0, 0, 0.08)',
+        'elevated':   '0px 1px 8px 0px rgba(0, 0, 0, 0.05)',
+        'dropdown':   '0 3px 16px rgba(0, 0, 0, 0.10)',
+        'raised':     '0 3px 16px rgba(0, 0, 0, 0.10)',
+        'node-selected': '0px 1px 8px 0px rgba(0, 0, 0, 0.05), 0 0 0 2px #2196f3',
       },
 
       borderRadius: {
         'none': '0',
-        'sm':   '2px',
-        'md':   '6px',
-        'lg':   '8px',
+        'sm':   '4px',
+        'DEFAULT': '8px',
+        'md':   '8px',
+        'lg':   '10px',
         'xl':   '12px',
+        '2xl':  '16px',
+        'full': '999px',
       },
 
       zIndex: {

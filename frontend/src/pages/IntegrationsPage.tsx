@@ -129,7 +129,7 @@ export default function IntegrationsPage() {
             placeholder="Search integrations..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-12 h-10 text-sm bg-white border border-card-border rounded-lg text-content-primary placeholder:text-content-placeholder focus:outline-2 focus:outline-content-primary focus:outline-offset-[-2px] transition-colors duration-100"
+            className="w-full pl-10 pr-12 h-10 text-sm bg-surface border border-card-border rounded-lg text-content-primary placeholder:text-content-placeholder focus:outline-2 focus:outline-content-primary focus:outline-offset-[-2px] transition-colors duration-100"
           />
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
             <Kbd>⌘K</Kbd>
@@ -142,7 +142,7 @@ export default function IntegrationsPage() {
             className={`h-8 px-3.5 text-xs font-medium rounded-lg transition-colors duration-100 whitespace-nowrap ${
               !activeCategory
                 ? 'bg-content-primary text-white'
-                : 'bg-white text-content-secondary hover:bg-surface-hover border border-card-border'
+                : 'bg-surface text-content-secondary hover:bg-surface-hover border border-card-border'
             }`}
           >
             All
@@ -154,7 +154,7 @@ export default function IntegrationsPage() {
               className={`h-8 px-3.5 text-xs font-medium rounded-lg transition-colors duration-100 whitespace-nowrap ${
                 activeCategory === cat
                   ? 'bg-content-primary text-white'
-                  : 'bg-white text-content-secondary hover:bg-surface-hover border border-card-border'
+                  : 'bg-surface text-content-secondary hover:bg-surface-hover border border-card-border'
               }`}
             >
               {cat}
@@ -176,7 +176,7 @@ export default function IntegrationsPage() {
             {group.items.map((item) => (
               <div
                 key={item.name}
-                className={`group relative bg-white rounded-xl border-2 transition-all duration-150 cursor-pointer hover:shadow-elevated ${
+                className={`group relative bg-card-bg rounded-xl border-2 transition-all duration-150 cursor-pointer hover:shadow-elevated ${
                   item.connected ? 'border-content-primary' : 'border-card-border hover:border-content-helper'
                 }`}
               >
