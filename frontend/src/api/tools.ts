@@ -482,24 +482,60 @@ const MOCK_TOOLS: Tool[] = [
 
 /* ---------- Existing read endpoints ---------- */
 
-export const fetchTools = (): Promise<Tool[]> => fetchOrMock('/v0/tools', MOCK_TOOLS);
+function normalizeToolFromAPI(raw: Record<string, unknown>): Tool {
+  return {
+    id: raw.id as string,
+    name: raw.name as string,
+    description: (raw.description as string) ?? '',
+    icon: (raw.icon as string) ?? 'wrench',
+    status: (raw.status as Tool['status']) ?? 'draft',
+    category: (raw.category as Tool['category']) ?? 'utilities',
+    adapter: (raw.adapter as Tool['adapter']) ?? 'docker',
+    currentVersion: (raw.current_version as string) ?? '',
+    versions: (raw.versions as Tool['versions']) ?? [],
+    contract: (raw.contract as Tool['contract']) ?? { inputs: [], outputs: [] },
+    costPerRun: (raw.cost_per_run as number) ?? 0,
+    usageCount: (raw.usage_count as number) ?? 0,
+    image: (raw.image as string) ?? '',
+    registry: (raw.registry as string) ?? '',
+    limits: (raw.limits as Tool['limits']) ?? { cpu: 2, memoryMb: 1024, timeoutSeconds: 120 },
+    sandboxNetwork: (raw.sandbox_network as Tool['sandboxNetwork']) ?? 'deny',
+    tags: (raw.tags as string[]) ?? [],
+  };
+}
 
-export const fetchTool = (id: string): Promise<Tool> =>
-  fetchOrMock(`/v0/tools/${id}`, MOCK_TOOLS.find((tool) => tool.id === id) ?? MOCK_TOOLS[0]);
+export const fetchTools = async (): Promise<Tool[]> => {
+  const res = await fetchOrMock<unknown>('/v0/tools', MOCK_TOOLS);
+  const raw: unknown[] = Array.isArray(res)
+    ? res
+    : (res as { tools?: unknown[] }).tools ?? [];
+  return raw.map((t) => normalizeToolFromAPI(t as Record<string, unknown>));
+};
+
+export const fetchTool = async (id: string): Promise<Tool> => {
+  const mockFallback = MOCK_TOOLS.find((tool) => tool.id === id) ?? MOCK_TOOLS[0];
+  const res = await fetchOrMock<unknown>(`/v0/tools/${id}`, mockFallback);
+  const raw = ((res as { tool?: unknown }).tool ?? res) as Record<string, unknown>;
+  return normalizeToolFromAPI(raw);
+};
 
 export async function fetchToolVersions(toolId: string): Promise<ToolVersion[]> {
-  return apiOrMock(`/v0/tools/${toolId}/versions`, { method: 'GET' }, []);
+  const res = await apiOrMock<ToolVersion[] | { versions: ToolVersion[] }>(
+    `/v0/tools/${toolId}/versions`, { method: 'GET' }, []
+  );
+  return Array.isArray(res) ? res : (res as { versions: ToolVersion[] }).versions ?? [];
 }
 
 /* ---------- Mutation endpoints ---------- */
 
 export async function createTool(data: { name: string; description: string; owner?: string }): Promise<Tool> {
-  return apiClient.post('/v0/tools', data);
+  const res = await apiClient.post<{ tool: Record<string, unknown> }>('/v0/tools', data);
+  return normalizeToolFromAPI((res as { tool: Record<string, unknown> }).tool ?? (res as unknown as Record<string, unknown>));
 }
 
 export async function createToolVersion(
   toolId: string,
-  data: { version: string; contract_json: string },
+  data: { version: string; contract: Record<string, unknown> },
 ): Promise<ToolVersion> {
   return apiClient.post(`/v0/tools/${toolId}/versions`, data);
 }
@@ -534,7 +570,7 @@ export async function validateContract(
   contract: ToolContractFull,
   checkPublish?: boolean,
 ): Promise<ContractValidationResult> {
-  return apiClient.post('/v0/tools/validate-contract', { contract, check_publish: checkPublish });
+  return apiClient.post('/v0/validate/contract', { contract, check_publish: checkPublish });
 }
 
 export async function updateTrustLevel(
@@ -542,7 +578,7 @@ export async function updateTrustLevel(
   version: string,
   trustLevel: TrustLevel,
 ): Promise<ToolVersion> {
-  return apiClient.patch(`/v0/tools/${toolId}/versions/${version}/trust`, { trust_level: trustLevel });
+  return apiClient.patch(`/v0/tools/${toolId}/versions/${version}/trust-level`, { trust_level: trustLevel });
 }
 
 /* ---------- Tool Detail (Sprint 1.2) ---------- */
@@ -582,19 +618,29 @@ function buildToolRuns(tool: Tool): ToolRunEntry[] {
   }));
 }
 
-export const fetchToolDetail = (id: string): Promise<ToolDetail> => {
-  const tool = MOCK_TOOLS.find((t) => t.id === id) ?? MOCK_TOOLS[0];
-  return fetchOrMock(`/v0/tools/${id}/detail`, buildToolDetail(tool));
+export const fetchToolDetail = async (id: string): Promise<ToolDetail> => {
+  const res = await apiClient.get<{ tool: Record<string, unknown>; versions: ToolDetailVersion[] }>(`/v0/tools/${id}`);
+  const raw = res.tool;
+  const latestVersion = res.versions?.[0];
+  return {
+    ...normalizeToolFromAPI(raw),
+    trust_level: (latestVersion?.trust_level as TrustLevel) ?? 'untested',
+    supported_intents: [],
+    domain_tags: (raw.domain_tags as string[]) ?? [],
+    owner: (raw.owner as string) ?? '',
+    created_at: (raw.created_at as string) ?? '',
+    updated_at: (raw.updated_at as string) ?? '',
+  } as ToolDetail;
 };
 
-export const fetchToolDetailVersions = (toolId: string): Promise<ToolDetailVersion[]> => {
-  const tool = MOCK_TOOLS.find((t) => t.id === toolId) ?? MOCK_TOOLS[0];
-  return fetchOrMock(`/v0/tools/${toolId}/detail-versions`, buildToolDetailVersions(tool));
+export const fetchToolDetailVersions = async (toolId: string): Promise<ToolDetailVersion[]> => {
+  const res = await apiClient.get<{ versions: ToolDetailVersion[] }>(`/v0/tools/${toolId}/versions`);
+  return res.versions ?? [];
 };
 
-export const fetchToolRuns = (toolId: string): Promise<ToolRunEntry[]> => {
-  const tool = MOCK_TOOLS.find((t) => t.id === toolId) ?? MOCK_TOOLS[0];
-  return fetchOrMock(`/v0/tools/${toolId}/runs`, buildToolRuns(tool));
+export const fetchToolRuns = async (toolId: string): Promise<ToolRunEntry[]> => {
+  const res = await apiClient.get<{ runs: ToolRunEntry[] | null }>(`/v0/runs?tool_id=${toolId}&limit=20`);
+  return res.runs ?? [];
 };
 
 export async function createToolRun(
@@ -612,7 +658,7 @@ export async function createToolRun(
     created_at: new Date().toISOString(),
     inputs,
   };
-  return apiOrMock(`/v0/tools/${toolId}/runs`, { method: 'POST', body: JSON.stringify({ version, inputs }) }, mockRun);
+  return apiOrMock(`/v0/runs`, { method: 'POST', body: JSON.stringify({ tool_id: toolId, version, inputs }) }, mockRun);
 }
 
 /* ---------- Tool Shelf Resolution (Sprint 1.3) ---------- */

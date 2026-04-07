@@ -60,14 +60,16 @@ export default function LintResultsPanel({ result, className }: LintResultsPanel
       </div>
 
       {/* Section errors/warnings */}
-      {Object.entries(result.sections).map(([section, data]) => {
-        if (data.errors.length === 0 && data.warnings.length === 0) return null;
+      {Object.entries(result.sections ?? {}).map(([section, data]) => {
+        const errors = data.errors ?? [];
+        const warnings = data.warnings ?? [];
+        if (errors.length === 0 && warnings.length === 0) return null;
         return (
           <div key={section} className="space-y-1">
             <div className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[#acacac]">
               {section}
             </div>
-            {data.errors.map((err, i) => (
+            {errors.map((err, i) => (
               <div key={`e-${i}`} className="flex items-start gap-2 rounded-[6px] bg-[#ffebee] px-3 py-1.5">
                 <XCircle size={12} className="text-[#e74c3c] shrink-0 mt-0.5" />
                 <span className="text-[10px] text-[#e74c3c]">
@@ -75,7 +77,7 @@ export default function LintResultsPanel({ result, className }: LintResultsPanel
                 </span>
               </div>
             ))}
-            {data.warnings.map((warn, i) => (
+            {warnings.map((warn, i) => (
               <div key={`w-${i}`} className="flex items-start gap-2 rounded-[6px] bg-[#fff3e0] px-3 py-1.5">
                 <AlertTriangle size={12} className="text-[#ff9800] shrink-0 mt-0.5" />
                 <span className="text-[10px] text-[#ff9800]">

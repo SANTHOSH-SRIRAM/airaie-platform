@@ -264,7 +264,7 @@ function ToolRegistryRow({
         <AdapterBadge adapter={tool.adapter} />
       </div>
       <div className="text-[11px] text-[#6b6b6b]">
-        {tool.contract.inputs.length} → {tool.contract.outputs.length}
+        {tool.contract?.inputs?.length ?? 0} → {tool.contract?.outputs?.length ?? 0}
       </div>
     </button>
   );

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Wrench, ArrowLeft, FileCheck, Send } from 'lucide-react';
 import { useUiStore } from '@store/uiStore';
 import { useCreateTool, useCreateToolVersion, useValidateContract } from '@hooks/useTools';
+import { createToolVersion } from '@api/tools';
 import Button from '@components/ui/Button';
 import Badge from '@components/ui/Badge';
 import Input from '@components/ui/Input';
@@ -76,6 +77,92 @@ const INITIAL: FormState = {
 
 /* ---------- Helpers ---------- */
 
+// Maps frontend port types to backend contract types
+function mapPortType(t: string): string {
+  if (t === 'artifact') return 'file';
+  if (t === 'number') return 'float';
+  return t; // string, integer, float, boolean, json pass through
+}
+
+// Builds a backend-compatible ToolContract JSON object from form state
+function buildBackendContract(form: FormState): Record<string, unknown> {
+  const now = new Date().toISOString();
+  const slug = form.name.toLowerCase().replace(/\s+/g, '-');
+  return {
+    api_version: 'airaie.toolcontract/v1',
+    kind: 'ToolContract',
+    metadata: {
+      id: slug,
+      name: form.name,
+      version: '0.1.0',
+      owner: 'current-user',
+      domain_tags: form.domainTags.length > 0 ? form.domainTags : [form.category],
+      description: form.description,
+      license: 'MIT',
+      created_at: now,
+      updated_at: now,
+    },
+    interface: {
+      inputs: form.inputs.map((p) => ({
+        name: p.name,
+        title: p.name,
+        type: mapPortType(p.type),
+        description: p.description || p.name,
+        optional: !p.required,
+      })),
+      outputs: form.outputs.map((p) => ({
+        name: p.name,
+        title: p.name,
+        type: mapPortType(p.type),
+        description: p.description || p.name,
+      })),
+      errors: [],
+    },
+    runtime: {
+      adapter: form.adapter,
+      locality: 'local',
+      timeout_seconds: form.timeoutSeconds,
+      retries: 1,
+      idempotent: true,
+      deterministic: false,
+      resources: {
+        cpu_cores: form.cpu,
+        memory_mb: form.memoryMb,
+        disk_mb: 512,
+      },
+      docker: {
+        image: form.image || `airaie/${slug}:0.1.0`,
+        command: ['run'],
+        env: {},
+      },
+    },
+    capabilities: {
+      computes: [`${form.category}.${slug}`],
+      requires: [],
+      improves: [],
+      invocation_modes: ['batch'],
+    },
+    governance: {
+      sandbox: form.sandboxNetwork === 'deny',
+      audit_log: 'enabled',
+      quota: {
+        cpu_limit: `${form.cpu} cores`,
+        memory_limit: `${form.memoryMb} MB`,
+        max_concurrency: 5,
+      },
+    },
+    observability: {
+      log_level: 'info',
+      emit_metrics: true,
+      emit_traces: true,
+    },
+    tests: {
+      sample_cases: [],
+    },
+  };
+}
+
+// Keep old buildContract for the validate preview (used in step 3 review)
 function buildContract(form: FormState): ToolContractFull {
   return {
     metadata: {
@@ -188,7 +275,7 @@ export default function RegisterToolPage() {
     return true;
   }, [step, form.name, form.description]);
 
-  const contract = useMemo(() => buildContract(form), [form]);
+  const contract = useMemo(() => buildBackendContract(form) as unknown as ToolContractFull, [form]);
 
   const handleValidate = useCallback(async () => {
     setError(null);
@@ -205,10 +292,9 @@ export default function RegisterToolPage() {
     setError(null);
     try {
       const tool = await createTool.mutateAsync({ name: form.name, description: form.description });
-      const contractForVersion = { inputs: form.inputs, outputs: form.outputs };
-      await createVersion.mutateAsync({
+      await createToolVersion(tool.id, {
         version: '0.1.0',
-        contract_json: JSON.stringify(contractForVersion),
+        contract: buildBackendContract(form),
       });
       navigate(`/tools?registered=${tool.id}`);
     } catch (err: unknown) {
