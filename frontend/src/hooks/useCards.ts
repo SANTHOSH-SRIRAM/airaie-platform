@@ -4,6 +4,7 @@ import {
   getCard,
   createCard,
   updateCard,
+  deleteCard,
   listCardEvidence,
   addCardEvidence,
   getCardGraph,
@@ -43,12 +44,13 @@ export function useCard(id: string | undefined) {
   });
 }
 
-export function useCardEvidence(cardId: string | undefined) {
+export function useCardEvidence(cardId: string | undefined, autoRefresh = false) {
   return useQuery({
     queryKey: cardKeys.evidence(cardId!),
     queryFn: () => listCardEvidence(cardId!),
     enabled: !!cardId,
-    staleTime: 15_000,
+    staleTime: autoRefresh ? 3_000 : 15_000,
+    refetchInterval: autoRefresh ? 5_000 : false,
   });
 }
 
@@ -84,6 +86,20 @@ export function useUpdateCard(id: string, boardId?: string) {
       queryClient.invalidateQueries({ queryKey: cardKeys.detail(id) });
       if (boardId) {
         queryClient.invalidateQueries({ queryKey: cardKeys.list(boardId) });
+      }
+    },
+  });
+}
+
+export function useDeleteCard(id: string, boardId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => deleteCard(id),
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: cardKeys.detail(id) });
+      if (boardId) {
+        queryClient.invalidateQueries({ queryKey: cardKeys.list(boardId) });
+        queryClient.invalidateQueries({ queryKey: cardKeys.graph(boardId) });
       }
     },
   });

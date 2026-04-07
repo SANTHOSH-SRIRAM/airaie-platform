@@ -142,3 +142,19 @@ export async function createBoardFromIntent(data: {
 export async function listChildBoards(id: string): Promise<Board[]> {
   return apiOrMock(`/v0/boards/${id}/children`, { method: 'GET' }, []);
 }
+
+export async function downloadReleasePacket(id: string): Promise<Blob> {
+  const url = `/v0/boards/${id}/release-packet`;
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'X-Project-Id': 'prj_default',
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to download release packet: ${res.status}`);
+  }
+
+  return res.blob();
+}

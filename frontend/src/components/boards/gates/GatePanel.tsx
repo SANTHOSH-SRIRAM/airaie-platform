@@ -8,7 +8,7 @@ import {
   useRejectGate,
   useWaiveGate,
 } from '@hooks/useGates';
-import type { Gate, GateStatus, GateType, GateRequirement } from '@/types/gate';
+import type { Gate, GateStatus, GateType } from '@/types/gate';
 import {
   CheckCircle2,
   XCircle,
@@ -205,11 +205,34 @@ function GateRequirementsList({ gateId }: { gateId: string }) {
     );
   }
 
+  const satisfiedCount = requirements.filter((r) => r.satisfied).length;
+  const allSatisfied = satisfiedCount === requirements.length;
+
   return (
     <div className="flex flex-col gap-[4px] mb-[10px]">
-      <span className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] mb-[2px]">
-        Requirements
-      </span>
+      <div className="flex items-center gap-[6px] mb-[2px]">
+        <span className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac]">
+          Requirements
+        </span>
+        <span
+          className={cn(
+            'text-[9px] font-medium',
+            allSatisfied ? 'text-[#4caf50]' : 'text-[#ff9800]',
+          )}
+        >
+          {satisfiedCount}/{requirements.length} met
+        </span>
+        {/* Progress bar */}
+        <div className="flex-1 h-[3px] rounded-full bg-[#f0f0ec] max-w-[60px]">
+          <div
+            className={cn(
+              'h-full rounded-full transition-all',
+              allSatisfied ? 'bg-[#4caf50]' : 'bg-[#ff9800]',
+            )}
+            style={{ width: `${requirements.length > 0 ? (satisfiedCount / requirements.length) * 100 : 0}%` }}
+          />
+        </div>
+      </div>
       {requirements.map((req) => (
         <div key={req.id} className="flex items-center gap-[6px]">
           {req.satisfied ? (

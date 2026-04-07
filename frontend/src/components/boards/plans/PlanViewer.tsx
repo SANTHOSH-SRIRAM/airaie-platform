@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 import { cn } from '@utils/cn';
-import { getPlan } from '@api/plans';
-import type { ExecutionPlan, PlanNodeRole } from '@/types/plan';
+import { usePlan, usePlanPolling } from '@hooks/usePlans';
+import type { PlanNodeRole } from '@/types/plan';
 import {
   ReactFlow,
   Background,
@@ -12,7 +12,7 @@ import {
   Position,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, CheckCircle2, XCircle, Clock, Play } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Role colors
@@ -29,12 +29,27 @@ const ROLE_COLORS: Record<PlanNodeRole, { bg: string; border: string; badge: str
 };
 
 // ---------------------------------------------------------------------------
+// Step status config
+// ---------------------------------------------------------------------------
+
+const STEP_STATUS: Record<string, { icon: typeof CheckCircle2; color: string }> = {
+  completed: { icon: CheckCircle2, color: '#4caf50' },
+  running: { icon: Loader2, color: '#2196f3' },
+  failed: { icon: XCircle, color: '#e74c3c' },
+  pending: { icon: Clock, color: '#acacac' },
+  queued: { icon: Play, color: '#ff9800' },
+};
+
+// ---------------------------------------------------------------------------
 // Custom node
 // ---------------------------------------------------------------------------
 
 function PlanNode({ data }: NodeProps) {
   const role = data.role as PlanNodeRole;
   const colors = ROLE_COLORS[role] ?? ROLE_COLORS.validate_input;
+  const stepStatus = data.stepStatus as string | undefined;
+  const statusCfg = STEP_STATUS[stepStatus ?? 'pending'] ?? STEP_STATUS.pending;
+  const StatusIcon = statusCfg.icon;
 
   return (
     <div
@@ -42,16 +57,23 @@ function PlanNode({ data }: NodeProps) {
       style={{ background: colors.bg, border: `2px solid ${colors.border}` }}
     >
       <Handle type="target" position={Position.Top} className="!bg-[#acacac] !w-[6px] !h-[6px]" />
-      {/* Role badge */}
-      <span
-        className={cn(
-          'inline-flex items-center h-[16px] px-[6px] rounded-[3px] text-[8px] font-semibold uppercase tracking-[0.3px] mb-[4px]',
-          colors.badge,
-          colors.badgeText,
-        )}
-      >
-        {role.replace('_', ' ')}
-      </span>
+      {/* Role badge + status */}
+      <div className="flex items-center gap-[4px] mb-[4px]">
+        <span
+          className={cn(
+            'inline-flex items-center h-[16px] px-[6px] rounded-[3px] text-[8px] font-semibold uppercase tracking-[0.3px]',
+            colors.badge,
+            colors.badgeText,
+          )}
+        >
+          {role.replace('_', ' ')}
+        </span>
+        <StatusIcon
+          size={10}
+          style={{ color: statusCfg.color }}
+          className={stepStatus === 'running' ? 'animate-spin' : ''}
+        />
+      </div>
       {/* Tool info */}
       <div className="text-[11px] font-semibold text-[#1a1a1a] truncate max-w-[130px]">
         {data.toolId as string}
@@ -79,35 +101,19 @@ interface PlanViewerProps {
 // ---------------------------------------------------------------------------
 
 export default function PlanViewer({ cardId }: PlanViewerProps) {
-  const [plan, setPlan] = useState<ExecutionPlan | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: plan, isLoading, error } = usePlan(cardId);
 
-  useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    setError(null);
+  // Poll while executing
+  const isExecuting = plan?.status === 'executing';
+  const { data: polledPlan } = usePlanPolling(cardId, isExecuting);
 
-    getPlan(cardId)
-      .then((data) => {
-        if (mounted) setPlan(data);
-      })
-      .catch((err) => {
-        if (mounted) setError(err?.message ?? 'Failed to load plan');
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, [cardId]);
+  // Use polled data when available and executing
+  const activePlan = (isExecuting && polledPlan) ? polledPlan : plan;
 
   const { nodes, edges } = useMemo(() => {
-    if (!plan) return { nodes: [] as Node[], edges: [] as Edge[] };
+    if (!activePlan) return { nodes: [] as Node[], edges: [] as Edge[] };
 
-    const rfNodes: Node[] = plan.nodes.map((n, i) => ({
+    const rfNodes: Node[] = activePlan.nodes.map((n, i) => ({
       id: n.node_id,
       type: 'planNode',
       position: { x: 20, y: i * 100 },
@@ -116,23 +122,24 @@ export default function PlanViewer({ cardId }: PlanViewerProps) {
         toolId: n.tool_id,
         toolVersion: n.tool_version,
         label: n.tool_id,
+        stepStatus: n.status ?? 'pending',
       },
       draggable: false,
     }));
 
-    const rfEdges: Edge[] = plan.edges.map((e, i) => ({
+    const rfEdges: Edge[] = activePlan.edges.map((e, i) => ({
       id: `pedge-${i}`,
       source: e.from_node_id,
       target: e.to_node_id,
       type: 'smoothstep',
-      animated: plan.status === 'executing',
+      animated: activePlan.status === 'executing',
       style: { stroke: '#d0d0d0', strokeWidth: 1.5 },
     }));
 
     return { nodes: rfNodes, edges: rfEdges };
-  }, [plan]);
+  }, [activePlan]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-[350px] bg-[#fafafa] rounded-[10px]">
         <Loader2 size={20} className="animate-spin text-[#acacac]" />
@@ -140,14 +147,18 @@ export default function PlanViewer({ cardId }: PlanViewerProps) {
     );
   }
 
-  if (error || !plan) {
+  if (error || !activePlan) {
     return (
       <div className="flex items-center justify-center h-[350px] bg-[#fafafa] rounded-[10px] gap-[8px]">
         <AlertCircle size={16} className="text-[#e74c3c]" />
-        <span className="text-[12px] text-[#e74c3c]">{error ?? 'No plan found'}</span>
+        <span className="text-[12px] text-[#e74c3c]">{(error as Error)?.message ?? 'No plan found'}</span>
       </div>
     );
   }
+
+  // Compute step progress
+  const completedSteps = activePlan.nodes.filter((n) => n.status === 'completed').length;
+  const totalSteps = activePlan.nodes.length;
 
   return (
     <div>
@@ -158,18 +169,32 @@ export default function PlanViewer({ cardId }: PlanViewerProps) {
         </span>
         <span className={cn(
           'h-[18px] px-[8px] rounded-[4px] text-[9px] font-semibold uppercase inline-flex items-center',
-          plan.status === 'completed' && 'bg-[#e8f5e9] text-[#4caf50]',
-          plan.status === 'executing' && 'bg-[#e3f2fd] text-[#2196f3]',
-          plan.status === 'failed' && 'bg-[#ffebee] text-[#e74c3c]',
-          plan.status === 'draft' && 'bg-[#f0f0ec] text-[#6b6b6b]',
-          plan.status === 'validated' && 'bg-[#e3f2fd] text-[#2196f3]',
+          activePlan.status === 'completed' && 'bg-[#e8f5e9] text-[#4caf50]',
+          activePlan.status === 'executing' && 'bg-[#e3f2fd] text-[#2196f3]',
+          activePlan.status === 'failed' && 'bg-[#ffebee] text-[#e74c3c]',
+          activePlan.status === 'draft' && 'bg-[#f0f0ec] text-[#6b6b6b]',
+          activePlan.status === 'validated' && 'bg-[#e3f2fd] text-[#2196f3]',
         )}>
-          {plan.status}
+          {activePlan.status}
         </span>
         <span className="text-[10px] text-[#acacac]">
-          Est. {plan.time_estimate} / ${plan.cost_estimate.toFixed(2)}
+          Est. {activePlan.time_estimate} / ${activePlan.cost_estimate.toFixed(2)}
+        </span>
+        {/* Step progress */}
+        <span className="text-[10px] text-[#6b6b6b] ml-auto">
+          {completedSteps}/{totalSteps} steps
         </span>
       </div>
+
+      {/* Step progress bar */}
+      {activePlan.status === 'executing' && (
+        <div className="h-[3px] rounded-full bg-[#f0f0ec] mb-[8px]">
+          <div
+            className="h-full rounded-full bg-[#2196f3] transition-all"
+            style={{ width: `${totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0}%` }}
+          />
+        </div>
+      )}
 
       {/* DAG */}
       <div className="h-[350px] rounded-[10px] overflow-hidden border border-[#e8e8e8]">

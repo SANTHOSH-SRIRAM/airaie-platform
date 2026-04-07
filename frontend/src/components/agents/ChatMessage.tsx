@@ -1,7 +1,7 @@
 import type { ChatMessage as ChatMessageType } from '@/types/agentPlayground';
 import Avatar from '@components/ui/Avatar';
 import ToolCallProposalCard from '@components/agents/ToolCallProposalCard';
-import { cn } from '@utils/cn';
+// cn import removed (unused)
 
 interface ChatMessageProps {
   message: ChatMessageType;

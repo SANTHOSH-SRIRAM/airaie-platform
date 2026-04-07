@@ -3,6 +3,7 @@ import {
   listIntents,
   getIntent,
   createIntent,
+  updateIntent,
   lockIntent,
   listIntentTypes,
 } from '@api/intents';
@@ -59,6 +60,19 @@ export function useCreateIntent(boardId: string) {
     mutationFn: (data: Parameters<typeof createIntent>[1]) => createIntent(boardId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: intentKeys.list(boardId) });
+    },
+  });
+}
+
+export function useUpdateIntent(id: string, boardId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Parameters<typeof updateIntent>[1]) => updateIntent(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: intentKeys.detail(id) });
+      if (boardId) {
+        queryClient.invalidateQueries({ queryKey: intentKeys.list(boardId) });
+      }
     },
   });
 }

@@ -13,15 +13,6 @@ function confidenceVariant(c: number): 'success' | 'warning' | 'danger' {
 }
 
 export default function ToolCallProposalCard({ proposal }: ToolCallProposalCardProps) {
-  const borderColor: Record<string, string> = {
-    proposed: 'border-l-blue-50',
-    approved: 'border-l-blue-50',
-    executing: 'border-l-yellow-30',
-    succeeded: 'border-l-green-50',
-    failed: 'border-l-red-50',
-    rejected: 'border-l-gray-50',
-  };
-
   // The type doesn't have a `status` field, so we treat all proposals as "proposed"
   const accentClass = 'border-l-blue-50';
 

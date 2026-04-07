@@ -5,7 +5,7 @@ import type {
   AgentActivityEntry,
   GovernanceStudy,
   SystemStatus,
-} from '@types/index';
+} from '@/types/index';
 import { API_CONFIG } from '@constants/api';
 
 const BASE = API_CONFIG.BASE_URL;

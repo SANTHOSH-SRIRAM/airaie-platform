@@ -1,115 +1,119 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+// useNavigate removed (unused)
 import {
   Bell,
   Shield,
-  CheckCircle2,
   XCircle,
-  AlertTriangle,
   Brain,
+  Settings,
+  Play,
+  ArrowRight,
+  Globe
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 
 // ---------------------------------------------------------------------------
-// Types
+// Types & Mock Data
 // ---------------------------------------------------------------------------
 
-type NotificationType = 'gate_approval' | 'run_completed' | 'run_failed' | 'agent_escalation';
+type NotificationCategory = 'runs' | 'approvals' | 'agents' | 'system';
 
 interface Notification {
   id: string;
-  type: NotificationType;
+  category: NotificationCategory;
   title: string;
   description: string;
   timestamp: string;
   read: boolean;
-  route: string;
+  contextIcon: typeof Play | typeof Shield | typeof Globe;
+  contextText: string;
+  actions?: {
+    label: string;
+    type: 'primary' | 'secondary' | 'text';
+    color?: string;
+  }[];
 }
 
-const NOTIFICATION_CONFIG: Record<
-  NotificationType,
-  { icon: typeof Bell; color: string; bgColor: string }
-> = {
-  gate_approval: { icon: Shield, color: 'text-[#ff9800]', bgColor: 'bg-[#fff3e0]' },
-  run_completed: { icon: CheckCircle2, color: 'text-[#4caf50]', bgColor: 'bg-[#e8f5e9]' },
-  run_failed: { icon: XCircle, color: 'text-[#e74c3c]', bgColor: 'bg-[#ffebee]' },
-  agent_escalation: { icon: Brain, color: 'text-[#9c27b0]', bgColor: 'bg-[#f3e5f5]' },
-};
-
-// ---------------------------------------------------------------------------
-// Mock notifications
-// ---------------------------------------------------------------------------
-
-const INITIAL_NOTIFICATIONS: Notification[] = [
+const MOCK_NOTIFICATIONS: Notification[] = [
   {
     id: 'notif_1',
-    type: 'gate_approval',
-    title: 'Gate Approval Required',
-    description: 'Thermal Evidence gate on Structural Validation Study needs your approval',
-    timestamp: '2 minutes ago',
+    category: 'runs',
+    title: 'Run Failed — FEA Solver error',
+    description: 'run_a1b0e5 failed at FEA Solver node with convergence error. 3/5 nodes completed before failure.',
+    timestamp: '2m ago',
     read: false,
-    route: '/boards/board_structural_001',
+    contextIcon: Play,
+    contextText: 'FEA Validation Pipeline · v3',
   },
   {
     id: 'notif_2',
-    type: 'run_completed',
-    title: 'Run Completed',
-    description: 'FEA Validation Pipeline run #run_001 completed successfully',
-    timestamp: '15 minutes ago',
+    category: 'approvals',
+    title: 'Approval Required — Thermal Evidence Gate',
+    description: 'Your sign-off is needed as lead_engineer. 1 of 3 requirements met. CFD results pending.',
+    timestamp: '15m ago',
     read: false,
-    route: '/workflow-runs/run_001',
+    contextIcon: Shield,
+    contextText: 'Structural Validation Study · Study mode',
+    actions: [
+      { label: 'Approve', type: 'primary', color: 'bg-[#4caf50]' },
+      { label: 'Review', type: 'text', color: 'text-[#ff9800]' },
+    ],
   },
   {
     id: 'notif_3',
-    type: 'run_failed',
-    title: 'Run Failed',
-    description: 'Thermal Stress Coupling run #run_003 failed at node 4',
-    timestamp: '1 hour ago',
+    category: 'agents',
+    title: 'Agent Escalated — Low confidence decision',
+    description: 'FEA Optimizer Agent proposed fea-solver with confidence 0.42 (below 0.85 threshold). Material uncertainty detected.',
+    timestamp: '1h ago',
     read: false,
-    route: '/workflow-runs/run_003',
+    contextIcon: Globe,
+    contextText: 'FEA Optimizer Agent · Session ses_x7k2m',
+    actions: [
+      { label: 'Review Proposal', type: 'text', color: 'text-[#9c27b0]' },
+    ],
   },
   {
     id: 'notif_4',
-    type: 'agent_escalation',
-    title: 'Agent Escalation',
-    description: 'FEA Optimizer Agent escalated decision: confidence below threshold (0.42)',
-    timestamp: '2 hours ago',
+    category: 'runs',
+    title: 'Run Succeeded — FEA Validation Pipeline',
+    description: 'All 5 nodes completed successfully in 2m 14s. Artifacts generated and saved to registry.',
+    timestamp: '4h ago',
     read: true,
-    route: '/agent-studio/fea-optimizer',
-  },
-  {
-    id: 'notif_5',
-    type: 'run_completed',
-    title: 'Run Completed',
-    description: 'Mesh Quality Check run #run_005 completed in 12s',
-    timestamp: '3 hours ago',
-    read: true,
-    route: '/workflow-runs/run_005',
-  },
-  {
-    id: 'notif_6',
-    type: 'gate_approval',
-    title: 'Gate Waived',
-    description: 'Release Approval gate on Bracket v2 Release was waived by admin',
-    timestamp: '5 hours ago',
-    read: true,
-    route: '/boards/board_release_003',
+    contextIcon: Play,
+    contextText: 'FEA Validation Pipeline · v3',
   },
 ];
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function getCategoryStyles(category: NotificationCategory) {
+  switch (category) {
+    case 'runs':
+      // From the image, run failure is red
+      return { border: 'border-[#e74c3c]', icon: XCircle, iconColor: 'text-[#e74c3c]', iconBg: 'bg-[#ffebee]' };
+    case 'approvals':
+      return { border: 'border-[#ff9800]', icon: Shield, iconColor: 'text-[#ff9800]', iconBg: 'bg-[#fff3e0]' };
+    case 'agents':
+      return { border: 'border-[#9c27b0]', icon: Brain, iconColor: 'text-[#9c27b0]', iconBg: 'bg-[#f3e5f5]' };
+    default:
+      return { border: 'border-[#acacac]', icon: Bell, iconColor: 'text-[#6b6b6b]', iconBg: 'bg-[#f0f0ec]' };
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 export default function NotificationCenter() {
-  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
-  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  const [activeTab, setActiveTab] = useState<'All' | 'Runs' | 'Approvals' | 'Agents' | 'System'>('All');
+  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  // Close on click outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -122,7 +126,6 @@ export default function NotificationCenter() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  // Close on Escape
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape' && isOpen) setIsOpen(false);
@@ -135,120 +138,169 @@ export default function NotificationCenter() {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   }, []);
 
-  const handleNotificationClick = useCallback(
-    (notification: Notification) => {
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
-      );
-      setIsOpen(false);
-      navigate(notification.route);
-    },
-    [navigate]
-  );
-
   return (
     <div ref={dropdownRef} className="relative">
-      {/* Bell Button */}
+      {/* Bell Trigger */}
       <button
         onClick={() => setIsOpen((prev) => !prev)}
-        className="relative w-[32px] h-[32px] flex items-center justify-center text-[#949494] hover:bg-[#f5f5f0] rounded-full transition-colors shrink-0"
+        className="relative w-[32px] h-[32px] flex items-center justify-center text-[#1a1a1a] hover:bg-[#f5f5f0] rounded-full transition-colors shrink-0"
         aria-label="Notifications"
         aria-expanded={isOpen}
       >
         <Bell size={16} />
         {unreadCount > 0 && (
-          <span className="absolute top-[3px] right-[4px] min-w-[14px] h-[14px] flex items-center justify-center bg-[#e74c3c] text-white text-[9px] font-bold rounded-full px-[3px]">
+          <span className="absolute top-[2px] right-[2px] min-w-[16px] h-[16px] flex items-center justify-center bg-[#e74c3c] text-white text-[10px] font-bold rounded-full border-2 border-white shadow-sm">
             {unreadCount}
           </span>
         )}
       </button>
 
-      {/* Dropdown */}
+      {/* Dropdown Panel */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-[380px] bg-white rounded-[12px] shadow-[0px_12px_40px_rgba(0,0,0,0.15)] border border-[#ece9e3] overflow-hidden z-[100]">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#f0f0ec]">
-            <div className="flex items-center gap-2">
-              <h3 className="text-[14px] font-semibold text-[#1a1a1a]">Notifications</h3>
-              {unreadCount > 0 && (
-                <span className="h-[20px] min-w-[20px] flex items-center justify-center bg-[#e74c3c] text-white text-[10px] font-bold rounded-full px-1.5">
-                  {unreadCount}
-                </span>
-              )}
-            </div>
-            {unreadCount > 0 && (
-              <button
-                onClick={handleMarkAllRead}
-                className="text-[12px] text-[#2196f3] hover:text-[#1976d2] font-medium transition-colors"
-              >
-                Mark all read
-              </button>
-            )}
-          </div>
-
-          {/* Notification List */}
-          <div className="max-h-[400px] overflow-y-auto">
-            {notifications.map((notification) => {
-              const config = NOTIFICATION_CONFIG[notification.type];
-              const Icon = config.icon;
-
-              return (
+        <div className="absolute right-0 top-full mt-3 w-[400px] bg-white rounded-[12px] shadow-[0px_8px_32px_rgba(0,0,0,0.12)] border border-[#ece9e3] overflow-hidden z-[100] flex flex-col max-h-[580px]">
+          
+          {/* Header Area */}
+          <div className="px-4 pt-4 pb-3">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Bell size={16} className="text-[#1a1a1a]" strokeWidth={2.5} />
+                <h3 className="text-[14px] font-bold text-[#1a1a1a]">Notifications</h3>
+                {unreadCount > 0 && (
+                  <span className="h-[20px] px-2 flex items-center justify-center bg-[#ffebee] text-[#e74c3c] text-[10px] font-bold rounded-full">
+                    {unreadCount} new
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3 text-[11px] text-[#6b6b6b] font-medium">
                 <button
-                  key={notification.id}
-                  onClick={() => handleNotificationClick(notification)}
-                  className={cn(
-                    'w-full flex items-start gap-3 px-4 py-3 text-left transition-colors border-b border-[#f8f8f7] last:border-b-0',
-                    notification.read
-                      ? 'hover:bg-[#fafaf8]'
-                      : 'bg-[#fafaf8] hover:bg-[#f5f5f0]'
-                  )}
+                  onClick={handleMarkAllRead}
+                  className="hover:text-[#1a1a1a] transition-colors"
                 >
-                  <div
+                  Mark all read
+                </button>
+                <button className="flex items-center gap-1 hover:text-[#1a1a1a] transition-colors">
+                  <Settings size={12} /> Settings
+                </button>
+              </div>
+            </div>
+
+            {/* Filter Tabs */}
+            <div className="flex items-center gap-3 border-b border-[#f0f0ec] pb-2">
+              {(['All', 'Runs', 'Approvals', 'Agents', 'System'] as const).map((tab) => {
+                const isActive = activeTab === tab;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
                     className={cn(
-                      'w-[32px] h-[32px] rounded-[8px] flex items-center justify-center shrink-0 mt-0.5',
-                      config.bgColor
+                      'flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] text-[11px] font-medium transition-colors',
+                      isActive
+                        ? 'bg-[#2d2d2d] text-white'
+                        : 'text-[#6b6b6b] hover:bg-[#f5f5f0]'
                     )}
                   >
-                    <Icon size={14} className={config.color} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          'text-[12px] font-medium truncate',
-                          notification.read ? 'text-[#6b6b6b]' : 'text-[#1a1a1a]'
-                        )}
-                      >
-                        {notification.title}
-                      </span>
-                      {!notification.read && (
-                        <span className="w-[6px] h-[6px] rounded-full bg-[#2196f3] shrink-0" />
+                    {tab === 'Runs' && <Play size={11} className={isActive ? 'text-[#d5d5cf]' : 'text-[#acacac]'} />}
+                    {tab === 'Approvals' && <Shield size={11} className={isActive ? 'text-[#d5d5cf]' : 'text-[#ff9800]'} />}
+                    {tab === 'Agents' && <Brain size={11} className={isActive ? 'text-[#d5d5cf]' : 'text-[#9c27b0]'} />}
+                    {tab === 'System' && <Settings size={11} className={isActive ? 'text-[#d5d5cf]' : 'text-[#acacac]'} />}
+                    
+                    {tab}
+                    
+                    {/* Tiny notification indicator dot on specific tabs */}
+                    {tab === 'Approvals' && !isActive && (
+                      <span className="w-1.5 h-1.5 bg-[#ff9800] rounded-full ml-0.5" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* List Content */}
+          <div className="flex-1 overflow-y-auto">
+            {notifications.map((notif) => {
+              const styles = getCategoryStyles(notif.category);
+              const Icon = styles.icon;
+
+              return (
+                <div
+                  key={notif.id}
+                  className={cn(
+                    'group relative border-b border-[#f0f0ec] bg-white hover:bg-[#fbfaf9] transition-colors',
+                    notif.read ? 'opacity-70' : ''
+                  )}
+                >
+                  {/* Left Color Bar */}
+                  <div className={cn('absolute left-0 top-0 bottom-0 w-[3px]', styles.border)} />
+
+                  <div className="flex items-start gap-3 p-4 pl-5">
+                    {/* Icon */}
+                    <div className={cn('w-[32px] h-[32px] rounded-full flex items-center justify-center shrink-0 border border-white shadow-sm ring-1 ring-black/5', styles.iconBg, styles.iconColor)}>
+                      <Icon size={16} strokeWidth={2} />
+                    </div>
+
+                    {/* Body */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-3 mt-0.5">
+                        <h4 className={cn('text-[13px] font-bold leading-tight', notif.read ? 'text-[#6b6b6b]' : 'text-[#1a1a1a]')}>
+                          {notif.title}
+                        </h4>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[11px] text-[#acacac] whitespace-nowrap">{notif.timestamp}</span>
+                          {!notif.read && <span className="w-1.5 h-1.5 rounded-full bg-[#e74c3c]" />}
+                        </div>
+                      </div>
+
+                      <p className="text-[12px] text-[#6b6b6b] mt-1.5 leading-relaxed pr-2">
+                        {notif.description}
+                      </p>
+
+                      <div className="flex items-center gap-1.5 mt-2.5 text-[11px] text-[#acacac] font-medium">
+                        <notif.contextIcon size={10} className="shrink-0" />
+                        <span>{notif.contextText}</span>
+                      </div>
+
+                      {/* Optional Action Buttons */}
+                      {notif.actions && notif.actions.length > 0 && (
+                        <div className="flex items-center gap-2.5 mt-3">
+                          {notif.actions.map((act, i) => (
+                            <button
+                              key={i}
+                              className={cn(
+                                'text-[11px] font-bold transition-opacity hover:opacity-80 flex items-center gap-1',
+                                act.type === 'primary' 
+                                  ? `${act.color} text-white px-2.5 py-1 rounded-[4px]` 
+                                  : `${act.color}`
+                              )}
+                            >
+                              {act.label}
+                              {act.type === 'text' && <ArrowRight size={12} className="ml-0.5" />}
+                            </button>
+                          ))}
+                        </div>
                       )}
                     </div>
-                    <p className="text-[11px] text-[#949494] mt-0.5 line-clamp-2">
-                      {notification.description}
-                    </p>
-                    <span className="text-[10px] text-[#acacac] mt-1 block">
-                      {notification.timestamp}
-                    </span>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
 
-          {/* Footer */}
-          <div className="px-4 py-2.5 border-t border-[#f0f0ec] text-center">
-            <button
-              onClick={() => {
-                setIsOpen(false);
-                // Future: navigate to full notification page
-              }}
-              className="text-[12px] text-[#6b6b6b] hover:text-[#1a1a1a] font-medium transition-colors"
-            >
-              View all notifications
-            </button>
+          {/* Sticky Footer */}
+          <div className="shrink-0 p-3 bg-[#fbfaf9] border-t border-[#ece9e3] flex items-center justify-between shadow-[0_-4px_16px_rgba(0,0,0,0.02)] relative z-10">
+            <span className="text-[11px] text-[#acacac] font-medium">
+              Showing 10 of 23 notifications
+            </span>
+            <div className="flex items-center gap-3">
+              <button className="text-[11px] text-[#2196f3] font-bold flex items-center gap-1 hover:underline">
+                View All Notifications <ArrowRight size={12} />
+              </button>
+              <button className="text-[11px] text-[#6b6b6b] font-medium flex items-center gap-1 hover:text-[#1a1a1a] transition-colors">
+                <Settings size={12} /> Notification Preferences
+              </button>
+            </div>
           </div>
+
         </div>
       )}
     </div>

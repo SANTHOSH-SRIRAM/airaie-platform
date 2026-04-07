@@ -9,8 +9,8 @@ function formatDuration(duration?: number) {
   return `${Math.floor(duration / 60)}m ${Math.round(duration % 60)}s`;
 }
 
-interface RunNodeDetailPanelProps {
-  runDetail: RunDetail | undefined;
+export interface RunNodeDetailPanelProps {
+  runDetail?: RunDetail | undefined;
 }
 
 export default function RunNodeDetailPanel({ runDetail }: RunNodeDetailPanelProps) {

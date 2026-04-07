@@ -2,7 +2,6 @@ import { createElement, useEffect, useMemo, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom';
 import {
   Archive,
-  ArrowUpRight,
   BarChart3,
   Binary,
   Box,
@@ -16,6 +15,8 @@ import {
   FlaskConical,
   Globe,
   Grid2X2,
+  List,
+  LayoutGrid,
   Paperclip,
   Plus,
   Scale,
@@ -29,8 +30,9 @@ import { useUiStore } from '@store/uiStore';
 import { useToolList } from '@hooks/useTools';
 import Button from '@components/ui/Button';
 import RegisterToolModal from '@components/tools/RegisterToolModal';
+import ToolTableView from '@components/tools/ToolTableView';
 import { cn } from '@utils/cn';
-import type { Tool, ToolAdapter, ToolCategory, ToolContractField, ToolStatus } from '@/types/tool';
+import type { Tool, ToolAdapter, ToolCategory, ToolStatus } from '@/types/tool';
 
 const CATEGORY_OPTIONS: { value: 'all' | ToolCategory; label: string }[] = [
   { value: 'all', label: 'All Categories' },
@@ -130,15 +132,6 @@ function AdapterGlyph({
   return createElement(ADAPTER_ICON_MAP[adapter], { size });
 }
 
-function formatFieldType(type: string) {
-  if (type.startsWith('enum')) return 'enum';
-  return type;
-}
-
-function formatDuration(seconds: number | undefined) {
-  if (!seconds) return '0s';
-  return `${seconds}s`;
-}
 
 function SelectDropdown<T extends string>({
   value,
@@ -231,77 +224,6 @@ function AdapterBadge({ adapter }: { adapter: ToolAdapter }) {
   );
 }
 
-function ContractList({
-  label,
-  fields,
-  bulletClassName,
-}: {
-  label: string;
-  fields: ToolContractField[];
-  bulletClassName: string;
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-1 text-[11px] text-[#6b6b6b]">
-        <span>{label}</span>
-        {label === 'Inputs' && <ChevronDown size={12} className="text-[#acacac]" />}
-      </div>
-      <div className="space-y-2">
-        {fields.map((field) => (
-          <div key={field.name} className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className={cn('h-[6px] w-[6px] shrink-0 rounded-[3px]', bulletClassName)} />
-              <span className="truncate font-mono text-[10px] text-[#1a1a1a]">{field.name}</span>
-            </div>
-            <span className="shrink-0 text-[10px] text-[#acacac]">{formatFieldType(field.type)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DetailRow({
-  label,
-  value,
-  valueClassName,
-}: {
-  label: string;
-  value: React.ReactNode;
-  valueClassName?: string;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <span className="text-[11px] text-[#6b6b6b]">{label}</span>
-      <div className={cn('max-w-[150px] text-right text-[11px] text-[#1a1a1a]', valueClassName)}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function LimitCard({
-  label,
-  value,
-  tone = 'default',
-}: {
-  label: string;
-  value: React.ReactNode;
-  tone?: 'default' | 'alert';
-}) {
-  return (
-    <div className="flex min-h-[54px] flex-col gap-[6px] rounded-[8px] bg-[#f5f5f0] px-2 py-2">
-      <span className="text-[10px] text-[#acacac]">{label}</span>
-      {tone === 'alert' ? (
-        <span className="inline-flex h-5 min-w-5 items-center justify-center self-start rounded-full bg-[#e74c3c] px-1.5 text-[10px] text-white">
-          {value}
-        </span>
-      ) : (
-        <span className="font-mono text-[10px] text-[#1a1a1a]">{value}</span>
-      )}
-    </div>
-  );
-}
 
 function ToolRegistryRow({
   tool,
@@ -392,15 +314,18 @@ export default function ToolRegistryPage() {
   const closeRightPanel = useUiStore((state) => state.closeRightPanel);
   const { data: allTools, isLoading, isError } = useToolList();
 
+  const viewMode = useUiStore((state) => state.toolRegistryViewMode);
+  const setViewMode = useUiStore((state) => state.setToolRegistryViewMode);
+
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'all' | ToolCategory>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | ToolStatus>('all');
   const [adapterFilter, setAdapterFilter] = useState<'all' | ToolAdapter>('all');
-  const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
 
-  const handleUseInWorkflow = useCallback((toolId: string) => {
-    navigate(`/workflow-studio?addTool=${toolId}`);
+
+  const handleTableRowSelect = useCallback((toolId: string) => {
+    navigate(`/tools/${toolId}`);
   }, [navigate]);
 
   useEffect(() => {
@@ -433,15 +358,7 @@ export default function ToolRegistryPage() {
     });
   }, [adapterFilter, allTools, categoryFilter, search, statusFilter]);
 
-  const activeToolId =
-    selectedToolId && filteredTools.some((tool) => tool.id === selectedToolId)
-      ? selectedToolId
-      : filteredTools[0]?.id ?? null;
 
-  const selectedTool =
-    filteredTools.find((tool) => tool.id === activeToolId) ??
-    allTools?.find((tool) => tool.id === activeToolId) ??
-    null;
 
   const totalTools = allTools?.length ?? 0;
   const publishedCount = allTools?.filter((tool) => tool.status === 'published').length ?? 0;
@@ -495,12 +412,38 @@ export default function ToolRegistryPage() {
               className="w-[116px]"
             />
 
+            {/* View mode toggle */}
+            <div className="flex items-center rounded-[8px] bg-[#f5f5f0] shadow-[inset_0_0_0_1px_rgba(236,233,227,0.95)]">
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                className={cn(
+                  'flex h-9 w-9 items-center justify-center rounded-l-[8px] transition-colors',
+                  viewMode === 'grid' ? 'bg-white shadow-[0px_1px_3px_rgba(0,0,0,0.08)] text-[#1a1a1a]' : 'text-[#acacac] hover:text-[#6b6b6b]'
+                )}
+                title="List view"
+              >
+                <LayoutGrid size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={cn(
+                  'flex h-9 w-9 items-center justify-center rounded-r-[8px] transition-colors',
+                  viewMode === 'table' ? 'bg-white shadow-[0px_1px_3px_rgba(0,0,0,0.08)] text-[#1a1a1a]' : 'text-[#acacac] hover:text-[#6b6b6b]'
+                )}
+                title="Table view"
+              >
+                <List size={14} />
+              </button>
+            </div>
+
             <Button
               type="button"
               variant="secondary"
               size="sm"
               icon={<Plus size={14} />}
-              onClick={() => setShowRegisterModal(true)}
+              onClick={() => navigate('/tools/register')}
               className="h-9 rounded-[8px] bg-[#2d2d2d] px-[14px] text-[13px] font-medium text-white shadow-none hover:bg-[#242424]"
             >
               Register Tool
@@ -508,169 +451,65 @@ export default function ToolRegistryPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_282px]">
-          <div className="flex h-[652px] flex-col overflow-hidden rounded-[12px] bg-white shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)]">
-            <TableHeader />
+        {viewMode === 'grid' ? (
+          /* ═══════════ GRID VIEW ═══════════ */
+          <section className="grid gap-4">
+            <div className="flex h-[652px] flex-col overflow-hidden rounded-[12px] bg-white shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)]">
+              <TableHeader />
 
-            {filteredTools.length === 0 ? (
-              <div className="flex flex-1 items-center justify-center text-[13px] text-[#6b6b6b]">
-                No tools match your filters.
-              </div>
-            ) : (
-              <div className="flex-1 overflow-y-auto">
-                {filteredTools.map((tool) => (
-                  <ToolRegistryRow
-                    key={tool.id}
-                    tool={tool}
-                    selected={tool.id === selectedTool?.id}
-                    onSelect={setSelectedToolId}
-                  />
-                ))}
-              </div>
-            )}
+              {filteredTools.length === 0 ? (
+                <div className="flex flex-1 items-center justify-center text-[13px] text-[#6b6b6b]">
+                  No tools match your filters.
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto">
+                  {filteredTools.map((tool) => (
+                    <ToolRegistryRow
+                      key={tool.id}
+                      tool={tool}
+                      selected={false}
+                      onSelect={handleTableRowSelect}
+                    />
+                  ))}
+                </div>
+              )}
 
-            <div className="flex items-center justify-between border-t border-[#f0f0ec] px-6 py-3 text-[10px] text-[#acacac]">
-              <span>
-                Showing {filteredTools.length} of {totalTools} tools
-              </span>
-              <div className="flex items-center gap-4">
-                <span>Previous</span>
-                <span>Page 1 of 1</span>
-                <span>Next</span>
+              <div className="flex items-center justify-between border-t border-[#f0f0ec] px-6 py-3 text-[10px] text-[#acacac]">
+                <span>
+                  Showing {filteredTools.length} of {totalTools} tools
+                </span>
+                <div className="flex items-center gap-4">
+                  <span>Previous</span>
+                  <span>Page 1 of 1</span>
+                  <span>Next</span>
+                </div>
               </div>
             </div>
-          </div>
+          </section>
+        ) : (
+          /* ═══════════ TABLE VIEW (sortable columns + inspector) ═══════════ */
+          <section>
+            <div className="flex h-[652px] flex-col overflow-hidden rounded-[12px] bg-white shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)]">
+              <ToolTableView
+                tools={filteredTools}
+                selectedToolId={null}
+                onSelectTool={handleTableRowSelect}
+              />
 
-          <aside className="flex h-[652px] flex-col overflow-hidden rounded-[12px] bg-white shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)]">
-            {selectedTool ? (
-              <div className="flex-1 overflow-y-auto px-5 py-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-[14px] font-semibold text-[#1a1a1a]">Quick View</h2>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleUseInWorkflow(selectedTool.id)}
-                      className="inline-flex items-center gap-1 text-[12px] text-[#4caf50] hover:text-[#388e3c] transition-colors"
-                    >
-                      Use in Workflow
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 text-[12px] text-[#2196f3]"
-                    >
-                      Open Full
-                      <ArrowUpRight size={12} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-4 space-y-4">
-                  <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#acacac]">Tool</div>
-                    <div className="mt-1 text-[14px] font-semibold text-[#1a1a1a]">{selectedTool.name}</div>
-                    <div className="mt-2 inline-flex h-[22px] items-center gap-1 rounded-[6px] bg-[#e3f2fd] px-2 text-[10px] font-medium text-[#2196f3]">
-                      <Wrench size={10} />
-                      Tool
-                    </div>
-                    <div className="mt-2 text-[12px] text-[#6b6b6b]">
-                      {selectedTool.currentVersion} · {STATUS_LABELS[selectedTool.status]}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#acacac]">Description</div>
-                    <p className="mt-2 text-[12px] leading-[17px] text-[#6b6b6b]">
-                      {selectedTool.detailDescription ?? selectedTool.description}
-                    </p>
-                  </div>
-
-                  <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#acacac]">Contract</div>
-                    <div className="mt-2 space-y-3">
-                      <ContractList
-                        label="Inputs"
-                        fields={selectedTool.contract.inputs}
-                        bulletClassName="bg-[#2196f3]"
-                      />
-                      <ContractList
-                        label="Outputs"
-                        fields={selectedTool.contract.outputs}
-                        bulletClassName="bg-[#4caf50]"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#acacac]">Execution</div>
-                    <div className="mt-2 space-y-2">
-                      <DetailRow
-                        label="Adapter"
-                        value={
-                          <span className="inline-flex items-center gap-1.5">
-                            <AdapterGlyph adapter={selectedTool.adapter} size={12} />
-                            {ADAPTER_LABELS[selectedTool.adapter]}
-                          </span>
-                        }
-                      />
-                      <DetailRow label="Image" value={selectedTool.image} valueClassName="font-mono text-[10px]" />
-                      <DetailRow
-                        label="Network"
-                        value={
-                          <span
-                            className={cn(
-                              'inline-flex h-5 items-center rounded-full px-2 text-[10px] text-white',
-                              selectedTool.sandboxNetwork === 'deny' ? 'bg-[#e74c3c]' : 'bg-[#4caf50]'
-                            )}
-                          >
-                            {selectedTool.sandboxNetwork}
-                          </span>
-                        }
-                      />
-                      <DetailRow
-                        label="Filesystem"
-                        value={
-                          <span className="inline-flex h-5 items-center rounded-full bg-[#ff9800] px-2 text-[10px] text-white">
-                            {selectedTool.filesystemMode ?? 'sandbox'}
-                          </span>
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#acacac]">Limits</div>
-                    <div className="mt-2 grid grid-cols-3 gap-2">
-                      <LimitCard label="CPU" value={selectedTool.limits.cpu} tone="alert" />
-                      <LimitCard label="Mem" value={`${selectedTool.limits.memoryMb} MB`} />
-                      <LimitCard label="Timeout" value={`${selectedTool.limits.timeoutSeconds}s`} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#acacac]">Usage</div>
-                    <div className="mt-2 space-y-2">
-                      <DetailRow label="Total runs" value={selectedTool.usageCount} valueClassName="font-mono" />
-                      <DetailRow
-                        label="Success rate"
-                        value={`${selectedTool.successRate ?? 0}%`}
-                        valueClassName="font-mono text-[#4caf50]"
-                      />
-                      <DetailRow
-                        label="Avg duration"
-                        value={formatDuration(selectedTool.avgDurationSeconds)}
-                        valueClassName="font-mono"
-                      />
-                    </div>
-                  </div>
+              <div className="flex items-center justify-between border-t border-[#f0f0ec] px-6 py-3 text-[10px] text-[#acacac]">
+                <span>
+                  Showing {filteredTools.length} of {totalTools} tools
+                </span>
+                <div className="flex items-center gap-4">
+                  <span>Previous</span>
+                  <span>Page 1 of 1</span>
+                  <span>Next</span>
                 </div>
               </div>
-            ) : (
-              <div className="flex flex-1 items-center justify-center px-6 text-center text-[13px] text-[#6b6b6b]">
-                Select a tool to view details.
-              </div>
-            )}
-          </aside>
-        </section>
+            </div>
+
+          </section>
+        )}
 
         <div className="flex justify-center pt-1">
           <div className="inline-flex h-9 items-center gap-2 rounded-[12px] bg-white px-3.5 shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)]">

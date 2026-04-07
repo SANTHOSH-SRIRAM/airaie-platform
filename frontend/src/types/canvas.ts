@@ -10,11 +10,12 @@ export interface CanvasConnectionPort {
   maxConnections?: number;
 }
 
-export enum CanvasNodeRenderType {
-  Default = 'default',
-  StickyNote = 'stickyNote',
-  AddNodes = 'addNodes',
-}
+export const CanvasNodeRenderType = {
+  Default: 'default',
+  StickyNote: 'stickyNote',
+  AddNodes: 'addNodes',
+} as const;
+export type CanvasNodeRenderType = (typeof CanvasNodeRenderType)[keyof typeof CanvasNodeRenderType];
 
 export interface CanvasNodeExecution {
   status?: 'queued' | 'running' | 'succeeded' | 'failed' | 'skipped';
@@ -28,7 +29,7 @@ export interface CanvasNodeRunData {
   visible: boolean;
 }
 
-export interface CanvasNodeData {
+export interface CanvasNodeData extends Record<string, unknown> {
   id: string;
   label: string;
   subtitle?: string;

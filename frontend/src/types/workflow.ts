@@ -84,7 +84,7 @@ export interface WorkflowRunResult {
 import type { Node, Edge } from '@xyflow/react';
 import type { WorkflowNodeType } from '@constants/nodeCategories';
 
-export interface WorkflowNodeData {
+export interface WorkflowNodeData extends Record<string, unknown> {
   label: string;
   subtype: string;
   nodeType: WorkflowNodeType;

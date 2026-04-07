@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Activity, CircleDot } from 'lucide-react';
-import type { ActiveRun } from '@types/index';
+import type { ActiveRun } from '@/types/index';
 import { useActiveRuns } from '@hooks/useDashboard';
 import { cn } from '@utils/cn';
 import ErrorState from '@components/ui/ErrorState';

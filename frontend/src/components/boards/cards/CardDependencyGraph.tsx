@@ -1,5 +1,5 @@
-import { useMemo, useCallback } from 'react';
-import { cn } from '@utils/cn';
+import { useMemo } from 'react';
+
 import { useCardGraph } from '@hooks/useCards';
 import {
   ReactFlow,

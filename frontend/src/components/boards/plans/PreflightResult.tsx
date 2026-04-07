@@ -1,4 +1,3 @@
-import { cn } from '@utils/cn';
 import type { PreflightResult as PreflightResultType } from '@/types/plan';
 import { CheckCircle2, XCircle, AlertTriangle, Info } from 'lucide-react';
 

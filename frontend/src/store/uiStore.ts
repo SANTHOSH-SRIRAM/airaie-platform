@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 // --- Types ---
 
-export type SidebarContentType = 'navigation' | 'nodePalette' | 'sessions' | 'filters';
+export type SidebarContentType = 'navigation' | 'nodePalette' | 'sessions' | 'filters' | 'artifacts' | 'profile' | 'tool-detail';
 
 export interface RightPanelState {
   open: boolean;
@@ -26,6 +26,8 @@ interface SectionState {
   [key: string]: boolean;
 }
 
+export type ToolRegistryViewMode = 'grid' | 'table';
+
 export interface UiStore {
   // --- Existing state ---
   sidebarCollapsed: boolean;
@@ -38,6 +40,10 @@ export interface UiStore {
   rightPanel: RightPanelState;
   bottomBar: BottomBarState;
   modals: ModalEntry[];
+  toolRegistryViewMode: ToolRegistryViewMode;
+  activeArtifactSection: string;
+  activeProfileSection: string;
+  activeToolSection: string;
 
   // --- Existing actions ---
   toggleSidebar: () => void;
@@ -57,6 +63,10 @@ export interface UiStore {
   pushModal: (entry: ModalEntry) => void;
   popModal: () => void;
   clearModals: () => void;
+  setToolRegistryViewMode: (mode: ToolRegistryViewMode) => void;
+  setActiveArtifactSection: (section: string) => void;
+  setActiveProfileSection: (section: string) => void;
+  setActiveToolSection: (section: string) => void;
 }
 
 export const useUiStore = create<UiStore>((set) => ({
@@ -83,6 +93,10 @@ export const useUiStore = create<UiStore>((set) => ({
     contentType: null,
   },
   modals: [],
+  toolRegistryViewMode: 'grid' as ToolRegistryViewMode,
+  activeArtifactSection: 'overview',
+  activeProfileSection: 'overview',
+  activeToolSection: 'overview',
 
   // --- Existing actions ---
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
@@ -138,4 +152,11 @@ export const useUiStore = create<UiStore>((set) => ({
     set((s) => ({ modals: s.modals.slice(0, -1) })),
 
   clearModals: () => set({ modals: [] }),
+
+  setToolRegistryViewMode: (mode) => set({ toolRegistryViewMode: mode }),
+
+  setActiveArtifactSection: (section) => set({ activeArtifactSection: section }),
+
+  setActiveProfileSection: (section) => set({ activeProfileSection: section }),
+  setActiveToolSection: (section) => set({ activeToolSection: section }),
 }));

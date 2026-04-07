@@ -31,7 +31,9 @@ export interface AgentSpec {
   scoring: {
     strategy: 'weighted' | 'priority' | 'cost_optimized';
     llm_weight?: number;
-    weights?: { compatibility: number; trust: number; cost: number };
+    weights?: { compatibility: number; trust: number; cost: number; latency: number; reliability: number };
+    min_score_threshold?: number;
+    risk_penalty_weight?: number;
   };
   constraints: {
     max_tools_per_run?: number;
@@ -128,7 +130,7 @@ const MOCK_VERSIONS: Record<string, AgentVersion[]> = {
           { tool_ref: 'result-analyzer@1.0', permissions: ['read', 'execute'], max_invocations: 3 },
           { tool_ref: 'material-db@1.2', permissions: ['read'], max_invocations: 10 },
         ],
-        scoring: { strategy: 'weighted', llm_weight: 0.3, weights: { compatibility: 0.4, trust: 0.35, cost: 0.25 } },
+        scoring: { strategy: 'weighted', llm_weight: 0.3, weights: { compatibility: 0.3, trust: 0.25, cost: 0.2, latency: 0.15, reliability: 0.1 }, min_score_threshold: 0.5, risk_penalty_weight: 0.2 },
         constraints: { max_tools_per_run: 8, timeout_seconds: 600, max_retries: 2, budget_limit: 10.0 },
         policy: {
           auto_approve_threshold: 0.85,
@@ -214,7 +216,7 @@ const MOCK_VERSIONS: Record<string, AgentVersion[]> = {
           { tool_ref: 'result-analyzer@1.0', permissions: ['read', 'execute'], max_invocations: 2 },
           { tool_ref: 'material-db@1.2', permissions: ['read'], max_invocations: 8 },
         ],
-        scoring: { strategy: 'weighted', llm_weight: 0.25, weights: { compatibility: 0.45, trust: 0.3, cost: 0.25 } },
+        scoring: { strategy: 'weighted', llm_weight: 0.25, weights: { compatibility: 0.45, trust: 0.3, cost: 0.25, latency: 0.0, reliability: 0.0 } },
         constraints: { max_tools_per_run: 10, timeout_seconds: 900, max_retries: 2, budget_limit: 15.0 },
         policy: {
           auto_approve_threshold: 0.88,

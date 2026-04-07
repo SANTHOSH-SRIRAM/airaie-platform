@@ -8,16 +8,15 @@ import {
   AlertTriangle,
   Plus,
   CheckCircle2,
-  Circle,
   XCircle,
   Clock,
   FileText,
-  Package,
   Lightbulb,
   TrendingUp,
   Zap,
   Eye,
   Loader2,
+  Rocket,
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import Sidebar from '@components/layout/Sidebar';
@@ -120,7 +119,7 @@ export default function BoardDetailPage() {
 
   // Hooks for real data
   const { data: board, isLoading: boardLoading } = useBoard(boardId);
-  const { data: summary, isLoading: summaryLoading } = useBoardSummary(boardId);
+  const { data: summary } = useBoardSummary(boardId);
 
   // Local state
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -147,6 +146,7 @@ export default function BoardDetailPage() {
       setActiveMode(modeMap[board.mode] ?? 'Study');
     }
   }, [board?.mode]);
+
 
   // Loading state
   if (boardLoading) {
@@ -214,7 +214,17 @@ export default function BoardDetailPage() {
                 modeClass = isActive ? 'bg-[#e3f2fd] text-[#2196f3] rounded-r-[8px]' : 'bg-[#f0f0ec] text-[#acacac] rounded-r-[8px]';
               }
               return (
-                <button key={mode} onClick={() => setActiveMode(mode)} className={cn(base, modeClass)}>
+                <button 
+                  key={mode} 
+                  onClick={() => {
+                    if (mode === 'Release') {
+                      navigate(`/boards/${boardId}/release`);
+                    } else {
+                      setActiveMode(mode);
+                    }
+                  }} 
+                  className={cn(base, modeClass)}
+                >
                   {mode}
                 </button>
               );
@@ -372,7 +382,7 @@ export default function BoardDetailPage() {
 
             {activeTab === 'gates' && boardId && <GatePanel boardId={boardId} />}
 
-            {activeTab === 'evidence' && boardId && <EvidenceTabContent boardId={boardId} />}
+            {activeTab === 'evidence' && <EvidenceTabContent />}
           </div>
         </div>
 
@@ -406,6 +416,48 @@ export default function BoardDetailPage() {
               <div className="flex flex-col gap-[8px]">
                 <ProgressBar label="Cards" current={cardStats.completed} total={cardStats.total} color="#4caf50" />
                 <ProgressBar label="Gates" current={gateStats.passed} total={gateStats.total} color="#ff9800" />
+              </div>
+            </div>
+
+            <div className="h-[1px] bg-[#e8e8e8] mb-[20px]" />
+
+            {/* Governance Status */}
+            <div className="mb-[20px]">
+              <span className="text-[10px] font-semibold text-[#acacac] uppercase tracking-[0.5px] block mb-[10px]">GOVERNANCE</span>
+              <div className="flex flex-col gap-[6px]">
+                <div className="flex items-center gap-[6px]">
+                  <Shield size={12} className="text-[#ff9800]" />
+                  <span className="text-[11px] font-medium text-[#6b6b6b] capitalize">
+                    {board.mode} mode
+                  </span>
+                </div>
+                <div className="flex items-center gap-[6px]">
+                  {gateStats.passed === gateStats.total && gateStats.total > 0 ? (
+                    <CheckCircle2 size={12} className="text-[#4caf50]" />
+                  ) : gateStats.failed > 0 ? (
+                    <XCircle size={12} className="text-[#e74c3c]" />
+                  ) : (
+                    <Clock size={12} className="text-[#ff9800]" />
+                  )}
+                  <span className="text-[11px] text-[#6b6b6b]">
+                    {gateStats.passed === gateStats.total && gateStats.total > 0
+                      ? 'All gates passed'
+                      : gateStats.failed > 0
+                        ? `${gateStats.failed} gate${gateStats.failed !== 1 ? 's' : ''} failed`
+                        : `${gateStats.pending} gate${gateStats.pending !== 1 ? 's' : ''} pending`}
+                  </span>
+                </div>
+                <div className="flex items-center gap-[6px]">
+                  <span className={cn(
+                    'w-[12px] h-[12px] rounded-full flex items-center justify-center text-[7px] font-bold text-white',
+                    readinessPercent >= 80 ? 'bg-[#4caf50]' : readinessPercent >= 40 ? 'bg-[#ff9800]' : 'bg-[#e74c3c]',
+                  )}>
+                    {readinessPercent >= 80 ? '' : '!'}
+                  </span>
+                  <span className="text-[11px] text-[#6b6b6b]">
+                    {readinessPercent}% completion
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -476,6 +528,14 @@ export default function BoardDetailPage() {
             {nextActions.length > 0 && (
               <span className="absolute top-[8px] right-[8px] w-[7px] h-[7px] rounded-[3.5px] bg-[#e74c3c]" />
             )}
+          </button>
+
+          <button
+            onClick={() => navigate(`/boards/${boardId}/release`)}
+            className="h-[38px] px-[19px] border border-[#4caf50] text-[#4caf50] hover:bg-[#e8f5e9] rounded-[8px] text-[13px] font-medium flex items-center gap-[8px] transition-colors"
+          >
+            <Rocket size={14} className="text-[#4caf50]" />
+            Release Packet
           </button>
 
           <div className="w-[1px] h-[24px] bg-[#e8e8e8]" />
@@ -661,7 +721,7 @@ function CardsTab({ boardId, selectedCardId, onSelectCard, showPlanViewer, onSho
               </div>
               <PlanViewer cardId={showPlanViewer} />
               <div className="mt-[12px]">
-                <ExecutePlanButton cardId={showPlanViewer} onExecuted={(runId) => { /* navigate to run */ }} />
+                <ExecutePlanButton cardId={showPlanViewer} boardId={boardId} onExecuted={() => { /* navigate to run */ }} />
               </div>
             </div>
           )}
@@ -680,7 +740,7 @@ function CardsTab({ boardId, selectedCardId, onSelectCard, showPlanViewer, onSho
 // Evidence Tab (cross-card)
 // ---------------------------------------------------------------------------
 
-function EvidenceTabContent({ boardId }: { boardId: string }) {
+function EvidenceTabContent() {
   // For cross-card evidence, we show a message explaining user should select a card
   // This could be enhanced to aggregate all evidence across cards
   return (

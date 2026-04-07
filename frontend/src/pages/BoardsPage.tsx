@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, ChevronDown, Plus, MoreHorizontal, AlertTriangle,
-  ArrowRight, Shield, Link2, CheckCircle2, Circle, XCircle, Sparkles,
+  Shield, Link2, CheckCircle2, Circle, XCircle, Sparkles, Rocket,
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import { useUiStore } from '@store/uiStore';
@@ -61,7 +61,7 @@ const BOARDS: BoardData[] = [
       { name: 'Release Approval', fulfilled: 0, total: 0, status: 'blocked' },
     ],
     readiness: 65,
-    evidence: { records: '6', artifacts: '3 · 12.4 MB', approvals: '1 pending' },
+    evidence: { records: 6, artifacts: '3 · 12.4 MB', approvals: '1 pending' },
     created: 'Mar 25',
   },
   {
@@ -78,7 +78,7 @@ const BOARDS: BoardData[] = [
       { name: 'Review Gate', fulfilled: 0, total: 1, status: 'pending' },
     ],
     readiness: 0,
-    evidence: { records: '1', artifacts: '0', approvals: 'None pending' },
+    evidence: { records: 1, artifacts: '0', approvals: 'None pending' },
     created: 'Mar 29',
     linkedResources: ['CFD Analysis Flow'],
   },
@@ -155,6 +155,16 @@ function BoardCard({ board }: { board: BoardData }) {
               <span className={cn('h-[22px] px-[10px] rounded-[6px] text-[11px] font-medium flex items-center capitalize', typeStyle.bg, typeStyle.text)}>
                 {board.type}
               </span>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/boards/${board.id}/release`);
+                }}
+                className="w-[24px] h-[24px] flex items-center justify-center rounded-[6px] text-[#4caf50] hover:bg-[#e8f5e9] transition-colors"
+                title="Release Packet"
+              >
+                <Rocket size={14} />
+              </button>
               <button className="w-[24px] h-[24px] flex items-center justify-center rounded-[6px] text-[#acacac] hover:text-[#6b6b6b] hover:bg-[#f5f5f0] transition-colors">
                 <MoreHorizontal size={14} />
               </button>
@@ -289,7 +299,7 @@ function StatsRow() {
   const passed = BOARDS.reduce((sum, b) => sum + b.gates.filter((g) => g.status === 'passed').length, 0);
   const pending = BOARDS.reduce((sum, b) => sum + b.gates.filter((g) => g.status === 'pending').length, 0);
   const blocked = BOARDS.reduce((sum, b) => sum + b.gates.filter((g) => g.status === 'blocked').length, 0);
-  const totalEvidence = BOARDS.reduce((sum, b) => sum + parseInt(b.evidence.records, 10), 0);
+  const totalEvidence = BOARDS.reduce((sum, b) => sum + b.evidence.records, 0);
   const requiresAction = BOARDS.reduce((sum, b) => sum + (b.evidence.approvals.includes('pending') ? 1 : 0), 0);
   const atRelease = BOARDS.filter((b) => b.type === 'release').length;
 

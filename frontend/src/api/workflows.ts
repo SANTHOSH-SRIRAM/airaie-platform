@@ -1,18 +1,5 @@
 import type { Workflow } from '@/types/workflow';
-import { API_CONFIG } from '@constants/api';
 import { apiOrMock, apiClient } from '@api/client';
-
-const BASE = API_CONFIG.BASE_URL;
-
-async function tryApiOrMock<T>(url: string, options: RequestInit, mockData: T): Promise<T> {
-  try {
-    const res = await fetch(url, { ...options, signal: AbortSignal.timeout(API_CONFIG.TIMEOUT) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return (await res.json()) as T;
-  } catch {
-    return mockData;
-  }
-}
 
 // --- Types ---
 
@@ -77,7 +64,7 @@ const MOCK_WORKFLOW: Workflow = {
 };
 
 export function fetchWorkflow(id: string): Promise<Workflow> {
-  return tryApiOrMock(`${BASE}/workflows/${id}`, { method: 'GET' }, {
+  return apiOrMock(`/v0/workflows/${id}`, { method: 'GET' }, {
     ...MOCK_WORKFLOW,
     id,
     name: id === MOCK_WORKFLOW.id
@@ -92,7 +79,7 @@ export function fetchWorkflow(id: string): Promise<Workflow> {
 }
 
 export function saveWorkflow(id: string, data: Partial<Workflow>): Promise<Workflow> {
-  return tryApiOrMock(`${BASE}/workflows/${id}`, {
+  return apiOrMock(`/v0/workflows/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -100,7 +87,7 @@ export function saveWorkflow(id: string, data: Partial<Workflow>): Promise<Workf
 }
 
 export function runWorkflow(id: string): Promise<{ runId: string }> {
-  return tryApiOrMock(`${BASE}/workflows/${id}/run`, { method: 'POST' }, { runId: `run_${Date.now()}` });
+  return apiOrMock(`/v0/workflows/${id}/run`, { method: 'POST' }, { runId: `run_${Date.now()}` });
 }
 
 // --- Version management ---
@@ -151,4 +138,63 @@ export function createWorkflow(data: { name: string; description?: string }): Pr
 
 export function deleteWorkflow(id: string): Promise<void> {
   return apiClient.delete(`/v0/workflows/${id}`);
+}
+
+// --- Trigger management ---
+
+export interface TriggerEntry {
+  id: string;
+  workflow_id: string;
+  type: 'manual' | 'schedule' | 'webhook' | 'event';
+  config: Record<string, unknown>;
+  is_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+const MOCK_TRIGGERS: TriggerEntry[] = [
+  {
+    id: 'trig_webhook',
+    workflow_id: 'wf_fea_validation',
+    type: 'webhook',
+    config: { endpoint: '/v0/hooks/fea-validation-wf123', method: 'POST' },
+    is_enabled: true,
+    created_at: '2026-03-15T10:00:00Z',
+    updated_at: '2026-04-01T10:00:00Z',
+  },
+];
+
+export function listTriggers(workflowId: string): Promise<TriggerEntry[]> {
+  return apiOrMock(`/v0/workflows/${workflowId}/triggers`, { method: 'GET' }, MOCK_TRIGGERS);
+}
+
+export function createTrigger(
+  workflowId: string,
+  data: { type: TriggerEntry['type']; config: Record<string, unknown>; is_enabled: boolean },
+): Promise<TriggerEntry> {
+  return apiOrMock(
+    `/v0/workflows/${workflowId}/triggers`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) },
+    { ...MOCK_TRIGGERS[0], id: `trig_${Date.now()}`, ...data, workflow_id: workflowId, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  );
+}
+
+export function updateTrigger(
+  workflowId: string,
+  triggerId: string,
+  data: Partial<TriggerEntry>,
+): Promise<TriggerEntry> {
+  return apiOrMock(
+    `/v0/workflows/${workflowId}/triggers/${triggerId}`,
+    { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) },
+    { ...MOCK_TRIGGERS[0], ...data, id: triggerId, workflow_id: workflowId, updated_at: new Date().toISOString() },
+  );
+}
+
+export function deleteTrigger(workflowId: string, triggerId: string): Promise<void> {
+  return apiOrMock(
+    `/v0/workflows/${workflowId}/triggers/${triggerId}`,
+    { method: 'DELETE' },
+    undefined,
+  );
 }

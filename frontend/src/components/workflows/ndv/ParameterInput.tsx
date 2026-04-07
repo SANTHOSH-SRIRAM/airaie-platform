@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { Braces, FolderSearch } from 'lucide-react';
 import { cn } from '@utils/cn';
 import type { ToolContractPort } from '@store/toolTypesStore';
@@ -10,6 +10,18 @@ interface ParameterInputProps {
   readOnly?: boolean;
   error?: string;
 }
+
+/** Expression autocomplete hints for the AIRAIE DSL */
+const EXPRESSION_HINTS = [
+  { label: '$inputs.', description: 'Reference upstream node output' },
+  { label: '$nodes.', description: 'Access any node by ID' },
+  { label: '$board.', description: 'Board-level context variables' },
+  { label: '$env.', description: 'Environment variables' },
+  { label: '$run.id', description: 'Current run identifier' },
+  { label: '$run.startedAt', description: 'Run start timestamp' },
+  { label: '$artifact(', description: 'Reference an artifact by ID' },
+  { label: '$gate.', description: 'Governance gate status' },
+];
 
 /** Convert snake_case or camelCase to Title Case */
 function toTitleCase(str: string): string {
@@ -44,7 +56,39 @@ export default function ParameterInput({
     setExpressionMode((v) => !v);
   }, []);
 
-  // Expression mode: always a text input with {{ }} placeholder
+  // Expression mode: text input with {{ }} placeholder and autocomplete hints
+  const [showHints, setShowHints] = useState(false);
+  const expressionInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExpressionFocus = useCallback(() => setShowHints(true), []);
+  const handleExpressionBlur = useCallback(() => {
+    // Delay to allow hint click to register
+    setTimeout(() => setShowHints(false), 150);
+  }, []);
+
+  const handleHintClick = useCallback(
+    (hint: string) => {
+      const current = typeof value === 'string' ? value : '';
+      // Insert hint at cursor or append
+      const newValue = current.endsWith('{{') || current.endsWith('{{ ')
+        ? current + hint
+        : current + (current ? ' ' : '') + '{{ ' + hint;
+      onChange(newValue);
+      expressionInputRef.current?.focus();
+    },
+    [value, onChange],
+  );
+
+  // Filter hints based on current input
+  const filteredHints = useMemo(() => {
+    const strVal = typeof value === 'string' ? value : '';
+    // Extract the last expression token after {{ or $
+    const match = strVal.match(/(?:\{\{\s*|\$)(\w*)\.?(\w*)$/);
+    if (!match) return EXPRESSION_HINTS;
+    const prefix = match[0].replace(/^\{\{\s*/, '').replace(/^\$/, '$');
+    return EXPRESSION_HINTS.filter((h) => h.label.startsWith(prefix) || prefix === '');
+  }, [value]);
+
   if (expressionMode) {
     return (
       <ParameterWrapper
@@ -55,19 +99,40 @@ export default function ParameterInput({
         expressionMode={expressionMode}
         onExpressionToggle={handleExpressionToggle}
       >
-        <input
-          type="text"
-          value={typeof value === 'string' ? value : ''}
-          onChange={(e) => onChange(e.target.value)}
-          readOnly={readOnly}
-          placeholder="{{ expression }}"
-          className={cn(
-            'w-full rounded-md border px-2.5 py-1.5 font-mono text-xs outline-none',
-            'border-amber-300 bg-amber-50 text-amber-800',
-            'focus:border-amber-400 focus:ring-1 focus:ring-amber-400',
-            readOnly && 'cursor-not-allowed opacity-60'
+        <div className="relative">
+          <input
+            ref={expressionInputRef}
+            type="text"
+            value={typeof value === 'string' ? value : ''}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={handleExpressionFocus}
+            onBlur={handleExpressionBlur}
+            readOnly={readOnly}
+            placeholder="{{ $inputs.field_name }}"
+            className={cn(
+              'w-full rounded-md border px-2.5 py-1.5 font-mono text-xs outline-none',
+              'border-amber-300 bg-amber-50 text-amber-800',
+              'focus:border-amber-400 focus:ring-1 focus:ring-amber-400',
+              readOnly && 'cursor-not-allowed opacity-60'
+            )}
+          />
+          {showHints && !readOnly && filteredHints.length > 0 && (
+            <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-[160px] overflow-y-auto rounded-lg border border-[#eceae4] bg-white shadow-md">
+              {filteredHints.map((hint) => (
+                <button
+                  key={hint.label}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleHintClick(hint.label)}
+                  className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left hover:bg-[#f8f8f7]"
+                >
+                  <span className="font-mono text-[11px] text-amber-700">{hint.label}</span>
+                  <span className="truncate text-[10px] text-[#949494]">{hint.description}</span>
+                </button>
+              ))}
+            </div>
           )}
-        />
+        </div>
       </ParameterWrapper>
     );
   }

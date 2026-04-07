@@ -12,9 +12,9 @@ async function fetchOrMock<T>(url: string, mockData: T): Promise<T> {
 }
 
 const MOCK_SESSIONS: AgentSession[] = [
-  { id: 'ses_x7k2m', name: 'Bracket Optimization', agentId: 'agent_fea_opt', agentName: 'FEA Optimizer', messageCount: 5, toolCallCount: 3, status: 'active', createdAt: new Date(Date.now() - 600_000).toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'ses_x7k2m', name: 'Bracket Optimization', agentId: 'agent_fea_opt', agentName: 'FEA Optimizer', messageCount: 5, toolCallCount: 3, status: 'active', createdAt: new Date(Date.now() - 600_000).toISOString(), updatedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 3_600_000).toISOString() },
   { id: 'ses_m3n4p', name: 'Load Case Analysis', agentId: 'agent_fea_opt', agentName: 'FEA Optimizer', messageCount: 8, toolCallCount: 5, status: 'completed', createdAt: new Date(Date.now() - 7_200_000).toISOString(), updatedAt: new Date(Date.now() - 3_600_000).toISOString() },
-  { id: 'ses_q5r6s', name: 'Material Selection', agentId: 'agent_fea_opt', agentName: 'FEA Optimizer', messageCount: 3, toolCallCount: 1, status: 'completed', createdAt: new Date(Date.now() - 86_400_000).toISOString(), updatedAt: new Date(Date.now() - 82_800_000).toISOString() },
+  { id: 'ses_q5r6s', name: 'Material Selection', agentId: 'agent_fea_opt', agentName: 'FEA Optimizer', messageCount: 3, toolCallCount: 1, status: 'expired', createdAt: new Date(Date.now() - 86_400_000).toISOString(), updatedAt: new Date(Date.now() - 82_800_000).toISOString(), expiresAt: new Date(Date.now() - 3_600_000).toISOString() },
 ];
 
 const MOCK_MESSAGES: ChatMessage[] = [
@@ -24,13 +24,15 @@ const MOCK_MESSAGES: ChatMessage[] = [
 ];
 
 const MOCK_TRACE: DecisionTraceEntry[] = [
-  { id: 'dt_1', label: 'Context received', detail: 'Bracket: Al6061, 160×80×5mm, 500N', status: 'completed', timestamp: new Date(Date.now() - 300_000).toISOString() },
-  { id: 'dt_2', label: 'Tool search', detail: '3 tools found, ranked by compatibility', status: 'completed', timestamp: new Date(Date.now() - 298_000).toISOString() },
-  { id: 'dt_3', label: 'Proposal: mesh-generator', detail: 'Confidence: 0.92 - Auto-approved', status: 'completed', timestamp: new Date(Date.now() - 295_000).toISOString() },
-  { id: 'dt_4', label: 'Executed mesh-generator', detail: 'SUCCESS - 7.2s - $0.30', status: 'completed', timestamp: new Date(Date.now() - 288_000).toISOString() },
-  { id: 'dt_5', label: 'Proposal: fea-solver', detail: 'Confidence: 0.94 - Auto-approved', status: 'completed', timestamp: new Date(Date.now() - 285_000).toISOString() },
-  { id: 'dt_6', label: 'Executing fea-solver', detail: 'Running - 12s elapsed', status: 'running', timestamp: new Date(Date.now() - 273_000).toISOString() },
-  { id: 'dt_7', label: 'Evaluate result', detail: 'Pending', status: 'pending' },
+  { id: 'dt_1', label: 'Context received', detail: 'Bracket: Al6061, 160x80x5mm, 500N', status: 'completed', timestamp: new Date(Date.now() - 300_000).toISOString(), stepType: 'scoring' },
+  { id: 'dt_2', label: 'Tool scoring complete', detail: '3 tools scored: mesh-gen 0.92, fea-solver 0.87, result-analyzer 0.90', status: 'completed', timestamp: new Date(Date.now() - 298_000).toISOString(), stepType: 'scoring' },
+  { id: 'dt_3', label: 'Selected mesh-generator', detail: 'Confidence: 0.92 - Auto-approved', status: 'completed', timestamp: new Date(Date.now() - 295_000).toISOString(), stepType: 'selection' },
+  { id: 'dt_4', label: 'Executed mesh-generator', detail: 'SUCCESS - 7.2s - $0.30', status: 'completed', timestamp: new Date(Date.now() - 288_000).toISOString(), stepType: 'execution' },
+  { id: 'dt_5', label: 'Mesh quality verified', detail: 'Element quality > 0.85, no degenerate faces', status: 'completed', timestamp: new Date(Date.now() - 287_000).toISOString(), stepType: 'result' },
+  { id: 'dt_6', label: 'Selected fea-solver', detail: 'Confidence: 0.94 - Auto-approved', status: 'completed', timestamp: new Date(Date.now() - 285_000).toISOString(), stepType: 'selection' },
+  { id: 'dt_7', label: 'Executing fea-solver', detail: 'Running - 12s elapsed', status: 'running', timestamp: new Date(Date.now() - 273_000).toISOString(), stepType: 'execution' },
+  { id: 'dt_8', label: 'Replan triggered', detail: 'Mesh density too coarse for stress concentration near fillet - re-meshing with higher density', status: 'failed', timestamp: new Date(Date.now() - 260_000).toISOString(), stepType: 'replan' },
+  { id: 'dt_9', label: 'Evaluate result', detail: 'Pending', status: 'pending', stepType: 'result' },
 ];
 
 const MOCK_METRICS: AgentMetrics = { iterations: { current: 2, max: 5 }, totalCost: 0.80, budgetRemaining: 9.20, duration: 19, timeout: 600 };
@@ -41,6 +43,6 @@ export const fetchMessages = (sessionId: string): Promise<ChatMessage[]> => fetc
 export const fetchDecisionTrace = (sessionId: string): Promise<DecisionTraceEntry[]> => fetchOrMock(`${BASE}/sessions/${sessionId}/trace`, MOCK_TRACE);
 export const fetchAgentMetrics = (sessionId: string): Promise<AgentMetrics> => fetchOrMock(`${BASE}/sessions/${sessionId}/metrics`, MOCK_METRICS);
 export const fetchPolicyStatus = (agentId: string): Promise<PolicyStatus> => fetchOrMock(`${BASE}/agents/${agentId}/policy`, MOCK_POLICY);
-export const sendMessage = (sessionId: string, content: string): Promise<ChatMessage> => fetchOrMock(`${BASE}/sessions/${sessionId}/messages`, { id: `msg_${Date.now()}`, role: 'agent' as const, content: 'Processing your request...', timestamp: new Date().toISOString() });
+export const sendMessage = (sessionId: string, _content: string): Promise<ChatMessage> => fetchOrMock(`${BASE}/sessions/${sessionId}/messages`, { id: `msg_${Date.now()}`, role: 'agent' as const, content: 'Processing your request...', timestamp: new Date().toISOString() });
 export const stopAgent = (sessionId: string): Promise<void> => fetchOrMock(`${BASE}/sessions/${sessionId}/stop`, undefined);
 export const approveAll = (sessionId: string): Promise<void> => fetchOrMock(`${BASE}/sessions/${sessionId}/approve-all`, undefined);

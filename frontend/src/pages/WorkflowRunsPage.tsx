@@ -50,7 +50,7 @@ export default function WorkflowRunsPage() {
 
   // SSE-powered execution flow
   const { connected: sseConnected } = useRunWorkflow(DEFAULT_WORKFLOW_ID);
-  const activeRunId = useExecutionStore((s) => s.activeRunId);
+  useExecutionStore((s) => s.activeRunId);
   const executionSseConnected = useExecutionStore((s) => s.sseConnected);
 
   const loadWorkflow = useWorkflowStore((s) => s.loadWorkflow);

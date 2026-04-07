@@ -1,39 +1,71 @@
 import { API_CONFIG } from '@constants/api';
 
 export class ApiError extends Error {
+  status: number;
+  code: string;
+  details?: Record<string, unknown>;
+
   constructor(
-    public status: number,
-    public code: string,
+    status: number,
+    code: string,
     message: string,
-    public details?: Record<string, unknown>
+    details?: Record<string, unknown>
   ) {
     super(message);
     this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+    this.details = details;
   }
 }
 
 // Check env flag for mock mode
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS !== 'false';
 
+/** Returns the stored JWT access token, or null. */
+function getAccessToken(): string | null {
+  return localStorage.getItem('airaie-access-token');
+}
+
 // Core fetch wrapper with proper error handling
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const url = path.startsWith('/v0') ? path : `${API_CONFIG.BASE_URL}${path}`;
+
+  // Build headers with auth token
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Project-Id': 'prj_default', // Default project for dev
+  };
+  const token = getAccessToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const res = await fetch(url, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
-      'X-Project-Id': 'prj_default', // Default project for dev
+      ...headers,
       ...options?.headers,
     },
     signal: options?.signal ?? AbortSignal.timeout(API_CONFIG.TIMEOUT),
   });
 
+  // Handle 401 — redirect to login
+  if (res.status === 401) {
+    localStorage.removeItem('airaie-access-token');
+    localStorage.removeItem('airaie-refresh-token');
+    localStorage.removeItem('airaie-user');
+    if (window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
+  }
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new ApiError(
       res.status,
-      body.code ?? `HTTP_${res.status}`,
-      body.message ?? `Request failed: ${res.status}`,
+      body?.error?.code ?? body.code ?? `HTTP_${res.status}`,
+      body?.error?.message ?? body.message ?? `Request failed: ${res.status}`,
       body.details
     );
   }

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAgentMemories, useCreateMemory, useDeleteMemory } from '@hooks/useAgents';
 import type { AgentMemory } from '@api/agents';
 import type { MemoryType, CreateMemoryData } from '@api/agentMemory';
@@ -35,6 +35,35 @@ interface MemoryBrowserProps {
 
 /* ---------- Sub-components ---------- */
 
+function formatTtlCountdown(createdAt: string, ttlHours: number): string {
+  const expiresAt = new Date(createdAt).getTime() + ttlHours * 60 * 60 * 1000;
+  const remaining = expiresAt - Date.now();
+  if (remaining <= 0) return 'Expired';
+  const hours = Math.floor(remaining / (60 * 60 * 1000));
+  const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
+  if (hours > 24) {
+    const days = Math.floor(hours / 24);
+    return `${days}d ${hours % 24}h remaining`;
+  }
+  return `${hours}h ${minutes}m remaining`;
+}
+
+function formatTimestamp(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const seconds = Math.floor(diff / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+// Episodic memories (lessons and error_patterns) have TTL
+const EPISODIC_TYPES: MemoryType[] = ['lesson', 'error_pattern'];
+const DEFAULT_TTL_HOURS = 72; // 3 days
+
 function MemoryCard({
   memory,
   onDelete,
@@ -44,15 +73,40 @@ function MemoryCard({
 }) {
   const colors = TYPE_COLORS[memory.memory_type];
   const relevancePercent = Math.round(memory.relevance * 100);
+  const isEpisodic = EPISODIC_TYPES.includes(memory.memory_type);
+  const isFromRun = !!memory.source_run_id;
+
+  // TTL countdown for episodic memories
+  const [ttlDisplay, setTtlDisplay] = useState(() =>
+    isEpisodic ? formatTtlCountdown(memory.created_at, DEFAULT_TTL_HOURS) : '',
+  );
+
+  useEffect(() => {
+    if (!isEpisodic) return;
+    const interval = setInterval(() => {
+      setTtlDisplay(formatTtlCountdown(memory.created_at, DEFAULT_TTL_HOURS));
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [memory.created_at, isEpisodic]);
 
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-4 transition-shadow hover:shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
       <div className="mb-2 flex items-start justify-between">
-        <span
-          className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${colors.bg} ${colors.text}`}
-        >
-          {TYPE_LABELS[memory.memory_type]}
-        </span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span
+            className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${colors.bg} ${colors.text}`}
+          >
+            {TYPE_LABELS[memory.memory_type]}
+          </span>
+          {isFromRun && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2v4" /><path d="m16.2 7.8 2.9-2.9" /><path d="M18 12h4" /><path d="m16.2 16.2 2.9 2.9" /><path d="M12 18v4" /><path d="m4.9 19.1 2.9-2.9" /><path d="M2 12h4" /><path d="m4.9 4.9 2.9 2.9" />
+              </svg>
+              Learned from Run
+            </span>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => onDelete(memory.id)}
@@ -106,15 +160,40 @@ function MemoryCard({
         <span className="text-xs font-mono text-zinc-500">{relevancePercent}%</span>
       </div>
 
-      {/* Source run */}
-      {memory.source_run_id && (
-        <p className="text-xs text-zinc-400">
-          Source:{' '}
-          <span className="font-mono text-zinc-500 dark:text-zinc-400">
-            {memory.source_run_id}
-          </span>
-        </p>
+      {/* TTL countdown for episodic memories */}
+      {isEpisodic && (
+        <div className="mb-2 flex items-center gap-2">
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">TTL</span>
+          <div className="h-1.5 flex-1 rounded-full bg-zinc-200 dark:bg-zinc-700">
+            {(() => {
+              const expiresAt = new Date(memory.created_at).getTime() + DEFAULT_TTL_HOURS * 60 * 60 * 1000;
+              const total = DEFAULT_TTL_HOURS * 60 * 60 * 1000;
+              const remaining = Math.max(0, expiresAt - Date.now());
+              const percent = Math.round((remaining / total) * 100);
+              return (
+                <div
+                  className={`h-1.5 rounded-full transition-all ${percent > 30 ? 'bg-green-500' : percent > 10 ? 'bg-amber-500' : 'bg-red-500'}`}
+                  style={{ width: `${percent}%` }}
+                />
+              );
+            })()}
+          </div>
+          <span className="text-xs font-mono text-zinc-500 whitespace-nowrap">{ttlDisplay}</span>
+        </div>
       )}
+
+      {/* Timestamp + Source run */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-zinc-400">{formatTimestamp(memory.created_at)}</span>
+        {memory.source_run_id && (
+          <span className="text-xs text-zinc-400">
+            Source:{' '}
+            <span className="font-mono text-zinc-500 dark:text-zinc-400">
+              {memory.source_run_id}
+            </span>
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -235,11 +314,23 @@ function AddMemoryForm({
 export default function MemoryBrowser({ agentId }: MemoryBrowserProps) {
   const [activeTab, setActiveTab] = useState<MemoryType | 'all'>('all');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const typeFilter = activeTab === 'all' ? undefined : activeTab;
   const { data: memories = [], isLoading } = useAgentMemories(agentId, typeFilter);
   const createMutation = useCreateMemory(agentId);
   const deleteMutation = useDeleteMemory(agentId);
+
+  // Filter memories by search query
+  const filteredMemories = memories.filter((m) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      m.content.toLowerCase().includes(query) ||
+      m.tags.some((t) => t.toLowerCase().includes(query)) ||
+      (m.source_run_id && m.source_run_id.toLowerCase().includes(query))
+    );
+  });
 
   const handleCreate = useCallback(
     (data: CreateMemoryData) => {
@@ -257,14 +348,17 @@ export default function MemoryBrowser({ agentId }: MemoryBrowserProps) {
     [deleteMutation],
   );
 
+  const inputClass =
+    'w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500';
+
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
           Agent Memories
-          {memories.length > 0 && (
-            <span className="ml-2 text-sm font-normal text-zinc-500">({memories.length})</span>
+          {filteredMemories.length > 0 && (
+            <span className="ml-2 text-sm font-normal text-zinc-500">({filteredMemories.length})</span>
           )}
         </h3>
         {!showAddForm && (
@@ -274,6 +368,41 @@ export default function MemoryBrowser({ agentId }: MemoryBrowserProps) {
             className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
           >
             + Add Memory
+          </button>
+        )}
+      </div>
+
+      {/* Search input */}
+      <div className="relative">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+        <input
+          type="text"
+          className={`${inputClass} pl-9`}
+          placeholder="Search memories by content or tag..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+            </svg>
           </button>
         )}
       </div>
@@ -315,17 +444,19 @@ export default function MemoryBrowser({ agentId }: MemoryBrowserProps) {
             />
           ))}
         </div>
-      ) : memories.length === 0 ? (
+      ) : filteredMemories.length === 0 ? (
         <div className="rounded-lg border border-dashed border-zinc-300 py-12 text-center dark:border-zinc-700">
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            {activeTab === 'all'
-              ? 'No memories yet. Add memories to help this agent learn from past interactions.'
-              : `No ${TYPE_LABELS[activeTab as MemoryType]?.toLowerCase()} memories found.`}
+            {searchQuery
+              ? `No memories matching "${searchQuery}".`
+              : activeTab === 'all'
+                ? 'No memories yet. Add memories to help this agent learn from past interactions.'
+                : `No ${TYPE_LABELS[activeTab as MemoryType]?.toLowerCase()} memories found.`}
           </p>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          {memories.map((memory) => (
+          {filteredMemories.map((memory) => (
             <MemoryCard key={memory.id} memory={memory} onDelete={handleDelete} />
           ))}
         </div>

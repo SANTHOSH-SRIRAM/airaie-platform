@@ -37,9 +37,11 @@ const AGENT_STUDIO_FIXTURES = {
     llmWeight: 0.7,
     scoringStrategy: 'Weighted Blend',
     scoringWeights: [
-      { label: 'Compatibility', value: 0.4 },
-      { label: 'Trust', value: 0.35 },
-      { label: 'Cost', value: 0.25 },
+      { label: 'Compatibility', value: 0.3 },
+      { label: 'Trust', value: 0.25 },
+      { label: 'Cost', value: 0.2 },
+      { label: 'Latency', value: 0.15 },
+      { label: 'Reliability', value: 0.1 },
     ],
     tools: [
       { id: 'fea-solver', name: 'FEA Solver', version: '2.1.0', permissions: ['read', 'exec'], maxCalls: 5 },

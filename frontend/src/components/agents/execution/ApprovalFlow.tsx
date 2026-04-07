@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle, XCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, ArrowUpRight, Loader2 } from 'lucide-react';
 import type { ActionDecision } from '@components/agents/execution/PolicyDecisionDisplay';
 import Badge from '@components/ui/Badge';
 import Button from '@components/ui/Button';
@@ -13,9 +13,10 @@ interface ApprovalFlowProps {
   actions: ActionDecision[];
   onApproved?: () => void;
   onRejected?: () => void;
+  onEscalated?: () => void;
 }
 
-type FlowStatus = 'pending' | 'approving' | 'rejecting' | 'approved' | 'rejected' | 'error';
+type FlowStatus = 'pending' | 'approving' | 'rejecting' | 'escalating' | 'approved' | 'rejected' | 'escalated' | 'error';
 
 /* ---------- Helpers ---------- */
 
@@ -23,11 +24,12 @@ const verdictConfig = {
   approved: { variant: 'success' as const, label: 'Approved' },
   needs_approval: { variant: 'warning' as const, label: 'Needs Approval' },
   blocked: { variant: 'danger' as const, label: 'Blocked' },
+  escalated: { variant: 'info' as const, label: 'Escalated' },
 };
 
 /* ---------- Component ---------- */
 
-export default function ApprovalFlow({ proposalId, actions, onApproved, onRejected }: ApprovalFlowProps) {
+export default function ApprovalFlow({ proposalId, actions, onApproved, onRejected, onEscalated }: ApprovalFlowProps) {
   const [status, setStatus] = useState<FlowStatus>('pending');
   const [rationale, setRationale] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +70,22 @@ export default function ApprovalFlow({ proposalId, actions, onApproved, onReject
     }
   };
 
-  // Success / Rejected states
+  const handleEscalate = async () => {
+    setStatus('escalating');
+    setError(null);
+    try {
+      await apiClient.post(`/v0/proposals/${proposalId}/escalate`, {
+        rationale: rationale.trim() || 'Escalated for human review',
+      });
+      setStatus('escalated');
+      onEscalated?.();
+    } catch (err: unknown) {
+      setError((err as { message?: string })?.message ?? 'Failed to escalate proposal');
+      setStatus('error');
+    }
+  };
+
+  // Success / Rejected / Escalated states
   if (status === 'approved') {
     return (
       <div data-testid="approval-flow" className="border border-green-50 rounded-lg bg-green-20 p-4 flex items-center gap-3">
@@ -95,7 +112,22 @@ export default function ApprovalFlow({ proposalId, actions, onApproved, onReject
     );
   }
 
-  const isLoading = status === 'approving' || status === 'rejecting';
+  if (status === 'escalated') {
+    return (
+      <div data-testid="approval-flow" className="border border-blue-60 rounded-lg bg-blue-20 p-4 flex items-center gap-3">
+        <ArrowUpRight className="w-5 h-5 text-blue-60 shrink-0" />
+        <div>
+          <p className="text-sm font-semibold text-blue-80">Proposal Escalated</p>
+          <p className="text-xs text-blue-60 mt-0.5">
+            This proposal has been escalated for human review.
+            {rationale && ` Rationale: ${rationale}`}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const isLoading = status === 'approving' || status === 'rejecting' || status === 'escalating';
 
   return (
     <div data-testid="approval-flow" className="border border-card-border rounded-lg bg-card-bg shadow-card">
@@ -188,7 +220,7 @@ export default function ApprovalFlow({ proposalId, actions, onApproved, onReject
         </div>
       )}
 
-      {/* Footer: Approve All / Reject */}
+      {/* Footer: Approve All / Escalate / Reject */}
       <div className="flex items-center justify-end gap-2 px-4 py-3">
         <Button
           data-testid="approval-reject-btn"
@@ -199,6 +231,16 @@ export default function ApprovalFlow({ proposalId, actions, onApproved, onReject
           disabled={isLoading}
         >
           Reject
+        </Button>
+        <Button
+          data-testid="approval-escalate-btn"
+          variant="secondary"
+          size="sm"
+          icon={isLoading && status === 'escalating' ? <Loader2 className="animate-spin" /> : <ArrowUpRight />}
+          onClick={handleEscalate}
+          disabled={isLoading}
+        >
+          Escalate
         </Button>
         <Button
           data-testid="approval-approve-btn"

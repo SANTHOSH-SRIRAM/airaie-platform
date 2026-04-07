@@ -38,7 +38,7 @@ export interface WorkflowEditorState {
   loadWorkflow: (nodes: WorkflowEditorNode[], edges: WorkflowEditorEdge[], metadata: WorkflowEditorMetadata) => void;
 }
 
-export const useWorkflowStore = create<WorkflowEditorState>((set, get) => ({
+export const useWorkflowStore = create<WorkflowEditorState>((set, _get) => ({
   nodes: [],
   edges: [],
   selectedNodeId: null,

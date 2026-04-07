@@ -5,9 +5,10 @@ export interface AgentSession {
   agentName: string;
   messageCount: number;
   toolCallCount: number;
-  status: 'active' | 'completed' | 'error';
+  status: 'active' | 'completed' | 'error' | 'expired';
   createdAt: string;
   updatedAt: string;
+  expiresAt?: string;
 }
 
 export interface ToolCallProposal {
@@ -35,6 +36,7 @@ export interface DecisionTraceEntry {
   status: 'completed' | 'running' | 'pending' | 'failed';
   detail?: string;
   timestamp?: string;
+  stepType?: 'scoring' | 'selection' | 'execution' | 'result' | 'replan';
 }
 
 export interface AgentMetrics {

@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, MoreHorizontal, Sun, Moon } from 'lucide-react';
+import { Search, MoreHorizontal, Sun, Moon, User, LogOut, Settings } from 'lucide-react';
 import { useDarkMode } from '@hooks/useDarkMode';
+import { useAuth } from '@contexts/AuthContext';
 import { cn } from '@utils/cn';
 import { PAGE_TABS } from '@constants/routes';
 import airaielogo from '@/assets/airaie-logo.png';
@@ -13,7 +14,21 @@ export default function Header() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
   const { isDark, toggle: toggleDark } = useDarkMode();
+  const { user, isAuthenticated, logout } = useAuth();
+
+  // Close profile dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setProfileOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Cmd+K / Ctrl+K global shortcut
   const handleGlobalKeyDown = useCallback((e: KeyboardEvent) => {
@@ -102,9 +117,79 @@ export default function Header() {
           {/* Notification Center */}
           <NotificationCenter />
 
-          {/* Avatar */}
-          <div className="w-[32px] h-[32px] rounded-full bg-[#2d2d2d] flex items-center justify-center text-white text-[13px] font-semibold shrink-0">
-            S
+          {/* User Profile Dropdown */}
+          <div ref={profileRef} className="relative shrink-0">
+            <button
+              onClick={() => {
+                if (isAuthenticated) {
+                  setProfileOpen(!profileOpen);
+                } else {
+                  navigate('/login');
+                }
+              }}
+              className="w-[32px] h-[32px] rounded-full bg-[#2d2d2d] flex items-center justify-center text-white text-[13px] font-semibold hover:ring-2 hover:ring-[#e74c3c] transition-all"
+              aria-label={isAuthenticated ? 'User menu' : 'Sign in'}
+            >
+              {user?.name ? user.name.charAt(0).toUpperCase() : 'S'}
+            </button>
+
+            {profileOpen && isAuthenticated && (
+              <div className="absolute right-0 top-full mt-2 w-[220px] bg-white dark:bg-gray-800 rounded-[12px] border border-[#ece9e3] dark:border-gray-700 shadow-[0px_4px_16px_0px_rgba(0,0,0,0.12)] z-50 overflow-hidden">
+                {/* User info */}
+                <div className="px-4 py-3 border-b border-[#ece9e3] dark:border-gray-700">
+                  <p className="text-[13px] font-medium text-[#1a1a1a] dark:text-white truncate">
+                    {user?.name || 'User'}
+                  </p>
+                  <p className="text-[11px] text-[#6b6b6b] dark:text-gray-400 truncate">
+                    {user?.email || ''}
+                  </p>
+                  {user?.role && (
+                    <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-medium bg-[#f0f0ec] dark:bg-gray-700 text-[#6b6b6b] dark:text-gray-300 rounded-full">
+                      {user.role}
+                    </span>
+                  )}
+                </div>
+
+                {/* Menu items */}
+                <div className="py-1">
+                  <button
+                    onClick={() => {
+                      setProfileOpen(false);
+                      navigate('/profile');
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] text-[#1a1a1a] dark:text-white hover:bg-[#f8f8f7] dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <User size={14} className="text-[#6b6b6b]" />
+                    Profile
+                  </button>
+                  <button
+                    onClick={() => {
+                      setProfileOpen(false);
+                      navigate('/settings');
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] text-[#1a1a1a] dark:text-white hover:bg-[#f8f8f7] dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <Settings size={14} className="text-[#6b6b6b]" />
+                    Settings
+                  </button>
+                </div>
+
+                {/* Logout */}
+                <div className="border-t border-[#ece9e3] dark:border-gray-700 py-1">
+                  <button
+                    onClick={() => {
+                      setProfileOpen(false);
+                      logout();
+                      navigate('/login');
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  >
+                    <LogOut size={14} />
+                    Sign out
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </header>
 

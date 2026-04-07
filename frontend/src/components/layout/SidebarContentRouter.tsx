@@ -1,8 +1,11 @@
-import { useUiStore, type SidebarContentType } from '@store/uiStore';
+import { useUiStore } from '@store/uiStore';
 import SidebarNavigation from './SidebarNavigation';
 import NodePalette from '@components/workflows/NodePalette';
 import SessionList from '@components/agents/SessionList';
 import FilterSidebar from '@components/tools/FilterSidebar';
+import ArtifactsSidebar from '@components/artifacts/ArtifactsSidebar';
+import ProfileSidebar from '@components/profile/ProfileSidebar';
+import ToolDetailSidebar from '@components/tools/ToolDetailSidebar';
 
 /**
  * Routes sidebar content based on uiStore.sidebarContentType.
@@ -32,6 +35,21 @@ export default function SidebarContentRouter() {
       {/* Filters — tool registry */}
       <div className={contentType === 'filters' ? 'contents' : 'hidden'}>
         <FilterSidebar />
+      </div>
+
+      {/* Artifacts left sidebar */}
+      <div className={contentType === 'artifacts' ? 'contents' : 'hidden'}>
+        <ArtifactsSidebar />
+      </div>
+
+      {/* Profile sidebar */}
+      <div className={contentType === 'profile' ? 'contents' : 'hidden'}>
+        <ProfileSidebar />
+      </div>
+
+      {/* Tool Detail sidebar */}
+      <div className={contentType === 'tool-detail' ? 'contents' : 'hidden'}>
+        <ToolDetailSidebar />
       </div>
     </div>
   );

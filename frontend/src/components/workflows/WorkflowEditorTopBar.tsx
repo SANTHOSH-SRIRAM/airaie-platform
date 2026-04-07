@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { ArrowLeft, AlertTriangle, Loader2, Check } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Loader2, Check, Code2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useWorkflowStore } from '@store/workflowStore';
-import { useValidateWorkflow } from '@hooks/useWorkflow';
+import { useValidateWorkflow, useCompileWorkflow } from '@hooks/useWorkflow';
 import { canvasToYamlDsl } from '@utils/canvasToYaml';
-import type { ValidateResult } from '@api/workflows';
+import type { ValidateResult, CompileResult } from '@api/workflows';
 import { cn } from '@utils/cn';
 import VersionList from './VersionList';
 import PublishModal from './PublishModal';
@@ -39,8 +39,10 @@ export default function WorkflowEditorTopBar({
 
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidateResult | null>(null);
+  const [compileResult, setCompileResult] = useState<CompileResult | null>(null);
 
   const validateMutation = useValidateWorkflow();
+  const compileMutation = useCompileWorkflow();
 
   const versionNumber = parseInt(metadata?.version.replace(/^v/, '') ?? '3', 10);
 
@@ -52,9 +54,29 @@ export default function WorkflowEditorTopBar({
     );
     const result = await validateMutation.mutateAsync(yaml);
     setValidationResult(result);
+    setCompileResult(null);
+  };
+
+  const handleCompile = async () => {
+    if (!metadata?.id) return;
+    try {
+      const result = await compileMutation.mutateAsync({
+        workflowId: metadata.id,
+        version: versionNumber,
+      });
+      setCompileResult(result);
+      setValidationResult(null);
+    } catch {
+      setCompileResult({
+        success: false,
+        errors: [{ message: 'Compilation request failed. Check your network connection.', severity: 'error' }],
+      });
+      setValidationResult(null);
+    }
   };
 
   const warningCount = validationResult?.warnings?.length ?? 0;
+  const compileErrorCount = compileResult?.errors?.length ?? 0;
 
   const formatSaveTime = (d: Date) => {
     return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -125,6 +147,18 @@ export default function WorkflowEditorTopBar({
               </button>
             )}
 
+            {/* Compile error indicator */}
+            {compileErrorCount > 0 && (
+              <button
+                onClick={() => setCompileResult(compileResult)}
+                className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-red-600 transition-colors hover:bg-red-50"
+                title={`${compileErrorCount} compile error${compileErrorCount > 1 ? 's' : ''}`}
+              >
+                <AlertTriangle size={13} />
+                {compileErrorCount}
+              </button>
+            )}
+
             {/* Validate button */}
             <button
               onClick={handleValidate}
@@ -132,6 +166,25 @@ export default function WorkflowEditorTopBar({
               className="h-[38px] rounded-[10px] border border-[#e0e0e0] px-3 text-[13px] font-medium text-[#6b6b6b] transition-colors hover:bg-[#f8f8f7] hover:text-[#1a1a1a] disabled:opacity-50"
             >
               {validateMutation.isPending ? 'Validating...' : 'Validate'}
+            </button>
+
+            {/* Compile button */}
+            <button
+              onClick={handleCompile}
+              disabled={compileMutation.isPending || !metadata?.id}
+              className="flex h-[38px] items-center gap-1.5 rounded-[10px] border border-[#e0e0e0] px-3 text-[13px] font-medium text-[#6b6b6b] transition-colors hover:bg-[#f8f8f7] hover:text-[#1a1a1a] disabled:opacity-50"
+            >
+              {compileMutation.isPending ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  Compiling...
+                </>
+              ) : (
+                <>
+                  <Code2 size={14} />
+                  Compile
+                </>
+              )}
             </button>
 
             {/* Save button */}
@@ -190,6 +243,16 @@ export default function WorkflowEditorTopBar({
           <ValidationPanel
             result={validationResult}
             onClose={() => setValidationResult(null)}
+          />
+        </div>
+      )}
+
+      {/* Compile result panel (floating bottom-right of parent) */}
+      {compileResult && (
+        <div className="relative">
+          <ValidationPanel
+            result={compileResult}
+            onClose={() => setCompileResult(null)}
           />
         </div>
       )}

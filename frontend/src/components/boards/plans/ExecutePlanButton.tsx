@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { cn } from '@utils/cn';
-import { validatePlan, executePlan } from '@api/plans';
+import { useValidatePlan, useExecutePlan } from '@hooks/usePlans';
 import type { PreflightResult as PreflightResultType } from '@/types/plan';
 import PreflightResult from './PreflightResult';
 import { Play, Loader2, CheckCircle2, XCircle } from 'lucide-react';
@@ -11,6 +11,7 @@ import { Play, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 
 interface ExecutePlanButtonProps {
   cardId: string;
+  boardId?: string;
   onExecuted?: (runId: string) => void;
 }
 
@@ -20,10 +21,13 @@ interface ExecutePlanButtonProps {
 
 type Stage = 'idle' | 'validating' | 'validated' | 'executing' | 'done' | 'error';
 
-export default function ExecutePlanButton({ cardId, onExecuted }: ExecutePlanButtonProps) {
+export default function ExecutePlanButton({ cardId, boardId, onExecuted }: ExecutePlanButtonProps) {
   const [stage, setStage] = useState<Stage>('idle');
   const [preflight, setPreflight] = useState<PreflightResultType | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const validatePlan = useValidatePlan(cardId);
+  const executePlan = useExecutePlan(cardId, boardId);
 
   const handleClick = async () => {
     setErrorMsg(null);
@@ -31,7 +35,7 @@ export default function ExecutePlanButton({ cardId, onExecuted }: ExecutePlanBut
     // Step 1: Validate
     setStage('validating');
     try {
-      const result = await validatePlan(cardId);
+      const result = await validatePlan.mutateAsync();
       setPreflight(result);
 
       if (!result.passed) {
@@ -43,7 +47,7 @@ export default function ExecutePlanButton({ cardId, onExecuted }: ExecutePlanBut
 
       // Step 2: Execute
       setStage('executing');
-      const plan = await executePlan(cardId);
+      const plan = await executePlan.mutateAsync();
       setStage('done');
 
       if (plan.run_id) {

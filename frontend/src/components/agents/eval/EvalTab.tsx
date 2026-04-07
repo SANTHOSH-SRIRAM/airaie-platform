@@ -128,7 +128,7 @@ const statusConfig = {
 
 /* ---------- Component ---------- */
 
-export default function EvalTab({ agentId }: EvalTabProps) {
+export default function EvalTab({ agentId: _agentId }: EvalTabProps) {
   const [testCases, setTestCases] = useState<EvalTestCase[]>(MOCK_TEST_CASES);
   const [isRunning, setIsRunning] = useState(false);
   const [hasRun, setHasRun] = useState(false);

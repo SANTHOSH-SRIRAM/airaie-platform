@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GitBranch, RefreshCw } from 'lucide-react';
-import type { RecentWorkflow } from '@types/index';
+import type { RecentWorkflow } from '@/types/index';
 import { useRecentWorkflows } from '@hooks/useDashboard';
 import { cn } from '@utils/cn';
 import ErrorState from '@components/ui/ErrorState';

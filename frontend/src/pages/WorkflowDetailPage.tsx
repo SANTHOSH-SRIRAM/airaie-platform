@@ -1,13 +1,16 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ExternalLink, Play, Eye, MoreHorizontal, GitBranch, Clock, DollarSign,
-  CheckCircle2, XCircle, AlertTriangle, ChevronRight, Star, Link2,
-  Webhook, Zap, Trash2, Settings, Hash, Shield, ArrowRight,
-  Activity, BarChart3, Timer, CircleDot, Minus,
+  ExternalLink, Play, Eye, GitBranch, DollarSign,
+  ChevronRight, Star, Link2,
+  Webhook, Zap, Trash2, Settings, Shield, ArrowRight,
+  Activity, BarChart3, Timer, CircleDot,
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import { useUiStore } from '@store/uiStore';
+import { useTriggers, useCreateTrigger, useUpdateTrigger, useDeleteTrigger } from '@hooks/useWorkflow';
+import TriggerPanel from '@components/workflows/TriggerPanel';
+import type { WorkflowTrigger } from '@/types/workflow';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -197,6 +200,52 @@ export default function WorkflowDetailPage() {
   const setSidebarContentType = useUiStore((s) => s.setSidebarContentType);
   const hideBottomBar = useUiStore((s) => s.hideBottomBar);
 
+  const workflowId = id ?? 'wf_fea_validation';
+  const { data: triggerEntries } = useTriggers(workflowId);
+  const createTriggerMutation = useCreateTrigger(workflowId);
+  const updateTriggerMutation = useUpdateTrigger(workflowId);
+  const deleteTriggerMutation = useDeleteTrigger(workflowId);
+
+  // Map API trigger entries to WorkflowTrigger shape for TriggerPanel
+  const triggers: WorkflowTrigger[] = (triggerEntries ?? []).map((t) => ({
+    id: t.id,
+    type: t.type,
+    config: t.config,
+    isEnabled: t.is_enabled,
+  }));
+
+  const handleAddTrigger = useCallback(
+    (trigger: Omit<WorkflowTrigger, 'id'>) => {
+      createTriggerMutation.mutate({
+        type: trigger.type,
+        config: trigger.config ?? {},
+        is_enabled: trigger.isEnabled,
+      });
+    },
+    [createTriggerMutation],
+  );
+
+  const handleUpdateTrigger = useCallback(
+    (trigger: WorkflowTrigger) => {
+      updateTriggerMutation.mutate({
+        triggerId: trigger.id,
+        data: {
+          type: trigger.type,
+          config: trigger.config,
+          is_enabled: trigger.isEnabled,
+        },
+      });
+    },
+    [updateTriggerMutation],
+  );
+
+  const handleDeleteTrigger = useCallback(
+    (triggerId: string) => {
+      deleteTriggerMutation.mutate(triggerId);
+    },
+    [deleteTriggerMutation],
+  );
+
   useEffect(() => {
     setSidebarContentType('navigation');
     hideBottomBar();
@@ -266,6 +315,12 @@ export default function WorkflowDetailPage() {
             </button>
             <button className="h-[36px] px-[20px] rounded-[8px] border border-[#e8e8e8] text-[12px] font-medium text-[#6b6b6b] flex items-center gap-[8px] hover:bg-[#f5f5f0] transition-colors">
               <Eye size={14} /> View Runs
+            </button>
+            <button 
+              onClick={() => navigate(`/workflows/${id || wf.id}/eval`)}
+              className="h-[36px] px-[20px] rounded-[8px] border border-[#d8b4fe] bg-[#f3e8ff] text-[#9333ea] text-[12px] font-bold flex items-center gap-[8px] hover:bg-[#e9d5ff] transition-colors"
+            >
+              <Activity size={14} /> Evaluation
             </button>
           </div>
         </div>
@@ -492,39 +547,17 @@ export default function WorkflowDetailPage() {
       </section>
 
       {/* ═══════════════════════════════════════════
-          TRIGGER
+          TRIGGERS
          ═══════════════════════════════════════════ */}
       <section className="bg-white rounded-[12px] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)] p-[24px]">
-        <SectionHeader
-          icon={Zap}
-          title="Trigger"
-          right={<button className="text-[11px] text-[#2196f3] font-medium hover:underline">+ edit</button>}
+        <TriggerPanel
+          workflowId={workflowId}
+          triggers={triggers}
+          onAdd={handleAddTrigger}
+          onUpdate={handleUpdateTrigger}
+          onDelete={handleDeleteTrigger}
+          isSaving={createTriggerMutation.isPending || updateTriggerMutation.isPending || deleteTriggerMutation.isPending}
         />
-        <div className="flex items-center gap-[8px] mb-[12px]">
-          <Webhook size={14} className="text-[#2196f3]" />
-          <span className="text-[13px] font-semibold text-[#1a1a1a]">Webhook</span>
-        </div>
-        <div className="mb-[12px]">
-          <span className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] block mb-[4px]">Endpoint</span>
-          <div className="flex items-center h-[36px] px-[12px] rounded-[8px] bg-[#f5f5f0] font-mono text-[11px] text-[#6b6b6b] overflow-x-auto">
-            https://api.airaie.io/v0/hooks/fea-validation-wf123
-          </div>
-          <button className="text-[10px] text-[#2196f3] mt-[4px] hover:underline">Copied</button>
-        </div>
-        <div className="grid grid-cols-3 gap-[16px]">
-          <div>
-            <span className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] block mb-[2px]">Method</span>
-            <span className="text-[12px] font-mono text-[#1a1a1a]">POST</span>
-          </div>
-          <div>
-            <span className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] block mb-[2px]">Last Triggered</span>
-            <span className="text-[12px] text-[#1a1a1a]">2 min ago</span>
-          </div>
-          <div>
-            <span className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] block mb-[2px]">Triggered Count / Since</span>
-            <span className="text-[12px] text-[#1a1a1a]">156 times</span>
-          </div>
-        </div>
       </section>
 
       {/* ═══════════════════════════════════════════

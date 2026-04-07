@@ -8,6 +8,10 @@ import {
   validateWorkflow,
   publishWorkflowVersion,
   createWorkflow,
+  listTriggers,
+  createTrigger,
+  updateTrigger,
+  deleteTrigger,
 } from '@api/workflows';
 
 export const workflowKeys = {
@@ -76,5 +80,45 @@ export function useCreateWorkflow() {
   return useMutation({
     mutationFn: createWorkflow,
     onSuccess: () => qc.invalidateQueries({ queryKey: workflowKeys.all }),
+  });
+}
+
+// --- Trigger hooks ---
+
+export const triggerKeys = {
+  list: (workflowId: string) => [...workflowKeys.all, workflowId, 'triggers'] as const,
+};
+
+export function useTriggers(workflowId: string) {
+  return useQuery({
+    queryKey: triggerKeys.list(workflowId),
+    queryFn: () => listTriggers(workflowId),
+    staleTime: 30_000,
+  });
+}
+
+export function useCreateTrigger(workflowId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { type: string; config: Record<string, unknown>; is_enabled: boolean }) =>
+      createTrigger(workflowId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: triggerKeys.list(workflowId) }),
+  });
+}
+
+export function useUpdateTrigger(workflowId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { triggerId: string; data: Record<string, unknown> }) =>
+      updateTrigger(workflowId, params.triggerId, params.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: triggerKeys.list(workflowId) }),
+  });
+}
+
+export function useDeleteTrigger(workflowId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (triggerId: string) => deleteTrigger(workflowId, triggerId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: triggerKeys.list(workflowId) }),
   });
 }

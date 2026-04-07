@@ -1,4 +1,4 @@
-import { ShieldCheck, ShieldAlert, ShieldX, Info } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, ShieldX, ArrowUpRight, Info } from 'lucide-react';
 import Badge from '@components/ui/Badge';
 import { cn } from '@utils/cn';
 
@@ -7,14 +7,14 @@ import { cn } from '@utils/cn';
 export interface ActionDecision {
   action_id: string;
   tool_ref: string;
-  verdict: 'approved' | 'needs_approval' | 'blocked';
+  verdict: 'approved' | 'needs_approval' | 'blocked' | 'escalated';
   reason: string;
   rule_name: string;
 }
 
 export interface PolicyDecision {
   proposal_id: string;
-  overall_verdict: 'approved' | 'needs_approval' | 'blocked';
+  overall_verdict: 'approved' | 'needs_approval' | 'blocked' | 'escalated';
   action_decisions: ActionDecision[];
   summary: string;
 }
@@ -46,6 +46,13 @@ const verdictConfig = {
     badgeVariant: 'danger' as const,
     bannerClass: 'bg-red-20 border-red-50 text-red-80',
     iconClass: 'text-red-50',
+  },
+  escalated: {
+    icon: ArrowUpRight,
+    label: 'Escalated',
+    badgeVariant: 'info' as const,
+    bannerClass: 'bg-blue-20 border-blue-60 text-blue-80',
+    iconClass: 'text-blue-60',
   },
 };
 

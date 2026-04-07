@@ -1,5 +1,5 @@
 import { GitBranch, Bot, Play, LayoutGrid } from 'lucide-react';
-import type { DashboardStats } from '@types/index';
+import type { DashboardStats } from '@/types/index';
 import StatCard from './StatCard';
 
 interface StatsRowProps {

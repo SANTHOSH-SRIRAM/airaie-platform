@@ -40,6 +40,11 @@ export interface AcceptanceCriterion {
   weight?: number;
 }
 
+export interface IntentConstraint {
+  key: string;
+  value: string;
+}
+
 export interface IntentPreferences {
   preferred_tools?: string[];
   compute_profile?: string;

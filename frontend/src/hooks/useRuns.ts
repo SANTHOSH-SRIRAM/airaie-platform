@@ -1,5 +1,5 @@
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { fetchRunList, fetchRunDetail, fetchRunLogs, cancelRun, retryRun } from '@api/runs';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { fetchRunList, fetchRunDetail, fetchRunLogs, cancelRun, retryRun, fetchRunArtifacts } from '@api/runs';
 
 export const runKeys = {
   all: ['runs'] as const,
@@ -20,10 +20,31 @@ export function useRunLogs(runId: string | null) {
   return useQuery({ queryKey: runKeys.logs(runId!), queryFn: () => fetchRunLogs(runId!), enabled: !!runId, refetchInterval: 2_000, staleTime: 2_000 });
 }
 
+export function useRunArtifacts(runId: string | null) {
+  return useQuery({
+    queryKey: [...runKeys.all, 'artifacts', runId!] as const,
+    queryFn: () => fetchRunArtifacts(runId!),
+    enabled: !!runId,
+    staleTime: 10_000,
+  });
+}
+
 export function useCancelRun() {
-  return useMutation({ mutationFn: (runId: string) => cancelRun(runId) });
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => cancelRun(runId),
+    onSuccess: (_, runId) => {
+      qc.invalidateQueries({ queryKey: runKeys.detail(runId) });
+    },
+  });
 }
 
 export function useRetryRun() {
-  return useMutation({ mutationFn: (runId: string) => retryRun(runId) });
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => retryRun(runId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: runKeys.all });
+    },
+  });
 }

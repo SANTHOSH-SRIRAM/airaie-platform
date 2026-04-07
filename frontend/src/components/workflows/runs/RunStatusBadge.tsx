@@ -4,31 +4,31 @@ import type { RunStatus, RunNodeStatus } from '@/types/run';
 
 const statusConfig: Record<RunStatus, { bg: string; text: string; icon: React.ReactNode; label: string }> = {
   running: {
-    bg: 'bg-blue-20',
-    text: 'text-blue-80',
+    bg: 'bg-blue-50',
+    text: 'text-blue-700',
     icon: <Loader2 size={12} className="animate-spin" />,
     label: 'Running',
   },
   succeeded: {
-    bg: 'bg-green-20',
-    text: 'text-green-80',
+    bg: 'bg-emerald-50',
+    text: 'text-emerald-700',
     icon: <CheckCircle2 size={12} />,
     label: 'Succeeded',
   },
   failed: {
-    bg: 'bg-red-20',
-    text: 'text-red-80',
+    bg: 'bg-red-50',
+    text: 'text-red-700',
     icon: <XCircle size={12} />,
     label: 'Failed',
   },
   waiting: {
-    bg: 'bg-gray-20',
-    text: 'text-gray-70',
+    bg: 'bg-gray-100',
+    text: 'text-gray-600',
     icon: <Clock size={12} />,
     label: 'Waiting',
   },
   cancelled: {
-    bg: 'bg-orange-100/10',
+    bg: 'bg-orange-50',
     text: 'text-orange-600',
     icon: <Ban size={12} />,
     label: 'Cancelled',

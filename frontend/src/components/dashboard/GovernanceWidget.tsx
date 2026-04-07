@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield } from 'lucide-react';
-import type { GovernanceStudy } from '@types/index';
+import type { GovernanceStudy } from '@/types/index';
 import { useGovernance } from '@hooks/useDashboard';
 import { cn } from '@utils/cn';
 import ErrorState from '@components/ui/ErrorState';

@@ -1,15 +1,5 @@
 import type { RunEntry, RunDetail, RunLogLine } from '@/types/run';
-import { API_CONFIG } from '@constants/api';
-
-const BASE = API_CONFIG.BASE_URL;
-
-async function tryApiOrMock<T>(url: string, options: RequestInit, mockData: T): Promise<T> {
-  try {
-    const res = await fetch(url, { ...options, signal: AbortSignal.timeout(API_CONFIG.TIMEOUT) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return (await res.json()) as T;
-  } catch { return mockData; }
-}
+import { apiOrMock } from '@api/client';
 
 const MOCK_RUNS: RunEntry[] = [
   { id: 'run_a1b2c3', workflowId: 'wf_fea', workflowName: 'FEA Validation Pipeline', status: 'running', startedAt: new Date(Date.now() - 120_000).toISOString(), duration: 120, nodesCompleted: 3, nodesTotal: 5, costUsd: 1.24, triggeredBy: 'Webhook' },
@@ -44,16 +34,31 @@ const MOCK_LOGS: RunLogLine[] = [
 ];
 
 export const fetchRunList = (workflowId: string): Promise<RunEntry[]> =>
-  tryApiOrMock(`${BASE}/workflows/${workflowId}/runs`, { method: 'GET' }, MOCK_RUNS);
+  apiOrMock(`/v0/workflows/${workflowId}/runs`, { method: 'GET' }, MOCK_RUNS);
 
 export const fetchRunDetail = (runId: string): Promise<RunDetail> =>
-  tryApiOrMock(`${BASE}/runs/${runId}`, { method: 'GET' }, MOCK_DETAIL);
+  apiOrMock(`/v0/runs/${runId}`, { method: 'GET' }, MOCK_DETAIL);
 
 export const fetchRunLogs = (runId: string): Promise<RunLogLine[]> =>
-  tryApiOrMock(`${BASE}/runs/${runId}/logs`, { method: 'GET' }, MOCK_LOGS);
+  apiOrMock(`/v0/runs/${runId}/logs`, { method: 'GET' }, MOCK_LOGS);
 
 export const cancelRun = (runId: string): Promise<void> =>
-  tryApiOrMock(`${BASE}/runs/${runId}/cancel`, { method: 'POST' }, undefined);
+  apiOrMock(`/v0/runs/${runId}/cancel`, { method: 'POST' }, undefined);
 
 export const retryRun = (runId: string): Promise<{ runId: string }> =>
-  tryApiOrMock(`${BASE}/runs/${runId}/retry`, { method: 'POST' }, { runId: `run_${Date.now()}` });
+  apiOrMock(`/v0/runs/${runId}/retry`, { method: 'POST' }, { runId: `run_${Date.now()}` });
+
+export interface RunArtifact {
+  id: string;
+  type: string;
+  name?: string;
+  size?: number;
+  node_id?: string;
+  created_at: string;
+  download_url?: string;
+}
+
+const MOCK_ARTIFACTS: RunArtifact[] = [];
+
+export const fetchRunArtifacts = (runId: string): Promise<RunArtifact[]> =>
+  apiOrMock(`/v0/runs/${runId}/artifacts`, { method: 'GET' }, MOCK_ARTIFACTS);

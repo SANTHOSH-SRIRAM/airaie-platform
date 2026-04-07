@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, GitBranch, Bot, Wrench, LayoutGrid,
-  CirclePlus, Settings, HelpCircle,
+  CirclePlus, Settings, HelpCircle, Package,
 } from 'lucide-react';
 import { ROUTES } from '@constants/routes';
 import SidebarSection from './SidebarSection';
@@ -24,6 +24,7 @@ export default function SidebarNavigation() {
         <SidebarItem icon={<Bot size={16} />} label="Agents" path={ROUTES.AGENTS} badge={3} />
         <SidebarItem icon={<Wrench size={16} />} label="Tools" path={ROUTES.TOOLS} badge={14} />
         <SidebarItem icon={<LayoutGrid size={16} />} label="Boards" path={ROUTES.BOARDS} badge={2} />
+        <SidebarItem icon={<Package size={16} />} label="Artifacts" path={ROUTES.ARTIFACTS} badge={47} />
       </SidebarSection>
 
       {/* QUICK ACTIONS */}

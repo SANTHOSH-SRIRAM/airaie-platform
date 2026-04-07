@@ -7,7 +7,6 @@ import {
   Wrench,
   Shield,
   Play,
-  X,
   Command,
 } from 'lucide-react';
 import { cn } from '@utils/cn';

@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bot } from 'lucide-react';
-import type { AgentActivityEntry } from '@types/index';
+import type { AgentActivityEntry } from '@/types/index';
 import { useAgentActivity } from '@hooks/useDashboard';
 import { cn } from '@utils/cn';
 import ErrorState from '@components/ui/ErrorState';

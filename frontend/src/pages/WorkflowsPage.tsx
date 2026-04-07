@@ -574,7 +574,7 @@ export default function WorkflowsPage() {
       <CreateWorkflowModal
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        onSubmit={(data) => {
+        onSubmit={(_data) => {
           setShowCreateModal(false);
           // Navigate to workflow editor after creation
           navigate('/workflow-studio');

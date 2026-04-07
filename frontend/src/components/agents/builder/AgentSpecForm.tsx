@@ -43,7 +43,9 @@ function defaultSpec(): AgentSpec {
     scoring: {
       strategy: 'weighted',
       llm_weight: 0.3,
-      weights: { compatibility: 0.4, trust: 0.35, cost: 0.25 },
+      weights: { compatibility: 0.25, trust: 0.25, cost: 0.2, latency: 0.15, reliability: 0.15 },
+      min_score_threshold: 0.5,
+      risk_penalty_weight: 0.2,
     },
     constraints: {
       max_tools_per_run: 5,
@@ -305,22 +307,32 @@ export default function AgentSpecForm({ spec, onChange, readOnly = false }: Agen
   );
 
   /* ---------- Scoring Section ---------- */
-  const updateWeight = (key: 'compatibility' | 'trust' | 'cost', value: number) => {
-    const current = local.scoring.weights ?? { compatibility: 0.4, trust: 0.35, cost: 0.25 };
-    const others = Object.entries(current).filter(([k]) => k !== key);
+  const WEIGHT_KEYS = ['compatibility', 'trust', 'cost', 'latency', 'reliability'] as const;
+  type WeightKey = typeof WEIGHT_KEYS[number];
+
+  const defaultWeights = { compatibility: 0.25, trust: 0.25, cost: 0.2, latency: 0.15, reliability: 0.15 };
+
+  const updateWeight = (key: WeightKey, value: number) => {
+    const current = { ...defaultWeights, ...local.scoring.weights };
+    const others = Object.entries(current).filter(([k]) => k !== key) as [WeightKey, number][];
     const othersSum = others.reduce((s, [, v]) => s + v, 0);
 
     // Normalize other weights so total = 1.0
     const remaining = Math.max(0, 1 - value);
     const scale = othersSum > 0 ? remaining / othersSum : 0;
-    const newWeights = {
-      compatibility: key === 'compatibility' ? value : current.compatibility * scale,
-      trust: key === 'trust' ? value : current.trust * scale,
-      cost: key === 'cost' ? value : current.cost * scale,
-    };
+    const newWeights = { ...current };
+    for (const [k, v] of others) {
+      newWeights[k] = v * scale;
+    }
+    newWeights[key] = value;
 
     update({ scoring: { ...local.scoring, weights: newWeights } });
   };
+
+  const weightsTotal = WEIGHT_KEYS.reduce(
+    (sum, key) => sum + (local.scoring.weights?.[key] ?? defaultWeights[key]),
+    0,
+  );
 
   const ScoringSection = (
     <div className={sectionClass}>
@@ -349,8 +361,8 @@ export default function AgentSpecForm({ spec, onChange, readOnly = false }: Agen
       </div>
       {local.scoring.strategy === 'weighted' && (
         <div className="space-y-3">
-          {(['compatibility', 'trust', 'cost'] as const).map((key) => {
-            const val = local.scoring.weights?.[key] ?? 0;
+          {WEIGHT_KEYS.map((key) => {
+            const val = local.scoring.weights?.[key] ?? defaultWeights[key];
             return (
               <div key={key} className="flex items-center gap-3">
                 <span className="w-28 text-sm capitalize text-zinc-600 dark:text-zinc-400">
@@ -372,16 +384,66 @@ export default function AgentSpecForm({ spec, onChange, readOnly = false }: Agen
               </div>
             );
           })}
-          <p className="text-xs text-zinc-400">
-            Total:{' '}
-            {(
-              (local.scoring.weights?.compatibility ?? 0) +
-              (local.scoring.weights?.trust ?? 0) +
-              (local.scoring.weights?.cost ?? 0)
-            ).toFixed(2)}
+          <p className={`text-xs ${Math.abs(weightsTotal - 1) < 0.01 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+            Total: {weightsTotal.toFixed(2)}
+            {Math.abs(weightsTotal - 1) >= 0.01 && ' (must sum to 1.0)'}
           </p>
         </div>
       )}
+
+      {/* Min Score Threshold */}
+      <div className="mt-5">
+        <label className={labelClass}>
+          Min Score Threshold
+          <span className="ml-2 text-xs font-normal text-zinc-500">
+            {(local.scoring.min_score_threshold ?? 0.5).toFixed(2)}
+          </span>
+        </label>
+        <input
+          type="range"
+          className="w-full max-w-sm accent-blue-600"
+          min={0}
+          max={1}
+          step={0.05}
+          value={local.scoring.min_score_threshold ?? 0.5}
+          onChange={(e) =>
+            update({
+              scoring: { ...local.scoring, min_score_threshold: parseFloat(e.target.value) },
+            })
+          }
+          disabled={readOnly}
+        />
+        <p className="mt-1 text-xs text-zinc-400">
+          Tools scoring below this threshold will be excluded from selection.
+        </p>
+      </div>
+
+      {/* Risk Penalty Weight */}
+      <div className="mt-5">
+        <label className={labelClass}>
+          Risk Penalty Weight
+          <span className="ml-2 text-xs font-normal text-zinc-500">
+            {(local.scoring.risk_penalty_weight ?? 0.2).toFixed(2)}
+          </span>
+        </label>
+        <input
+          type="range"
+          className="w-full max-w-sm accent-blue-600"
+          min={0}
+          max={1}
+          step={0.05}
+          value={local.scoring.risk_penalty_weight ?? 0.2}
+          onChange={(e) =>
+            update({
+              scoring: { ...local.scoring, risk_penalty_weight: parseFloat(e.target.value) },
+            })
+          }
+          disabled={readOnly}
+        />
+        <p className="mt-1 text-xs text-zinc-400">
+          Penalty applied to high-risk tool invocations. 0 = no penalty, 1 = max penalty.
+        </p>
+      </div>
     </div>
   );
 

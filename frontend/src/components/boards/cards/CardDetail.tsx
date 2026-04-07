@@ -1,6 +1,6 @@
-import { useState } from 'react';
 import { cn } from '@utils/cn';
 import { useCard, useCardEvidence } from '@hooks/useCards';
+import { useGeneratePlan } from '@hooks/usePlans';
 import type { CardStatus } from '@/types/card';
 import {
   CheckCircle2,
@@ -57,6 +57,7 @@ interface CardDetailProps {
 export default function CardDetail({ cardId, onGeneratePlan, onViewPlan }: CardDetailProps) {
   const { data: card, isLoading: cardLoading } = useCard(cardId);
   const { data: evidence, isLoading: evLoading } = useCardEvidence(cardId);
+  const generatePlan = useGeneratePlan(cardId);
 
   if (cardLoading) {
     return (
@@ -248,11 +249,28 @@ export default function CardDetail({ cardId, onGeneratePlan, onViewPlan }: CardD
       <div className="flex items-center gap-[8px] pt-[8px] border-t border-[#f0f0ec]">
         <button
           type="button"
-          onClick={() => onGeneratePlan?.(cardId)}
-          className="h-[32px] px-[14px] bg-[#ff9800] hover:bg-[#f57c00] text-white rounded-[8px] text-[11px] font-medium flex items-center gap-[5px] transition-colors"
+          onClick={async () => {
+            try {
+              await generatePlan.mutateAsync();
+              onGeneratePlan?.(cardId);
+            } catch {
+              // Error handled by mutation state
+            }
+          }}
+          disabled={generatePlan.isPending}
+          className={cn(
+            'h-[32px] px-[14px] text-white rounded-[8px] text-[11px] font-medium flex items-center gap-[5px] transition-colors',
+            generatePlan.isPending
+              ? 'bg-[#d0d0d0] cursor-not-allowed'
+              : 'bg-[#ff9800] hover:bg-[#f57c00]',
+          )}
         >
-          <Play size={12} />
-          Generate Plan
+          {generatePlan.isPending ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : (
+            <Play size={12} />
+          )}
+          {generatePlan.isPending ? 'Generating...' : 'Generate Plan'}
         </button>
         <button
           type="button"
@@ -263,6 +281,14 @@ export default function CardDetail({ cardId, onGeneratePlan, onViewPlan }: CardD
           View Plan
         </button>
       </div>
+      {generatePlan.isError && (
+        <div className="flex items-center gap-[6px] p-[8px] rounded-[8px] bg-[#ffebee] border border-[#ffcdd2]">
+          <XCircle size={12} className="text-[#e74c3c] shrink-0" />
+          <span className="text-[10px] text-[#e74c3c]">
+            {(generatePlan.error as Error)?.message ?? 'Failed to generate plan'}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

@@ -120,6 +120,7 @@ export async function createIntent(
     goal: string;
     card_id?: string;
     inputs?: IntentSpec['inputs'];
+    constraints?: Record<string, unknown>;
     acceptance_criteria?: IntentSpec['acceptance_criteria'];
     preferences?: IntentSpec['preferences'];
     governance?: IntentSpec['governance'];
@@ -130,7 +131,7 @@ export async function createIntent(
 
 export async function updateIntent(
   id: string,
-  data: Partial<Pick<IntentSpec, 'goal' | 'inputs' | 'acceptance_criteria' | 'preferences' | 'governance'>>,
+  data: Partial<Pick<IntentSpec, 'goal' | 'inputs' | 'constraints' | 'acceptance_criteria' | 'preferences' | 'governance'>>,
 ): Promise<IntentSpec> {
   return apiClient.patch(`/v0/intents/${id}`, data);
 }

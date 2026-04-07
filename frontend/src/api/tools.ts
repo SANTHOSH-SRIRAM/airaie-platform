@@ -1,4 +1,4 @@
-import type { Tool, ToolVersion } from '@/types/tool';
+import type { Tool, ToolVersion, ToolContractFull, ContractValidationResult, TrustLevel, ToolDetail, ToolRunEntry, ToolDetailVersion, ResolutionResult, ResolutionStrategy } from '@/types/tool';
 import { apiOrMock, apiClient } from '@api/client';
 
 /* ---------- Resolution / shelf types ---------- */
@@ -526,4 +526,123 @@ export async function validateToolInputs(
   return apiClient.post(`/v0/tools/${toolId}/versions/${version}/validate-inputs`, {
     inputs_json: JSON.stringify(inputs),
   });
+}
+
+/* ---------- Contract validation & trust (Sprint 1.1) ---------- */
+
+export async function validateContract(
+  contract: ToolContractFull,
+  checkPublish?: boolean,
+): Promise<ContractValidationResult> {
+  return apiClient.post('/v0/tools/validate-contract', { contract, check_publish: checkPublish });
+}
+
+export async function updateTrustLevel(
+  toolId: string,
+  version: string,
+  trustLevel: TrustLevel,
+): Promise<ToolVersion> {
+  return apiClient.patch(`/v0/tools/${toolId}/versions/${version}/trust`, { trust_level: trustLevel });
+}
+
+/* ---------- Tool Detail (Sprint 1.2) ---------- */
+
+function buildToolDetail(tool: Tool): ToolDetail {
+  return {
+    ...tool,
+    trust_level: tool.status === 'published' ? 'verified' : 'untested',
+    supported_intents: ['simulate', 'analyze', 'validate'],
+    domain_tags: tool.tags,
+    owner: 'Santhosh',
+    created_at: '2026-02-01T00:00:00Z',
+    updated_at: '2026-03-30T00:00:00Z',
+  };
+}
+
+function buildToolDetailVersions(tool: Tool): ToolDetailVersion[] {
+  return tool.versions.map((v, i) => ({
+    version: v.version,
+    status: v.status,
+    trust_level: v.status === 'published' ? 'verified' as TrustLevel : 'untested' as TrustLevel,
+    published_at: v.publishedAt,
+    run_count: Math.max(0, tool.usageCount - i * 10),
+  }));
+}
+
+function buildToolRuns(tool: Tool): ToolRunEntry[] {
+  const statuses: ToolRunEntry['status'][] = ['succeeded', 'succeeded', 'failed', 'succeeded', 'running'];
+  return statuses.map((status, i) => ({
+    run_id: `run_${tool.id}_${i + 1}`,
+    tool_id: tool.id,
+    version: tool.currentVersion,
+    status,
+    duration: status === 'running' ? 0 : Math.round(Math.random() * 60 + 5),
+    cost: status === 'running' ? 0 : +(tool.costPerRun * (0.8 + Math.random() * 0.4)).toFixed(2),
+    created_at: new Date(Date.now() - i * 3_600_000).toISOString(),
+  }));
+}
+
+export const fetchToolDetail = (id: string): Promise<ToolDetail> => {
+  const tool = MOCK_TOOLS.find((t) => t.id === id) ?? MOCK_TOOLS[0];
+  return fetchOrMock(`/v0/tools/${id}/detail`, buildToolDetail(tool));
+};
+
+export const fetchToolDetailVersions = (toolId: string): Promise<ToolDetailVersion[]> => {
+  const tool = MOCK_TOOLS.find((t) => t.id === toolId) ?? MOCK_TOOLS[0];
+  return fetchOrMock(`/v0/tools/${toolId}/detail-versions`, buildToolDetailVersions(tool));
+};
+
+export const fetchToolRuns = (toolId: string): Promise<ToolRunEntry[]> => {
+  const tool = MOCK_TOOLS.find((t) => t.id === toolId) ?? MOCK_TOOLS[0];
+  return fetchOrMock(`/v0/tools/${toolId}/runs`, buildToolRuns(tool));
+};
+
+export async function createToolRun(
+  toolId: string,
+  version: string,
+  inputs: Record<string, unknown>,
+): Promise<ToolRunEntry> {
+  const mockRun: ToolRunEntry = {
+    run_id: `run_${toolId}_${Date.now()}`,
+    tool_id: toolId,
+    version,
+    status: 'running',
+    duration: 0,
+    cost: 0,
+    created_at: new Date().toISOString(),
+    inputs,
+  };
+  return apiOrMock(`/v0/tools/${toolId}/runs`, { method: 'POST', body: JSON.stringify({ version, inputs }) }, mockRun);
+}
+
+/* ---------- Tool Shelf Resolution (Sprint 1.3) ---------- */
+
+export async function resolveToolShelf(
+  intentType: string,
+  strategy?: ResolutionStrategy,
+  context?: Record<string, unknown>,
+): Promise<ResolutionResult> {
+  return apiClient.post('/v0/toolshelf/resolve', {
+    intent_type: intentType,
+    strategy,
+    context,
+  });
+}
+
+export async function resolveToolShelfV2(
+  pipeline: {
+    steps: Array<{
+      step_id: string;
+      intent_type: string;
+      input_types: Array<{ name: string; type: string }>;
+      output_types: Array<{ name: string; type: string }>;
+    }>;
+  },
+  strategy?: ResolutionStrategy,
+): Promise<unknown> {
+  return apiClient.post('/v0/toolshelf/v2/resolve', { pipeline, strategy });
+}
+
+export async function explainResolution(resolutionId: string): Promise<unknown> {
+  return apiClient.get(`/v0/toolshelf/resolutions/${resolutionId}/explain`);
 }

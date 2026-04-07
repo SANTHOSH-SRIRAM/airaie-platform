@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { cn } from '@utils/cn';
-import { useCardEvidence } from '@hooks/useCards';
+import { useCard, useCardEvidence } from '@hooks/useCards';
 import type { CardEvidence } from '@/types/card';
 import AddEvidenceForm from './AddEvidenceForm';
 import {
@@ -9,10 +9,10 @@ import {
   AlertTriangle,
   Info,
   Plus,
-  Filter,
   Loader2,
   AlertCircle,
   ExternalLink,
+  RefreshCw,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -44,7 +44,9 @@ interface EvidencePanelProps {
 // ---------------------------------------------------------------------------
 
 export default function EvidencePanel({ cardId }: EvidencePanelProps) {
-  const { data: evidence, isLoading, error, refetch } = useCardEvidence(cardId);
+  const { data: card } = useCard(cardId);
+  const isRunning = card?.status === 'running' || card?.status === 'queued';
+  const { data: evidence, isLoading, error, refetch } = useCardEvidence(cardId, isRunning);
   const [filter, setFilter] = useState<EvalFilter>('all');
   const [showAddForm, setShowAddForm] = useState(false);
 
@@ -100,6 +102,24 @@ export default function EvidencePanel({ cardId }: EvidencePanelProps) {
               </button>
             ))}
           </div>
+
+          {/* Refresh button */}
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="h-[28px] w-[28px] flex items-center justify-center rounded-[6px] text-[#acacac] hover:text-[#6b6b6b] hover:bg-[#f0f0ec] transition-colors"
+            title="Refresh evidence"
+          >
+            <RefreshCw size={12} className={isRunning ? 'animate-spin' : ''} />
+          </button>
+
+          {/* Auto-refresh indicator */}
+          {isRunning && (
+            <span className="text-[9px] text-[#2196f3] font-medium flex items-center gap-[3px]">
+              <span className="w-[5px] h-[5px] rounded-full bg-[#2196f3] animate-pulse" />
+              Auto-refreshing
+            </span>
+          )}
 
           {/* Add button */}
           <button

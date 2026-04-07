@@ -2,11 +2,11 @@ import { Play, Square, RotateCcw, Plus, Wifi, WifiOff } from 'lucide-react';
 import { useRunWorkflow } from '@hooks/useRunWorkflow';
 import { useExecutionStore } from '@store/executionStore';
 
-interface RunActionBarProps {
-  workflowId: string;
+export interface RunActionBarProps {
+  workflowId?: string;
 }
 
-export default function RunActionBar({ workflowId }: RunActionBarProps) {
+export default function RunActionBar({ workflowId = '' }: RunActionBarProps) {
   const { isStarting, isCompleted, connected, error, start, cancel, reset } =
     useRunWorkflow(workflowId);
 
