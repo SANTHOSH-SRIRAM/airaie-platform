@@ -619,11 +619,62 @@ function buildToolRuns(tool: Tool): ToolRunEntry[] {
 }
 
 export const fetchToolDetail = async (id: string): Promise<ToolDetail> => {
-  const res = await apiClient.get<{ tool: Record<string, unknown>; versions: ToolDetailVersion[] }>(`/v0/tools/${id}`);
+  const res = await apiClient.get<{ tool: Record<string, unknown>; versions: Array<Record<string, unknown>> }>(`/v0/tools/${id}`);
   const raw = res.tool;
   const latestVersion = res.versions?.[0];
+
+  // Parse contract from the latest version's contract JSON
+  let contract: Tool['contract'] = { inputs: [], outputs: [] };
+  let adapter: Tool['adapter'] = 'docker';
+  let image = '';
+  let limits: Tool['limits'] = { cpu: 2, memoryMb: 1024, timeoutSeconds: 120 };
+  let sandboxNetwork: Tool['sandboxNetwork'] = 'deny';
+
+  if (latestVersion?.contract) {
+    try {
+      let contractStr = latestVersion.contract as string;
+      // Backend stores contract as base64-encoded JSON
+      if (typeof contractStr === 'string' && !contractStr.startsWith('{')) {
+        try { contractStr = atob(contractStr); } catch { /* not base64, try as-is */ }
+      }
+      const contractJson = typeof contractStr === 'string'
+        ? JSON.parse(contractStr)
+        : latestVersion.contract;
+
+      // Extract interface (inputs/outputs)
+      const iface = contractJson?.interface ?? contractJson;
+      if (iface?.inputs) contract.inputs = iface.inputs;
+      if (iface?.outputs) contract.outputs = iface.outputs;
+
+      // Extract runtime
+      const runtime = contractJson?.runtime;
+      if (runtime?.adapter) adapter = runtime.adapter;
+      if (runtime?.docker?.image) image = runtime.docker.image;
+      if (runtime?.resources) {
+        limits = {
+          cpu: runtime.resources.cpu_cores ?? runtime.resources.cpu ?? 2,
+          memoryMb: runtime.resources.memory_mb ?? 1024,
+          timeoutSeconds: runtime.resources.timeout_seconds ?? runtime.timeout_seconds ?? 120,
+        };
+      }
+
+      // Extract sandbox policy
+      const governance = contractJson?.governance;
+      if (governance?.sandbox?.network) sandboxNetwork = governance.sandbox.network;
+    } catch {
+      // keep defaults
+    }
+  }
+
   return {
     ...normalizeToolFromAPI(raw),
+    adapter: adapter as Tool['adapter'],
+    image,
+    limits,
+    sandboxNetwork,
+    contract,
+    currentVersion: (latestVersion?.version as string) ?? '',
+    status: (latestVersion?.status as Tool['status']) ?? 'draft',
     trust_level: (latestVersion?.trust_level as TrustLevel) ?? 'untested',
     supported_intents: [],
     domain_tags: (raw.domain_tags as string[]) ?? [],
@@ -639,8 +690,22 @@ export const fetchToolDetailVersions = async (toolId: string): Promise<ToolDetai
 };
 
 export const fetchToolRuns = async (toolId: string): Promise<ToolRunEntry[]> => {
-  const res = await apiClient.get<{ runs: ToolRunEntry[] | null }>(`/v0/runs?tool_id=${toolId}&limit=20`);
-  return res.runs ?? [];
+  const res = await apiClient.get<{ runs: Array<Record<string, unknown>> | null }>(`/v0/runs?tool_id=${toolId}&limit=20`);
+  return (res.runs ?? []).map((r) => {
+    const toolRef = (r.tool_ref as string) ?? '';
+    const version = toolRef.includes('@') ? toolRef.split('@')[1] : '';
+    return {
+      run_id: (r.id as string) ?? (r.run_id as string) ?? '',
+      tool_id: toolId,
+      version,
+      status: ((r.status as string) ?? 'pending').toLowerCase() as ToolRunEntry['status'],
+      duration: (r.duration_seconds as number) ?? 0,
+      cost: (r.cost_actual as number) ?? 0,
+      created_at: (r.created_at as string) ?? new Date().toISOString(),
+      inputs: r.inputs as Record<string, unknown> | undefined,
+      outputs: r.outputs as Record<string, unknown> | undefined,
+    };
+  });
 };
 
 export async function createToolRun(
@@ -648,17 +713,31 @@ export async function createToolRun(
   version: string,
   inputs: Record<string, unknown>,
 ): Promise<ToolRunEntry> {
-  const mockRun: ToolRunEntry = {
-    run_id: `run_${toolId}_${Date.now()}`,
+  const tool_ref = `${toolId}@${version}`;
+  const res = await apiClient.post<{ run: { id: string; status: string; created_at: string } }>(
+    '/v0/runs',
+    { tool_ref, inputs }
+  );
+  const run = (res as any).run ?? res;
+  return {
+    run_id: run.id ?? `run_${Date.now()}`,
     tool_id: toolId,
     version,
-    status: 'running',
+    status: (run.status?.toLowerCase() as ToolRunEntry['status']) ?? 'running',
     duration: 0,
     cost: 0,
-    created_at: new Date().toISOString(),
+    created_at: run.created_at ?? new Date().toISOString(),
     inputs,
   };
-  return apiOrMock(`/v0/runs`, { method: 'POST', body: JSON.stringify({ tool_id: toolId, version, inputs }) }, mockRun);
+}
+
+export async function updateTool(
+  id: string,
+  data: { name?: string; description?: string; owner?: string; domain_tags?: string[] },
+): Promise<Tool> {
+  const res = await apiClient.put<{ tool: Record<string, unknown> }>(`/v0/tools/${id}`, data);
+  const raw = (res as any).tool ?? res;
+  return normalizeToolFromAPI(raw as Record<string, unknown>);
 }
 
 /* ---------- Tool Shelf Resolution (Sprint 1.3) ---------- */

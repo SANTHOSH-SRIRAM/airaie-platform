@@ -77,11 +77,12 @@ const INITIAL: FormState = {
 
 /* ---------- Helpers ---------- */
 
-// Maps frontend port types to backend contract types
+// Maps frontend port types to backend contract standard types.
+// Standard types: string, integer, number, boolean, file, object, array
 function mapPortType(t: string): string {
   if (t === 'artifact') return 'file';
-  if (t === 'number') return 'float';
-  return t; // string, integer, float, boolean, json pass through
+  if (t === 'json') return 'object';
+  return t; // string, number, integer, boolean pass through
 }
 
 // Builds a backend-compatible ToolContract JSON object from form state

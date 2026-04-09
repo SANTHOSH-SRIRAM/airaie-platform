@@ -2,7 +2,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import Button from '@components/ui/Button';
 import { cn } from '@utils/cn';
 
-const PORT_TYPES = ['artifact', 'string', 'number', 'json', 'boolean'] as const;
+const PORT_TYPES = ['string', 'integer', 'number', 'boolean', 'artifact', 'json', 'object'] as const;
 
 export interface PortRow {
   name: string;

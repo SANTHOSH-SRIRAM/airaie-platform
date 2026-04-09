@@ -13,6 +13,8 @@ import {
   fetchToolDetailVersions,
   fetchToolRuns,
   createToolRun,
+  updateTool,
+  deprecateToolVersion,
   resolveToolShelf,
   explainResolution,
 } from '@api/tools';
@@ -140,6 +142,35 @@ export function useCreateRun() {
       createToolRun(data.toolId, data.version, data.inputs),
     onSuccess: (_result, variables) => {
       qc.invalidateQueries({ queryKey: toolKeys.runs(variables.toolId) });
+    },
+  });
+}
+
+// --- Update tool ---
+export function useUpdateTool(id?: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name?: string; description?: string; owner?: string; domain_tags?: string[] }) =>
+      updateTool(id!, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: toolKeys.all });
+      if (id) qc.invalidateQueries({ queryKey: toolKeys.detail(id) });
+    },
+  });
+}
+
+// --- Deprecate version ---
+export function useDeprecateToolVersion(toolId?: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ version, message }: { version: string; message: string }) =>
+      deprecateToolVersion(toolId!, version, message),
+    onSuccess: () => {
+      if (toolId) {
+        qc.invalidateQueries({ queryKey: toolKeys.versions(toolId) });
+        qc.invalidateQueries({ queryKey: toolKeys.detailVersions(toolId) });
+        qc.invalidateQueries({ queryKey: toolKeys.detail(toolId) });
+      }
     },
   });
 }

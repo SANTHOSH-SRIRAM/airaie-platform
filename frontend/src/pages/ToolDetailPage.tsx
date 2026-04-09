@@ -7,12 +7,13 @@ import {
   Container, FileCode2, Binary, Globe,
   FlaskConical, Wind, Grid2X2, Database, Box, Paperclip,
   Thermometer, Calculator, Scale, BrainCircuit, Archive, Combine, ShieldCheck,
-  ChevronRight, PlayCircle, Lock, HardDrive, Edit2, Upload, AlertTriangle, FileText, Check, MemoryStick, Cpu, Clock, Link2, Download, History
+  ChevronRight, PlayCircle, Lock, HardDrive, Edit2, Upload, AlertTriangle, FileText, Check, MemoryStick, Cpu, Clock, Link2, Download, History, X, CheckCircle, Loader2
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import { useUiStore } from '@store/uiStore';
-import { useToolDetailFull, useToolDetailVersions, useToolRuns } from '@hooks/useTools';
+import { useToolDetailFull, useToolDetailVersions, useToolRuns, useUpdateTool, useDeprecateToolVersion, useCreateRun } from '@hooks/useTools';
 import type { ToolAdapter, ToolCategory, ToolStatus, TrustLevel, ToolContractField, ToolDetail, ToolDetailVersion, ToolRunEntry } from '@/types/tool';
+import EditToolModal from '@components/tools/EditToolModal';
 
 // ── Shared Label & Icon Maps ───────────────────────────────────
 
@@ -54,12 +55,15 @@ function getToolIcon(name: string) {
   return TOOL_ICON_MAP[name as keyof typeof TOOL_ICON_MAP] ?? Wrench;
 }
 
-const RUN_STATUS: Record<ToolRunEntry['status'], { bg: string; text: string; label: string }> = {
-  running:   { bg: 'bg-[#e3f2fd]', text: 'text-[#2196f3]', label: 'Running' },
-  succeeded: { bg: 'bg-[#e8f5e9]', text: 'text-[#4caf50]', label: 'Succeeded' },
-  failed:    { bg: 'bg-[#ffebee]', text: 'text-[#e74c3c]', label: 'Failed' },
-  cancelled: { bg: 'bg-[#f5f5f0]', text: 'text-[#acacac]', label: 'Cancelled' },
+const RUN_STATUS: Record<string, { bg: string; text: string; label: string }> = {
+  running:    { bg: 'bg-[#e3f2fd]', text: 'text-[#2196f3]', label: 'Running' },
+  succeeded:  { bg: 'bg-[#e8f5e9]', text: 'text-[#4caf50]', label: 'Succeeded' },
+  completed:  { bg: 'bg-[#e8f5e9]', text: 'text-[#4caf50]', label: 'Completed' },
+  failed:     { bg: 'bg-[#ffebee]', text: 'text-[#e74c3c]', label: 'Failed' },
+  cancelled:  { bg: 'bg-[#f5f5f0]', text: 'text-[#acacac]', label: 'Cancelled' },
+  pending:    { bg: 'bg-[#fff3e0]', text: 'text-[#ff9800]', label: 'Pending' },
 };
+const RUN_STATUS_DEFAULT = { bg: 'bg-[#f0f0ec]', text: 'text-[#6b6b6b]', label: 'Unknown' };
 
 function formatDuration(seconds: number | undefined) {
   if (!seconds) return '0s';
@@ -113,9 +117,21 @@ export default function ToolDetailPage() {
   const closeRightPanel = useUiStore((s) => s.closeRightPanel);
   const setActiveToolSection = useUiStore((s) => s.setActiveToolSection);
 
-  const { data: tool, isLoading, isError } = useToolDetailFull(id);
+  const { data: tool, isLoading, isError, refetch } = useToolDetailFull(id);
   const { data: versions } = useToolDetailVersions(id);
   const { data: runs } = useToolRuns(id);
+
+  // Modals + UI state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [deprecateConfirm, setDeprecateConfirm] = useState(false);
+  const [testInputs, setTestInputs] = useState<Record<string, unknown>>({});
+  const [testRunning, setTestRunning] = useState(false);
+  const [testResult, setTestResult] = useState<{ status: string; run_id: string; outputs?: unknown } | null>(null);
+  const [testError, setTestError] = useState<string | null>(null);
+
+  // Mutations
+  const deprecateMutation = useDeprecateToolVersion(id);
+  const createRunMutation = useCreateRun();
 
   const observerRef = useRef<IntersectionObserver | null>(null);
 
@@ -175,11 +191,20 @@ export default function ToolDetailPage() {
             <span className="px-2 py-0.5 bg-[#f0f0ec] text-[#6b6b6b] text-[11px] font-bold rounded-[4px]">{CATEGORY_LABELS[tool.category]}</span>
          </div>
          <div className="flex items-center gap-[12px]">
-            <button className="h-[32px] px-[16px] border border-[#2196f3] text-[#2196f3] rounded-[8px] text-[12px] font-bold hover:bg-[#e3f2fd] transition-colors flex items-center gap-1.5"><Play size={14}/> Test Run</button>
-            <button className="h-[32px] px-[16px] border border-[#e8e8e8] text-[#1a1a1a] rounded-[8px] text-[12px] font-bold hover:bg-[#fafaf8] transition-colors flex items-center gap-1.5"><Edit2 size={14}/> Edit Tool</button>
-            <button className="h-[32px] px-[16px] bg-[#1a1a1a] text-white rounded-[8px] text-[12px] font-bold hover:bg-[#333] transition-colors shadow-sm">+ New Version</button>
+            <button
+              onClick={() => document.getElementById('test-run')?.scrollIntoView({ behavior: 'smooth' })}
+              className="h-[32px] px-[16px] border border-[#2196f3] text-[#2196f3] rounded-[8px] text-[12px] font-bold hover:bg-[#e3f2fd] transition-colors flex items-center gap-1.5"
+            ><Play size={14}/> Test Run</button>
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="h-[32px] px-[16px] border border-[#e8e8e8] text-[#1a1a1a] rounded-[8px] text-[12px] font-bold hover:bg-[#fafaf8] transition-colors flex items-center gap-1.5"
+            ><Edit2 size={14}/> Edit Tool</button>
+            <button
+              onClick={() => navigate(`/tools/register?clone=${id}`)}
+              className="h-[32px] px-[16px] bg-[#1a1a1a] text-white rounded-[8px] text-[12px] font-bold hover:bg-[#333] transition-colors shadow-sm"
+            >+ New Version</button>
             <button className="w-[32px] h-[32px] flex items-center justify-center hover:bg-[#f0f0ec] rounded-full text-[#6b6b6b]"><Activity size={16}/></button>
-            <div className="w-[32px] h-[32px] rounded-full bg-[#2d2d2d] flex items-center justify-center text-white text-[13px] font-bold shadow-sm">{tool.owner.charAt(0).toUpperCase()}</div>
+            <div className="w-[32px] h-[32px] rounded-full bg-[#2d2d2d] flex items-center justify-center text-white text-[13px] font-bold shadow-sm">{tool.owner?.charAt(0)?.toUpperCase() ?? 'U'}</div>
          </div>
       </header>
 
@@ -303,75 +328,54 @@ export default function ToolDetailPage() {
                </div>
 
                <div className="grid grid-cols-2 gap-8 mb-8">
+                  {/* DYNAMIC INPUTS */}
                   <div>
-                     <h4 className="text-[10px] uppercase font-bold text-[#acacac] tracking-widest mb-4">Inputs <span className="font-mono bg-[#f0f0ec] px-1.5 py-0.5 rounded text-[#6b6b6b] ml-2">3 parameters</span></h4>
+                     <h4 className="text-[10px] uppercase font-bold text-[#acacac] tracking-widest mb-4">
+                       Inputs <span className="font-mono bg-[#f0f0ec] px-1.5 py-0.5 rounded text-[#6b6b6b] ml-2">{tool.contract?.inputs?.length ?? 0} parameters</span>
+                     </h4>
                      <div className="flex flex-col gap-3">
-                        {/* Mock mapped blocks as per image */}
-                        <div className="border border-[#e8e8e8] rounded-[8px] p-4 bg-[#fbfaf9]">
-                           <div className="flex justify-between items-center mb-2">
-                              <span className="font-mono font-bold text-[#1a1a1a] text-[13px]">mesh_file</span>
-                              <span className="text-[10px] bg-[#e3f2fd] text-[#2196f3] px-2 rounded-full font-mono font-bold">artifact</span>
+                        {(tool.contract?.inputs ?? []).length === 0 ? (
+                          <div className="text-[12px] text-[#acacac] italic p-4 border border-dashed border-[#ece9e3] rounded-[8px]">No inputs defined</div>
+                        ) : (tool.contract?.inputs ?? []).map((inp) => (
+                           <div key={inp.name} className="border border-[#e8e8e8] rounded-[8px] p-4 bg-[#fbfaf9]">
+                              <div className="flex justify-between items-center mb-2">
+                                 <span className="font-mono font-bold text-[#1a1a1a] text-[13px]">{inp.name}</span>
+                                 <span className={cn("text-[10px] px-2 rounded-full font-mono font-bold", inp.type === 'artifact' ? 'bg-[#e3f2fd] text-[#2196f3]' : 'bg-[#f0f0ec] text-[#6b6b6b]')}>{inp.type}</span>
+                              </div>
+                              <p className="text-[12px] text-[#6b6b6b] flex items-center gap-2 mb-1">
+                                 <span className={cn("w-1.5 h-1.5 rounded-full", inp.required ? 'bg-[#4caf50]' : 'bg-[#ff9800]')} />
+                                 <span className={cn("font-bold text-[11px]", inp.required ? 'text-[#4caf50]' : 'text-[#ff9800]')}>{inp.required ? 'Required' : 'Optional'}</span>
+                                 {inp.description && <span className="text-[#6b6b6b]">{inp.description}</span>}
+                              </p>
                            </div>
-                           <p className="text-[12px] text-[#6b6b6b] flex items-center gap-2 mb-2"><span className="w-1.5 h-1.5 bg-[#4caf50] rounded-full"/> <span className="font-bold text-[#4caf50]">Required</span> Input mesh geometry file in STL, STEP, or VTK format</p>
-                           <p className="text-[11px] text-[#acacac] font-mono">Accepted formats: .stl, .step, .vtk</p>
-                        </div>
-                        <div className="border border-[#e8e8e8] rounded-[8px] p-4 bg-[#fbfaf9]">
-                           <div className="flex justify-between items-center mb-2">
-                              <span className="font-mono font-bold text-[#1a1a1a] text-[13px]">threshold</span>
-                              <span className="text-[10px] bg-[#f0f0ec] text-[#6b6b6b] px-2 rounded-full font-mono font-bold">number</span>
-                           </div>
-                           <p className="text-[12px] text-[#6b6b6b] flex items-center gap-2 mb-2"><span className="w-1.5 h-1.5 bg-[#ff9800] rounded-full"/> <span className="font-bold text-[#ff9800]">Optional</span> Stress threshold value in MPa for pass/fail evaluation</p>
-                           <p className="text-[11px] text-[#acacac] font-mono">Default: <span className="text-[#1a1a1a] bg-[#e8e8e8] px-1">128</span> · Range: 1-10000</p>
-                        </div>
-                        <div className="border border-[#e8e8e8] rounded-[8px] p-4 bg-[#fbfaf9]">
-                           <div className="flex justify-between items-center mb-2">
-                              <span className="font-mono font-bold text-[#1a1a1a] text-[13px]">output_format</span>
-                              <span className="text-[10px] bg-[#f0f0ec] text-[#6b6b6b] px-2 rounded-full font-mono font-bold">enum</span>
-                           </div>
-                           <p className="text-[12px] text-[#6b6b6b] flex items-center gap-2 mb-2"><span className="w-1.5 h-1.5 bg-[#4caf50] rounded-full"/> <span className="font-bold text-[#4caf50]">Required</span> Output file format selection</p>
-                           <p className="text-[11px] text-[#acacac] font-mono">Values: <span className="text-[#1a1a1a] bg-[#e8e8e8] px-1">vtk</span> <span className="text-[#1a1a1a] bg-[#e8e8e8] px-1">csv</span> <span className="text-[#1a1a1a] bg-[#e8e8e8] px-1">json</span></p>
-                        </div>
+                        ))}
                      </div>
                   </div>
 
+                  {/* DYNAMIC OUTPUTS */}
                   <div>
-                     <h4 className="text-[10px] uppercase font-bold text-[#acacac] tracking-widest mb-4">Outputs <span className="font-mono bg-[#f0f0ec] px-1.5 py-0.5 rounded text-[#6b6b6b] ml-2">2 parameters</span></h4>
+                     <h4 className="text-[10px] uppercase font-bold text-[#acacac] tracking-widest mb-4">
+                       Outputs <span className="font-mono bg-[#f0f0ec] px-1.5 py-0.5 rounded text-[#6b6b6b] ml-2">{tool.contract?.outputs?.length ?? 0} parameters</span>
+                     </h4>
                      <div className="flex flex-col gap-3">
-                        <div className="border border-[#e8f5e9] rounded-[8px] p-4 bg-[#fff]">
-                           <div className="flex justify-between items-center mb-2">
-                              <span className="font-mono font-bold text-[#1a1a1a] text-[13px]">result</span>
-                              <span className="text-[10px] bg-[#e8f5e9] text-[#4caf50] px-2 rounded-full font-mono font-bold">artifact</span>
+                        {(tool.contract?.outputs ?? []).length === 0 ? (
+                          <div className="text-[12px] text-[#acacac] italic p-4 border border-dashed border-[#ece9e3] rounded-[8px]">No outputs defined</div>
+                        ) : (tool.contract?.outputs ?? []).map((out) => (
+                           <div key={out.name} className="border border-[#e8f5e9] rounded-[8px] p-4 bg-[#fff]">
+                              <div className="flex justify-between items-center mb-2">
+                                 <span className="font-mono font-bold text-[#1a1a1a] text-[13px]">{out.name}</span>
+                                 <span className={cn("text-[10px] px-2 rounded-full font-mono font-bold", out.type === 'artifact' ? 'bg-[#e8f5e9] text-[#4caf50]' : 'bg-[#f0f0ec] text-[#6b6b6b]')}>{out.type}</span>
+                              </div>
+                              {out.description && <p className="text-[12px] text-[#6b6b6b]">{out.description}</p>}
                            </div>
-                           <p className="text-[12px] text-[#6b6b6b] mb-2">Primary simulation result file containing stress field data</p>
-                           <p className="text-[11px] text-[#acacac] font-mono">Format matches output_format parameter</p>
-                        </div>
-                        <div className="border border-[#f0f0ec] rounded-[8px] p-4 bg-[#fff]">
-                           <div className="flex justify-between items-center mb-2">
-                              <span className="font-mono font-bold text-[#1a1a1a] text-[13px]">metrics</span>
-                              <span className="text-[10px] bg-[#f0f0ec] text-[#6b6b6b] px-2 rounded-full font-mono font-bold">json</span>
-                           </div>
-                           <p className="text-[12px] text-[#6b6b6b] mb-2">Execution metrics including convergence info, element statistics, and timing</p>
-                           <p className="text-[11px] text-[#acacac] font-mono">Schema: {'{'} max_stress, safety_factor, element_count, iterations, converged {'}'}</p>
-                        </div>
+                        ))}
                      </div>
                   </div>
                </div>
 
-               <h4 className="text-[10px] uppercase font-bold text-[#acacac] tracking-widest mb-2">RAW CONTRACT</h4>
+               <h4 className="text-[10px] uppercase font-bold text-[#acacac] tracking-widest mb-2">RAW CONTRACT (interface)</h4>
                <div className="bg-[#1a1a1a] rounded-[8px] p-4 font-mono text-[11px] text-[#a855f7] overflow-x-auto">
-<pre>{`{
-  "name": "fea-solver",
-  "version": "2.1.0",
-  "inputs": [
-    { "name": "mesh_file", "type": "artifact", "required": `}<span className="text-[#f472b6]">true</span>{` },
-    { "name": "threshold", "type": "number", "required": `}<span className="text-[#f472b6]">false</span>{`, "default": `}<span className="text-[#fb923c]">128</span>{` },
-    { "name": "output_format", "type": "enum", "values": ["vtk", "csv", "json"], "required": `}<span className="text-[#f472b6]">true</span>{` }
-  ],
-  "outputs": [
-    { "name": "result", "type": "artifact" },
-    { "name": "metrics", "type": "json" }
-  ]
-}`}</pre>
+                  <pre>{JSON.stringify({ inputs: tool.contract?.inputs ?? [], outputs: tool.contract?.outputs ?? [] }, null, 2)}</pre>
                </div>
             </section>
 
@@ -386,70 +390,62 @@ export default function ToolDetailPage() {
                </div>
 
                <div className="grid grid-cols-[1fr_1fr_1.5fr] gap-8">
-                 {/* Adapter */}
+                 {/* Adapter — dynamic */}
                  <div>
                     <h4 className="text-[10px] uppercase font-bold text-[#acacac] tracking-widest mb-4">ADAPTER</h4>
                     <div className="flex gap-3 items-start mb-6">
-                       <Container size={24} className="text-[#2196f3]" />
+                       {createElement(ADAPTER_ICON_MAP[tool.adapter] ?? Container, { size: 24, className: 'text-[#2196f3]' })}
                        <div>
-                          <h5 className="text-[14px] font-bold text-[#1a1a1a]">Docker</h5>
-                          <p className="text-[11px] text-[#6b6b6b] mt-1">Containerized execution in isolated Docker environment.</p>
+                          <h5 className="text-[14px] font-bold text-[#1a1a1a]">{ADAPTER_LABELS[tool.adapter] ?? tool.adapter}</h5>
+                          <p className="text-[11px] text-[#6b6b6b] mt-1">Containerized execution in isolated environment.</p>
                        </div>
                     </div>
-                    <h4 className="text-[10px] uppercase font-bold text-[#acacac] tracking-widest mb-2 mt-4">IMAGE</h4>
-                    <div className="bg-[#f5f5f0] border border-[#e8e8e8] px-3 py-2 rounded-[6px] font-mono text-[13px] text-[#1a1a1a] inline-block mb-1">fea-solver:2.1</div>
-                    <p className="text-[10px] font-mono text-[#acacac]">Registry: registry.airaie.io</p>
+                    {tool.image && (<>
+                      <h4 className="text-[10px] uppercase font-bold text-[#acacac] tracking-widest mb-2 mt-4">IMAGE</h4>
+                      <div className="bg-[#f5f5f0] border border-[#e8e8e8] px-3 py-2 rounded-[6px] font-mono text-[13px] text-[#1a1a1a] inline-block mb-1 break-all">{tool.image}</div>
+                      {tool.registry && <p className="text-[10px] font-mono text-[#acacac]">Registry: {tool.registry}</p>}
+                    </>)}
                  </div>
 
-                 {/* Resources */}
+                 {/* Resources — dynamic */}
                  <div>
                     <h4 className="text-[10px] uppercase font-bold text-[#acacac] tracking-widest mb-4">DEFAULT RESOURCE LIMITS</h4>
                     <div className="flex flex-col gap-4">
                        <div className="h-10 border-l-[3px] border-[#e74c3c] pl-4 flex flex-col justify-center bg-[#fbfaf9] rounded-r-md">
                           <span className="text-[10px] font-bold text-[#1a1a1a]">CPU</span>
-                          <span className="font-mono text-[14px] font-bold text-[#1a1a1a]">4 <span className="text-[10px] text-[#6b6b6b]">cores</span></span>
+                          <span className="font-mono text-[14px] font-bold text-[#1a1a1a]">{tool.limits?.cpu ?? 2} <span className="text-[10px] text-[#6b6b6b]">cores</span></span>
                        </div>
                        <div className="h-10 border-l-[3px] border-[#ff9800] pl-4 flex flex-col justify-center bg-[#fbfaf9] rounded-r-md">
                           <span className="text-[10px] font-bold text-[#1a1a1a]">Memory</span>
-                          <span className="font-mono text-[14px] font-bold text-[#1a1a1a]">2048 <span className="text-[10px] text-[#6b6b6b]">MB</span></span>
+                          <span className="font-mono text-[14px] font-bold text-[#1a1a1a]">{tool.limits?.memoryMb ?? 1024} <span className="text-[10px] text-[#6b6b6b]">MB</span></span>
                        </div>
                        <div className="h-10 border-l-[3px] border-[#6b6b6b] pl-4 flex flex-col justify-center bg-[#fbfaf9] rounded-r-md">
                           <span className="text-[10px] font-bold text-[#1a1a1a]">Timeout</span>
-                          <span className="font-mono text-[14px] font-bold text-[#1a1a1a]">300 <span className="text-[10px] text-[#6b6b6b]">seconds</span></span>
+                          <span className="font-mono text-[14px] font-bold text-[#1a1a1a]">{tool.limits?.timeoutSeconds ?? 120} <span className="text-[10px] text-[#6b6b6b]">seconds</span></span>
                        </div>
-                       <p className="text-[10px] font-mono text-[#acacac] mt-2">Disk: 5000 MB</p>
                     </div>
                  </div>
 
-                 {/* Sandbox Policy */}
+                 {/* Sandbox Policy — dynamic */}
                  <div>
                     <h4 className="text-[10px] uppercase font-bold text-[#acacac] tracking-widest mb-4">SANDBOX POLICY</h4>
                     <div className="flex flex-col gap-4 border-l border-[#ece9e3] pl-6 h-full">
                        <div className="flex justify-between items-center text-[12px]">
-                          <span className="flex items-center gap-2 text-[#1a1a1a]"><Lock size={14} className="text-[#e74c3c]"/> Network</span>
-                          <span className="px-2 py-0.5 bg-[#ffebee] text-[#e74c3c] font-bold rounded-[4px] text-[10px]">Deny</span>
+                          <span className="flex items-center gap-2 text-[#1a1a1a]"><Lock size={14} className={tool.sandboxNetwork === 'deny' ? 'text-[#e74c3c]' : 'text-[#4caf50]'}/> Network</span>
+                          <span className={cn("px-2 py-0.5 font-bold rounded-[4px] text-[10px]", tool.sandboxNetwork === 'deny' ? 'bg-[#ffebee] text-[#e74c3c]' : 'bg-[#e8f5e9] text-[#4caf50]')}>
+                            {tool.sandboxNetwork === 'deny' ? 'Deny' : 'Allow'}
+                          </span>
                        </div>
                        <div className="flex justify-between items-center text-[12px]">
                           <span className="flex items-center gap-2 text-[#1a1a1a]"><HardDrive size={14} className="text-[#ff9800]"/> Filesystem</span>
-                          <span className="px-2 py-0.5 bg-[#fff3e0] text-[#ff9800] font-bold rounded-[4px] text-[10px]">sandbox</span>
+                          <span className="px-2 py-0.5 bg-[#fff3e0] text-[#ff9800] font-bold rounded-[4px] text-[10px]">{tool.filesystemMode ?? 'sandbox'}</span>
                        </div>
-                       <div className="flex justify-between items-center text-[12px] pt-2">
-                          <span className="flex items-center gap-2 text-[#6b6b6b]"><Clock size={14} className="text-[#acacac]"/> Max CPU/Job</span>
-                          <span className="font-mono text-[11px] text-[#acacac]">8 cores</span>
-                       </div>
-                       <div className="flex justify-between items-center text-[12px]">
-                          <span className="flex items-center gap-2 text-[#6b6b6b]"><MemoryStick size={14} className="text-[#acacac]"/> Max Memory/job</span>
-                          <span className="font-mono text-[11px] text-[#acacac]">4096 MB</span>
-                       </div>
-                       <div className="flex justify-between items-center text-[12px]">
-                          <span className="flex items-center gap-2 text-[#6b6b6b]"><Cpu size={14} className="text-[#acacac]"/> Max Timeout/Job</span>
-                          <span className="font-mono text-[11px] text-[#acacac]">600s</span>
-                       </div>
-
-                       <div className="mt-4 p-3 border border-[#ffcdd2] bg-[#fffafa] rounded-[6px] flex gap-2 items-start text-[#e74c3c]">
-                         <AlertTriangle size={14} className="shrink-0 mt-0.5"/>
-                         <p className="text-[11px] font-medium leading-relaxed">Network access is denied for security. Tool runs in full isolation.</p>
-                       </div>
+                       {tool.sandboxNetwork === 'deny' && (
+                         <div className="mt-4 p-3 border border-[#ffcdd2] bg-[#fffafa] rounded-[6px] flex gap-2 items-start text-[#e74c3c]">
+                           <AlertTriangle size={14} className="shrink-0 mt-0.5"/>
+                           <p className="text-[11px] font-medium leading-relaxed">Network access is denied for security. Tool runs in full isolation.</p>
+                         </div>
+                       )}
                     </div>
                  </div>
                </div>
@@ -509,7 +505,7 @@ export default function ToolDetailPage() {
 
                <div className="flex flex-col">
                   {runs?.slice(0,4)?.map((run) => {
-                     const cfg = RUN_STATUS[run.status];
+                     const cfg = RUN_STATUS[run.status?.toLowerCase()] ?? RUN_STATUS_DEFAULT;
                      return (
                         <div key={run.run_id} className="flex justify-between items-center py-4 border-b border-[#fafaf8] last:border-0 group cursor-pointer hover:bg-[#fbfaf9] -mx-4 px-4 rounded-md transition-colors">
                            <div className="flex items-center gap-4">
@@ -577,40 +573,188 @@ export default function ToolDetailPage() {
                </div>
                
                <div className="grid grid-cols-2 border-t border-[#ece9e3] min-h-[300px]">
+                  {/* DYNAMIC INPUT FORM */}
                   <div className="p-[32px] border-r border-[#ece9e3] bg-[#fafaf8]">
                      <h4 className="text-[10px] uppercase font-bold text-[#acacac] tracking-widest mb-4">TEST INPUTS</h4>
-                     <form className="flex flex-col gap-5">
-                       <div>
-                         <label className="text-[11px] font-bold text-[#1a1a1a] mb-1.5 flex items-center gap-2">mesh_file <span className="text-[10px] font-normal text-[#2196f3] bg-[#e3f2fd] px-1 rounded">artifact</span></label>
-                         <div className="border border-dashed border-[#d5d5cf] bg-white rounded-[6px] h-12 flex items-center justify-center text-[12px] text-[#949494] gap-2 cursor-pointer hover:border-[#949494] hover:text-[#1a1a1a] transition-colors"><Upload size={14}/> Drop file or click to browse...</div>
-                       </div>
-                       <div>
-                         <label className="text-[11px] font-bold text-[#1a1a1a] mb-1.5 flex items-center gap-2">threshold <span className="text-[10px] font-normal text-[#6b6b6b] bg-[#f0f0ec] px-1 rounded">number</span></label>
-                         <div className="relative">
-                            <input type="number" defaultValue={128} className="w-full h-10 border border-[#d5d5cf] rounded-[6px] px-3 text-[13px] text-[#1a1a1a]" />
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] font-mono text-[#949494]">MPa</span>
+                     <div className="flex flex-col gap-5">
+                       {(tool.contract?.inputs ?? []).length === 0 ? (
+                         <p className="text-[12px] text-[#acacac] italic">No inputs defined for this tool.</p>
+                       ) : (tool.contract?.inputs ?? []).map((inp) => (
+                         <div key={inp.name}>
+                           <label className="text-[11px] font-bold text-[#1a1a1a] mb-1.5 flex items-center gap-2">
+                             {inp.name}
+                             <span className={cn("text-[10px] font-normal px-1 rounded", inp.type === 'artifact' ? 'text-[#2196f3] bg-[#e3f2fd]' : 'text-[#6b6b6b] bg-[#f0f0ec]')}>{inp.type}</span>
+                             {inp.required && <span className="text-[#e74c3c] text-[10px]">*</span>}
+                           </label>
+                           {inp.type === 'artifact' ? (
+                             <div className="border border-dashed border-[#d5d5cf] bg-white rounded-[6px] h-12 flex items-center justify-center text-[12px] text-[#949494] gap-2 cursor-pointer hover:border-[#2196f3] hover:text-[#2196f3] transition-colors">
+                               <Upload size={14}/> Artifact input (pass artifact_id)
+                             </div>
+                           ) : inp.type === 'boolean' ? (
+                             <input
+                               type="checkbox"
+                               className="w-5 h-5 rounded cursor-pointer"
+                               onChange={(e) => setTestInputs(prev => ({ ...prev, [inp.name]: e.target.checked }))}
+                             />
+                           ) : inp.type === 'number' || inp.type === 'float' || inp.type === 'integer' ? (
+                             <input
+                               type="number"
+                               placeholder={inp.description ?? inp.name}
+                               className="w-full h-10 border border-[#d5d5cf] rounded-[6px] px-3 text-[13px] text-[#1a1a1a] bg-white focus:border-[#2196f3] outline-none"
+                               onChange={(e) => setTestInputs(prev => ({ ...prev, [inp.name]: e.target.value === '' ? undefined : Number(e.target.value) }))}
+                             />
+                           ) : inp.type === 'json' || inp.type === 'object' ? (
+                             <textarea
+                               rows={3}
+                               placeholder={`{"key": "value"}`}
+                               className="w-full border border-[#d5d5cf] rounded-[6px] px-3 py-2 text-[12px] font-mono text-[#1a1a1a] bg-white focus:border-[#2196f3] outline-none resize-none"
+                               onChange={(e) => { try { setTestInputs(prev => ({ ...prev, [inp.name]: JSON.parse(e.target.value) })) } catch { setTestInputs(prev => ({ ...prev, [inp.name]: e.target.value })) } }}
+                             />
+                           ) : (
+                             <input
+                               type="text"
+                               placeholder={inp.description ?? inp.name}
+                               className="w-full h-10 border border-[#d5d5cf] rounded-[6px] px-3 text-[13px] text-[#1a1a1a] bg-white focus:border-[#2196f3] outline-none"
+                               onChange={(e) => setTestInputs(prev => ({ ...prev, [inp.name]: e.target.value }))}
+                             />
+                           )}
                          </div>
-                       </div>
-                       <div>
-                         <label className="text-[11px] font-bold text-[#1a1a1a] mb-1.5 flex items-center gap-2">output_format <span className="text-[10px] font-normal text-[#6b6b6b] bg-[#f0f0ec] px-1 rounded">enum</span></label>
-                         <select className="w-full h-10 border border-[#d5d5cf] rounded-[6px] px-3 text-[13px] text-[#1a1a1a] bg-white">
-                            <option value="vtk">vtk</option>
-                            <option value="csv">csv</option>
-                            <option value="json">json</option>
-                         </select>
-                       </div>
-                       
-                       <button type="button" className="h-10 mt-2 bg-[#2196f3] text-white rounded-[8px] text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-[#1976d2] shadow-sm"><Play size={14} fill="white"/> Run Tool</button>
-                       <p className="text-[10px] text-[#949494] text-center">Estimated time ~15-20s</p>
-                     </form>
+                       ))}
+
+                       <button
+                         type="button"
+                         disabled={testRunning}
+                         onClick={async () => {
+                           if (!tool.id || !tool.currentVersion) return;
+                           setTestRunning(true);
+                           setTestResult(null);
+                           setTestError(null);
+                           try {
+                             const run = await createRunMutation.mutateAsync({
+                               toolId: tool.id,
+                               version: tool.currentVersion,
+                               inputs: testInputs,
+                             });
+                             const runId = run.run_id ?? '';
+                             setTestResult({ status: run.status ?? 'running', run_id: runId, outputs: run });
+                             // Poll for completion
+                             if (runId) {
+                               const poll = setInterval(async () => {
+                                 try {
+                                   const res = await fetch(`/v0/runs/${runId}`, { headers: { 'X-Project-Id': 'prj_default' } });
+                                   if (!res.ok) return;
+                                   const data = await res.json();
+                                   const r = data.run ?? data;
+                                   const status = (r.status ?? '').toLowerCase();
+                                   if (status === 'failed' || status === 'succeeded' || status === 'completed' || status === 'cancelled') {
+                                     clearInterval(poll);
+                                     setTestResult({ status, run_id: runId, outputs: r });
+                                     if (status === 'failed') setTestError(r.error ?? r.error_message ?? 'Run failed');
+                                   } else {
+                                     setTestResult({ status, run_id: runId, outputs: r });
+                                   }
+                                 } catch { /* ignore poll errors */ }
+                               }, 3000);
+                               // Stop polling after 5 minutes
+                               setTimeout(() => clearInterval(poll), 300000);
+                             }
+                           } catch (e: any) {
+                             setTestError(e?.message ?? 'Failed to start run');
+                           } finally {
+                             setTestRunning(false);
+                           }
+                         }}
+                         className="h-10 mt-2 bg-[#2196f3] text-white rounded-[8px] text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-[#1976d2] shadow-sm disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                       >
+                         {testRunning ? <><Loader2 size={14} className="animate-spin"/> Running...</> : <><Play size={14} fill="white"/> Run Tool</>}
+                       </button>
+                     </div>
                   </div>
+
+                  {/* OUTPUT PANEL */}
                   <div className="p-[32px] bg-white flex flex-col">
                      <h4 className="text-[10px] uppercase font-bold text-[#acacac] tracking-widest mb-4">TEST OUTPUT</h4>
-                     <div className="flex-1 border border-dashed border-[#d5d5cf] rounded-[8px] flex flex-col items-center justify-center text-center p-8">
-                        <div className="w-12 h-12 rounded-full bg-[#f5f5f0] flex items-center justify-center mb-4"><PlayCircle size={24} className="text-[#acacac] stroke-[1]"/></div>
-                        <p className="text-[13px] font-bold text-[#6b6b6b] mb-1">Run the tool to view output here.</p>
-                        <p className="text-[11px] text-[#949494]">Results will appear based on output schema structure.</p>
-                     </div>
+                     {testError ? (
+                       <div className="flex-1 border border-[#ffcdd2] bg-[#fffafa] rounded-[8px] p-6">
+                         <div className="flex items-start gap-2 text-[#e74c3c]">
+                           <AlertTriangle size={16} className="shrink-0 mt-0.5"/>
+                           <div>
+                             <p className="text-[13px] font-bold mb-1">Run Failed</p>
+                             <p className="text-[12px] font-mono">{testError}</p>
+                           </div>
+                         </div>
+                       </div>
+                     ) : testResult ? (
+                       <div className="flex-1 flex flex-col gap-4">
+                         <div className={cn("flex items-center gap-2 p-3 rounded-[8px]", testResult.status === 'running' ? 'bg-[#e3f2fd] text-[#2196f3]' : testResult.status === 'PENDING' ? 'bg-[#fff3e0] text-[#ff9800]' : 'bg-[#e8f5e9] text-[#4caf50]')}>
+                           {testResult.status === 'running' || testResult.status === 'PENDING' || testResult.status === 'RUNNING' ? (
+                             <Loader2 size={14} className="animate-spin"/>
+                           ) : (
+                             <CheckCircle size={14}/>
+                           )}
+                           <span className="text-[12px] font-bold">Run {testResult.status}</span>
+                           {testResult.run_id && <span className="text-[11px] font-mono ml-auto">{testResult.run_id}</span>}
+                         </div>
+                         <div className="flex items-center gap-3">
+                           {testResult.run_id && (
+                             <button
+                               onClick={() => {
+                                 const el = document.getElementById('runs');
+                                 if (el) el.scrollIntoView({ behavior: 'smooth' });
+                               }}
+                               className="text-[12px] text-[#2196f3] hover:underline font-bold flex items-center gap-1"
+                             >
+                               <ExternalLink size={12}/> View in Recent Runs
+                             </button>
+                           )}
+                           <button
+                             onClick={() => {
+                               try {
+                                 const data = testResult.outputs ?? testResult;
+                                 const decoded: Record<string, unknown> = { ...(data as Record<string, unknown>) };
+                                 const out = decoded.outputs;
+                                 if (typeof out === 'string') { try { decoded.outputs = JSON.parse(atob(out)); } catch {} }
+                                 const inp = decoded.inputs;
+                                 if (typeof inp === 'string') { try { decoded.inputs = JSON.parse(atob(inp)); } catch {} }
+                                 const blob = new Blob([JSON.stringify(decoded, null, 2)], { type: 'application/json' });
+                                 const url = URL.createObjectURL(blob);
+                                 const a = document.createElement('a');
+                                 a.href = url;
+                                 a.download = `run_${testResult.run_id}_result.json`;
+                                 a.click();
+                                 URL.revokeObjectURL(url);
+                               } catch {}
+                             }}
+                             className="text-[12px] text-[#6b6b6b] hover:text-[#1a1a1a] font-bold flex items-center gap-1"
+                           >
+                             <Download size={12}/> Download Results
+                           </button>
+                         </div>
+                         <div className="flex-1 bg-[#1a1a1a] rounded-[8px] p-4 font-mono text-[11px] text-[#a855f7] overflow-auto max-h-[400px]">
+                           <pre>{(() => {
+                             try {
+                               const data = testResult.outputs ?? testResult;
+                               const decoded: Record<string, unknown> = { ...(data as Record<string, unknown>) };
+                               const inp = decoded.inputs;
+                               if (typeof inp === 'string' && !inp.startsWith('{')) {
+                                 try { decoded.inputs = JSON.parse(atob(inp)); } catch {}
+                               }
+                               const out = decoded.outputs;
+                               if (typeof out === 'string' && !out.startsWith('[') && !out.startsWith('{')) {
+                                 try { decoded.outputs = JSON.parse(atob(out)); } catch {}
+                               }
+                               return JSON.stringify(decoded, null, 2);
+                             } catch { return JSON.stringify(testResult.outputs ?? testResult, null, 2); }
+                           })()}</pre>
+                         </div>
+                       </div>
+                     ) : (
+                       <div className="flex-1 border border-dashed border-[#d5d5cf] rounded-[8px] flex flex-col items-center justify-center text-center p-8">
+                         <div className="w-12 h-12 rounded-full bg-[#f5f5f0] flex items-center justify-center mb-4"><PlayCircle size={24} className="text-[#acacac] stroke-[1]"/></div>
+                         <p className="text-[13px] font-bold text-[#6b6b6b] mb-1">Run the tool to view output here.</p>
+                         <p className="text-[11px] text-[#949494]">Results will appear after execution completes.</p>
+                       </div>
+                     )}
                   </div>
                </div>
             </section>
@@ -622,24 +766,42 @@ export default function ToolDetailPage() {
                     <h3 className="text-[14px] font-bold text-[#e74c3c] mb-2 flex items-center gap-2"><AlertTriangle size={16}/> Deprecate This Version</h3>
                     <p className="text-[12px] text-[#6b6b6b] max-w-[600px] leading-relaxed">This version (v2.1.0) will no longer be available for new workflows. Active workflows will continue to operate normally. This action cannot be easily reversed.</p>
                   </div>
-                  <button className="h-[40px] px-[20px] bg-white border-2 border-[#e74c3c] text-[#e74c3c] rounded-[8px] text-[12px] font-bold hover:bg-[#ffebee] transition-colors flex items-center gap-2 shrink-0"><AlertTriangle size={14}/> Deprecate version</button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm(`Deprecate version ${tool.currentVersion}? Active workflows will continue but this version will be unavailable for new runs. This cannot be easily reversed.`)) {
+                        deprecateMutation.mutate({ version: tool.currentVersion, message: 'Deprecated via UI' });
+                      }
+                    }}
+                    disabled={deprecateMutation.isPending || tool.status === 'deprecated'}
+                    className="h-[40px] px-[20px] bg-white border-2 border-[#e74c3c] text-[#e74c3c] rounded-[8px] text-[12px] font-bold hover:bg-[#ffebee] transition-colors flex items-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {deprecateMutation.isPending ? <><Loader2 size={14} className="animate-spin"/> Deprecating...</> : <><AlertTriangle size={14}/> Deprecate version</>}
+                  </button>
                </div>
             </section>
 
          </div>
       </div>
 
+      {showEditModal && (
+        <EditToolModal
+          tool={tool}
+          onClose={() => setShowEditModal(false)}
+          onSave={() => { refetch(); setShowEditModal(false); }}
+        />
+      )}
+
       {/* ═ STICKY BOTTOM BAR FOOTER ═ */}
       <div className="absolute bottom-0 left-0 right-0 h-[72px] bg-white border-t border-[#ece9e3] px-[32px] flex items-center justify-between shadow-[0_-4px_16px_rgba(0,0,0,0.03)] z-30">
          <div className="flex items-center gap-4">
-            <button className="h-[40px] px-6 bg-[#1a1a1a] text-white rounded-[8px] text-[13px] font-bold hover:bg-[#333] tracking-wide shadow-sm flex items-center gap-2"><Edit2 size={14}/> Edit Form</button>
-            <button className="h-[40px] px-6 border-2 border-[#2196f3] text-[#2196f3] bg-[#fbf5f0] hover:bg-[#e3f2fd] rounded-[8px] text-[13px] font-bold transition-colors flex items-center gap-2"><Play size={14} fill="currentColor"/> Test Run</button>
+            <button onClick={() => setShowEditModal(true)} className="h-[40px] px-6 bg-[#1a1a1a] text-white rounded-[8px] text-[13px] font-bold hover:bg-[#333] tracking-wide shadow-sm flex items-center gap-2"><Edit2 size={14}/> Edit Form</button>
+            <button onClick={() => document.getElementById('test-run')?.scrollIntoView({ behavior: 'smooth' })} className="h-[40px] px-6 border-2 border-[#2196f3] text-[#2196f3] bg-[#fbf5f0] hover:bg-[#e3f2fd] rounded-[8px] text-[13px] font-bold transition-colors flex items-center gap-2"><Play size={14} fill="currentColor"/> Test Run</button>
             <button className="h-[40px] px-6 border border-[#ece9e3] text-[#1a1a1a] rounded-[8px] text-[13px] font-bold hover:bg-[#fbfaf9] transition-colors flex items-center gap-2"><Box size={14}/> Duplicate Tool</button>
          </div>
          <div className="flex items-center gap-3">
-            <span className="text-[11px] font-mono text-[#949494]">Tool timeline (v2.1.0)</span>
-            <span className="px-2 py-0.5 bg-[#e8f5e9] text-[#4caf50] text-[10px] font-bold rounded-[4px]">Published</span>
-            <span className="text-[11px] font-bold text-[#6b6b6b]">47 runs</span>
+            <span className="text-[11px] font-mono text-[#949494]">Tool timeline ({tool.currentVersion})</span>
+            <span className={cn("px-2 py-0.5 text-[10px] font-bold rounded-[4px]", tool.status === 'published' ? 'bg-[#e8f5e9] text-[#4caf50]' : 'bg-[#fff3e0] text-[#ff9800]')}>{STATUS_LABELS[tool.status]}</span>
+            <span className="text-[11px] font-bold text-[#6b6b6b]">{tool.usageCount ?? 0} runs</span>
          </div>
       </div>
 
