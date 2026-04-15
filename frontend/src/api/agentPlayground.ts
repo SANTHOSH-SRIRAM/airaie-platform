@@ -1,48 +1,202 @@
-import type { AgentSession, ChatMessage, DecisionTraceEntry, AgentMetrics, PolicyStatus } from '@/types/agentPlayground';
-import { API_CONFIG } from '@constants/api';
+import { apiClient, apiOrMock } from '@api/client';
+import type {
+  AgentSession,
+  BackendDecisionTraceEntry,
+  BackendSessionMessage,
+  ChatMessage,
+  DecisionTraceEntry,
+  AgentMetrics,
+  PolicyStatus,
+} from '@/types/agentPlayground';
 
-const BASE = API_CONFIG.BASE_URL;
+// ── Mapping helpers ──────────────────────────────────────────────
 
-async function fetchOrMock<T>(url: string, mockData: T): Promise<T> {
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(API_CONFIG.TIMEOUT) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return (await res.json()) as T;
-  } catch { return mockData; }
+/** Map backend history item to frontend ChatMessage */
+export function mapSessionMessage(
+  msg: BackendSessionMessage,
+  index: number,
+): ChatMessage {
+  return {
+    id: `msg_${index}`,
+    // Backend uses "assistant"; frontend display uses "agent"
+    role: msg.role === 'assistant' ? 'agent' : 'user',
+    content: msg.content,
+    timestamp: msg.timestamp,
+  };
 }
 
-const MOCK_SESSIONS: AgentSession[] = [
-  { id: 'ses_x7k2m', name: 'Bracket Optimization', agentId: 'agent_fea_opt', agentName: 'FEA Optimizer', messageCount: 5, toolCallCount: 3, status: 'active', createdAt: new Date(Date.now() - 600_000).toISOString(), updatedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 3_600_000).toISOString() },
-  { id: 'ses_m3n4p', name: 'Load Case Analysis', agentId: 'agent_fea_opt', agentName: 'FEA Optimizer', messageCount: 8, toolCallCount: 5, status: 'completed', createdAt: new Date(Date.now() - 7_200_000).toISOString(), updatedAt: new Date(Date.now() - 3_600_000).toISOString() },
-  { id: 'ses_q5r6s', name: 'Material Selection', agentId: 'agent_fea_opt', agentName: 'FEA Optimizer', messageCount: 3, toolCallCount: 1, status: 'expired', createdAt: new Date(Date.now() - 86_400_000).toISOString(), updatedAt: new Date(Date.now() - 82_800_000).toISOString(), expiresAt: new Date(Date.now() - 3_600_000).toISOString() },
-];
+/** Map backend DecisionTraceEntry to frontend DecisionTraceEntry */
+export function mapTraceEntry(entry: BackendDecisionTraceEntry): DecisionTraceEntry {
+  // Map backend event_type to frontend stepType
+  const stepTypeMap: Record<string, DecisionTraceEntry['stepType']> = {
+    scoring: 'scoring',
+    selection: 'selection',
+    execution: 'execution',
+    replan: 'replan',
+    policy: 'result', // backend "policy" maps to frontend "result"
+  };
+  // Map backend verdict to frontend status
+  const statusMap: Record<string, DecisionTraceEntry['status']> = {
+    approved: 'completed',
+    rejected: 'failed',
+    blocked: 'failed',
+    needs_approval: 'running',
+  };
 
-const MOCK_MESSAGES: ChatMessage[] = [
-  { id: 'msg_1', role: 'user', content: 'I have a bracket design in Aluminum 6061, 160mm x 80mm x 5mm. Can you run FEA analysis with a 500N load and check if it meets ISO 12345 stress requirements?', timestamp: new Date(Date.now() - 300_000).toISOString() },
-  { id: 'msg_2', role: 'agent', content: "I'll analyze this bracket for you. Let me first generate an optimized mesh for your geometry, then run the FEA simulation against ISO 12345 requirements.", timestamp: new Date(Date.now() - 295_000).toISOString() },
-  { id: 'msg_3', role: 'agent', content: '', timestamp: new Date(Date.now() - 290_000).toISOString(), toolCallProposal: { toolName: 'mesh-generator', toolVersion: '1.0', confidence: 0.92, reasoning: 'Need to generate mesh before FEA analysis. Mesh Generator is the optimal first step for Aluminum 6061 plate geometry with uniform thickness.', inputs: { geometry: 'art_cad_001', density: 0.8, element_type: 'hex8' }, estimatedCost: 0.30, estimatedDuration: '~7s', alternatives: [{ name: 'fea-solver@2.1', score: 0.45, reason: 'Wrong order — needs mesh first' }, { name: 'result-analyzer@1.0', score: 0.12, reason: 'No data to analyze yet' }] } },
-];
+  const label = entry.tool_ref
+    ? `${entry.event_type}: ${entry.tool_ref}`
+    : entry.event_type;
 
-const MOCK_TRACE: DecisionTraceEntry[] = [
-  { id: 'dt_1', label: 'Context received', detail: 'Bracket: Al6061, 160x80x5mm, 500N', status: 'completed', timestamp: new Date(Date.now() - 300_000).toISOString(), stepType: 'scoring' },
-  { id: 'dt_2', label: 'Tool scoring complete', detail: '3 tools scored: mesh-gen 0.92, fea-solver 0.87, result-analyzer 0.90', status: 'completed', timestamp: new Date(Date.now() - 298_000).toISOString(), stepType: 'scoring' },
-  { id: 'dt_3', label: 'Selected mesh-generator', detail: 'Confidence: 0.92 - Auto-approved', status: 'completed', timestamp: new Date(Date.now() - 295_000).toISOString(), stepType: 'selection' },
-  { id: 'dt_4', label: 'Executed mesh-generator', detail: 'SUCCESS - 7.2s - $0.30', status: 'completed', timestamp: new Date(Date.now() - 288_000).toISOString(), stepType: 'execution' },
-  { id: 'dt_5', label: 'Mesh quality verified', detail: 'Element quality > 0.85, no degenerate faces', status: 'completed', timestamp: new Date(Date.now() - 287_000).toISOString(), stepType: 'result' },
-  { id: 'dt_6', label: 'Selected fea-solver', detail: 'Confidence: 0.94 - Auto-approved', status: 'completed', timestamp: new Date(Date.now() - 285_000).toISOString(), stepType: 'selection' },
-  { id: 'dt_7', label: 'Executing fea-solver', detail: 'Running - 12s elapsed', status: 'running', timestamp: new Date(Date.now() - 273_000).toISOString(), stepType: 'execution' },
-  { id: 'dt_8', label: 'Replan triggered', detail: 'Mesh density too coarse for stress concentration near fillet - re-meshing with higher density', status: 'failed', timestamp: new Date(Date.now() - 260_000).toISOString(), stepType: 'replan' },
-  { id: 'dt_9', label: 'Evaluate result', detail: 'Pending', status: 'pending', stepType: 'result' },
-];
+  return {
+    id: `dt_${entry.step}`,
+    label,
+    status: statusMap[entry.verdict] ?? 'pending',
+    detail: entry.score > 0 ? `Score: ${entry.score.toFixed(2)} — ${entry.verdict}` : entry.verdict,
+    timestamp: entry.timestamp,
+    stepType: stepTypeMap[entry.event_type] ?? 'result',
+  };
+}
 
-const MOCK_METRICS: AgentMetrics = { iterations: { current: 2, max: 5 }, totalCost: 0.80, budgetRemaining: 9.20, duration: 19, timeout: 600 };
-const MOCK_POLICY: PolicyStatus = { autoApproveThreshold: 0.85, autoApproveEnabled: true };
+// ── Derived mock data (shaped to match real API for apiOrMock fallback) ──
 
-export const fetchSessions = (agentId: string): Promise<AgentSession[]> => fetchOrMock(`${BASE}/agents/${agentId}/sessions`, MOCK_SESSIONS);
-export const fetchMessages = (sessionId: string): Promise<ChatMessage[]> => fetchOrMock(`${BASE}/sessions/${sessionId}/messages`, MOCK_MESSAGES);
-export const fetchDecisionTrace = (sessionId: string): Promise<DecisionTraceEntry[]> => fetchOrMock(`${BASE}/sessions/${sessionId}/trace`, MOCK_TRACE);
-export const fetchAgentMetrics = (sessionId: string): Promise<AgentMetrics> => fetchOrMock(`${BASE}/sessions/${sessionId}/metrics`, MOCK_METRICS);
-export const fetchPolicyStatus = (agentId: string): Promise<PolicyStatus> => fetchOrMock(`${BASE}/agents/${agentId}/policy`, MOCK_POLICY);
-export const sendMessage = (sessionId: string, _content: string): Promise<ChatMessage> => fetchOrMock(`${BASE}/sessions/${sessionId}/messages`, { id: `msg_${Date.now()}`, role: 'agent' as const, content: 'Processing your request...', timestamp: new Date().toISOString() });
-export const stopAgent = (sessionId: string): Promise<void> => fetchOrMock(`${BASE}/sessions/${sessionId}/stop`, undefined);
-export const approveAll = (sessionId: string): Promise<void> => fetchOrMock(`${BASE}/sessions/${sessionId}/approve-all`, undefined);
+const MOCK_SESSION: AgentSession = {
+  id: 'ses_mock_001',
+  agent_id: 'agent_fea_opt',
+  project_id: 'prj_default',
+  context: { _decision_trace: [] },
+  history: [],
+  status: 'active',
+  created_at: new Date().toISOString(),
+  expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+};
+
+const MOCK_METRICS: AgentMetrics = {
+  iterations: { current: 0, max: 5 },
+  totalCost: 0,
+  budgetRemaining: 10.0,
+  duration: 0,
+  timeout: 600,
+};
+
+const MOCK_POLICY: PolicyStatus = {
+  autoApproveThreshold: 0.85,
+  autoApproveEnabled: true,
+};
+
+// ── Session lifecycle ──────────────────────────────────────────────
+
+/**
+ * POST /v0/agents/{id}/sessions
+ * Creates a new session. Must be called before sendMessage or runInSession.
+ */
+export async function createSession(agentId: string): Promise<AgentSession> {
+  return apiClient.post<AgentSession>(`/v0/agents/${agentId}/sessions`);
+}
+
+/**
+ * GET /v0/agents/{id}/sessions/{sid}
+ * Returns full session including history and context._decision_trace.
+ * Use refetchInterval:3000 via useQuery for polling.
+ */
+export async function getSession(agentId: string, sessionId: string): Promise<AgentSession> {
+  return apiOrMock<AgentSession>(
+    `/v0/agents/${agentId}/sessions/${sessionId}`,
+    { method: 'GET' },
+    MOCK_SESSION,
+  );
+}
+
+/**
+ * DELETE /v0/agents/{id}/sessions/{sid}
+ * Closes the session. Maps to the frontend "Stop Agent" action.
+ */
+export async function closeSession(agentId: string, sessionId: string): Promise<void> {
+  await apiClient.delete(`/v0/agents/${agentId}/sessions/${sessionId}`);
+}
+
+// ── Message sending ────────────────────────────────────────────────
+
+/**
+ * POST /v0/agents/{id}/sessions/{sid}/messages
+ * Sends a chat message and returns the assistant response.
+ * Response is wrapped: { message: BackendSessionMessage }
+ */
+export async function sendMessage(
+  agentId: string,
+  sessionId: string,
+  content: string,
+): Promise<ChatMessage> {
+  const resp = await apiClient.post<{ message: BackendSessionMessage }>(
+    `/v0/agents/${agentId}/sessions/${sessionId}/messages`,
+    { content, context_updates: {} },
+  );
+  return mapSessionMessage(resp.message, Date.now());
+}
+
+// ── Session run (dry-run / live) ───────────────────────────────────
+
+export interface RunInSessionRequest {
+  version: number;
+  inputs: Record<string, unknown>;
+  dry_run: boolean;
+}
+
+export interface RunInSessionResponse {
+  proposal?: unknown;
+  dry_run: boolean;
+  session_id: string;
+  policy_decision?: unknown;
+  run?: unknown;
+}
+
+/**
+ * POST /v0/agents/{id}/sessions/{sid}/run
+ * Runs the agent within the session context.
+ */
+export async function runInSession(
+  agentId: string,
+  sessionId: string,
+  req: RunInSessionRequest,
+): Promise<RunInSessionResponse> {
+  return apiClient.post<RunInSessionResponse>(
+    `/v0/agents/${agentId}/sessions/${sessionId}/run`,
+    req,
+  );
+}
+
+// ── Approve session action ─────────────────────────────────────────
+
+/**
+ * POST /v0/agents/{id}/sessions/{sid}/approve
+ * Approves a pending session action.
+ */
+export async function approveSessionAction(agentId: string, sessionId: string): Promise<void> {
+  await apiClient.post(`/v0/agents/${agentId}/sessions/${sessionId}/approve`);
+}
+
+// ── Derived data extractors (no separate endpoints needed) ─────────
+
+/** Extract ChatMessage[] from session history */
+export function extractMessages(session: AgentSession): ChatMessage[] {
+  return (session.history ?? []).map((msg, i) => mapSessionMessage(msg, i));
+}
+
+/** Extract DecisionTraceEntry[] from session context */
+export function extractDecisionTrace(session: AgentSession): DecisionTraceEntry[] {
+  const trace = session.context?._decision_trace ?? [];
+  return trace.map(mapTraceEntry);
+}
+
+/** Derive AgentMetrics stub from session (backend has no /metrics endpoint) */
+export function deriveMetrics(session: AgentSession): AgentMetrics {
+  const msgCount = session.history?.length ?? 0;
+  return {
+    ...MOCK_METRICS,
+    iterations: { current: msgCount, max: 20 },
+  };
+}
+
+/** Policy status stub — derive from session context or return default */
+export function derivePolicyStatus(): PolicyStatus {
+  return MOCK_POLICY;
+}

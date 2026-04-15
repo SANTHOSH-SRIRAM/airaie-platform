@@ -1,14 +1,35 @@
+// Matches backend model.Session exactly (snake_case)
 export interface AgentSession {
   id: string;
-  name: string;
-  agentId: string;
-  agentName: string;
-  messageCount: number;
-  toolCallCount: number;
-  status: 'active' | 'completed' | 'error' | 'expired';
-  createdAt: string;
-  updatedAt: string;
-  expiresAt?: string;
+  agent_id: string;
+  project_id: string;
+  context: {
+    _decision_trace?: BackendDecisionTraceEntry[];
+    [key: string]: unknown;
+  };
+  history: BackendSessionMessage[];
+  status: 'active' | 'closed' | 'expired';
+  created_at: string;
+  expires_at: string;
+}
+
+// Raw backend shape from context._decision_trace
+export interface BackendDecisionTraceEntry {
+  step: number;
+  event_type: 'scoring' | 'selection' | 'execution' | 'replan' | 'policy';
+  tool_ref: string;
+  score: number;
+  verdict: string;
+  details: Record<string, unknown>;
+  timestamp: string;
+}
+
+// Raw backend shape from history[]
+export interface BackendSessionMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  context_updates: Record<string, unknown>;
+  timestamp: string;
 }
 
 export interface ToolCallProposal {
