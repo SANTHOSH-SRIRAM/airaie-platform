@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useAgent } from '@hooks/useAgents';
 import {
   ArrowLeft,
   Brain,
@@ -175,9 +176,22 @@ function WeightToken({ label, value }: { label: string; value: number }) {
 export default function AgentStudioPage() {
   const navigate = useNavigate();
   const { agentId } = useParams<{ agentId?: string }>();
+
+  // Fetch real agent from backend if agentId is a real UUID (not a fixture key)
+  const isFixtureId = agentId ? agentId in AGENT_STUDIO_FIXTURES : false;
+  const { data: realAgent } = useAgent(isFixtureId ? null : (agentId ?? null));
+
   const studioAgent = useMemo(() => {
-    return AGENT_STUDIO_FIXTURES[agentId as keyof typeof AGENT_STUDIO_FIXTURES] ?? AGENT_STUDIO_FIXTURES[DEFAULT_AGENT_ID];
-  }, [agentId]);
+    const fixture = AGENT_STUDIO_FIXTURES[agentId as keyof typeof AGENT_STUDIO_FIXTURES] ?? AGENT_STUDIO_FIXTURES[DEFAULT_AGENT_ID];
+    if (!realAgent) return fixture;
+    // Overlay real agent fields onto the fixture so the rest of the UI still works
+    return {
+      ...fixture,
+      id: realAgent.id,
+      name: realAgent.name,
+      goal: realAgent.description ?? fixture.goal,
+    };
+  }, [agentId, realAgent]);
 
   const [activeTab, setActiveTab] = useState('builder');
   const [goal, setGoal] = useState(studioAgent.goal);

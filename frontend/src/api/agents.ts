@@ -280,7 +280,8 @@ export function getAgentVersion(agentId: string, version: number): Promise<Agent
 /* ---------- Mutation Endpoints ---------- */
 
 export async function createAgent(data: CreateAgentData): Promise<AgentDetail> {
-  return apiClient.post('/v0/agents', data);
+  const resp = await apiClient.post<{ agent: AgentDetail }>('/v0/agents', data);
+  return (resp as any).agent ?? resp;
 }
 
 export async function deleteAgent(id: string): Promise<void> {
