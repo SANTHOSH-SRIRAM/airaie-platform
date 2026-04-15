@@ -231,36 +231,50 @@ const MOCK_VERSIONS: Record<string, AgentVersion[]> = {
   ],
 };
 
+/* ---------- Response envelope interfaces ---------- */
+
+interface AgentVersionsResponse {
+  agent_id: string;
+  versions: AgentVersion[];
+  count: number;
+}
+
 /* ---------- Read Endpoints ---------- */
 
 export function listAgents(): Promise<AgentListItem[]> {
-  return apiOrMock('/v0/agents', { method: 'GET' }, MOCK_AGENTS);
+  return apiOrMock<{ agents: AgentListItem[]; count: number }>(
+    '/v0/agents',
+    { method: 'GET' },
+    { agents: MOCK_AGENTS, count: MOCK_AGENTS.length },
+  ).then((resp) => resp.agents ?? []);
 }
 
 export function getAgent(id: string): Promise<AgentDetail> {
-  return apiOrMock(
+  const mockAgent = MOCK_AGENTS.find((a) => a.id === id) ?? MOCK_AGENTS[0];
+  return apiOrMock<{ agent: AgentDetail }>(
     `/v0/agents/${id}`,
     { method: 'GET' },
-    MOCK_AGENTS.find((a) => a.id === id) ?? MOCK_AGENTS[0],
-  );
+    { agent: mockAgent },
+  ).then((resp) => resp.agent);
 }
 
 export function listAgentVersions(agentId: string): Promise<AgentVersion[]> {
-  return apiOrMock(
+  const mockVersions = MOCK_VERSIONS[agentId] ?? [];
+  return apiOrMock<AgentVersionsResponse>(
     `/v0/agents/${agentId}/versions`,
     { method: 'GET' },
-    MOCK_VERSIONS[agentId] ?? [],
-  );
+    { agent_id: agentId, versions: mockVersions, count: mockVersions.length },
+  ).then((resp) => resp.versions ?? []);
 }
 
 export function getAgentVersion(agentId: string, version: number): Promise<AgentVersion> {
   const agentVersions = MOCK_VERSIONS[agentId] ?? [];
   const mockVersion = agentVersions.find((v) => v.version === version) ?? agentVersions[0];
-  return apiOrMock(
+  return apiOrMock<{ version: AgentVersion }>(
     `/v0/agents/${agentId}/versions/${version}`,
     { method: 'GET' },
-    mockVersion,
-  );
+    { version: mockVersion },
+  ).then((resp) => resp.version);
 }
 
 /* ---------- Mutation Endpoints ---------- */

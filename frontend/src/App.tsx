@@ -89,7 +89,7 @@ function App() {
           <Route path={ROUTES.AGENT_STUDIO} element={<LazyPage><AgentStudioPage /></LazyPage>} />
           <Route path="/agent-studio/:agentId" element={<LazyPage><AgentStudioPage /></LazyPage>} />
           <Route path="/agent-playground" element={<LazyPage><AgentPlaygroundPage /></LazyPage>} />
-          <Route path="/agent-playground/:sessionId" element={<LazyPage><AgentPlaygroundPage /></LazyPage>} />
+          <Route path="/agent-playground/:agentId" element={<LazyPage><AgentPlaygroundPage /></LazyPage>} />
           <Route path="/workflow-runs" element={<LazyPage><WorkflowRunsPage /></LazyPage>} />
           <Route path="/workflow-runs/:runId" element={<LazyPage><WorkflowRunsPage /></LazyPage>} />
         </Route>
