@@ -1,13 +1,12 @@
 import { useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { useAgentPlaygroundStore } from '@store/agentPlaygroundStore';
-import { useDecisionTrace, useAgentMetrics, usePolicyStatus } from '@hooks/useAgentPlayground';
+import { useSession, useSessionTrace, useSessionMetrics, usePolicyStatus } from '@hooks/useAgentPlayground';
 import DecisionTraceTimeline from '@components/agents/DecisionTraceTimeline';
 import LiveMetrics from '@components/agents/LiveMetrics';
 import PolicyStatusCard from '@components/agents/PolicyStatusCard';
 import ScoringBreakdownPanel from '@components/agents/ScoringBreakdownPanel';
 import { cn } from '@utils/cn';
-
-const DEFAULT_AGENT_ID = 'agent_fea_opt';
 
 const INSPECTOR_TABS = [
   { id: 'overview', label: 'Overview' },
@@ -17,16 +16,15 @@ const INSPECTOR_TABS = [
 type InspectorTab = typeof INSPECTOR_TABS[number]['id'];
 
 export default function InspectorPanel() {
+  const { agentId = 'agent_fea_opt' } = useParams<{ agentId?: string }>();
   const activeSessionId = useAgentPlaygroundStore((s) => s.activeSessionId);
-  const sessions = useAgentPlaygroundStore((s) => s.sessions);
   const setPolicyStatus = useAgentPlaygroundStore((s) => s.setPolicyStatus);
   const [activeTab, setActiveTab] = useState<InspectorTab>('overview');
 
-  const { data: traceData } = useDecisionTrace(activeSessionId);
-  const { data: metricsData } = useAgentMetrics(activeSessionId);
-  const { data: policyData } = usePolicyStatus(DEFAULT_AGENT_ID);
-
-  const activeSession = sessions.find((s) => s.id === activeSessionId);
+  const { data: activeSession } = useSession(agentId, activeSessionId);
+  const { data: traceData } = useSessionTrace(agentId, activeSessionId);
+  const { data: metricsData } = useSessionMetrics(agentId, activeSessionId);
+  const { data: policyData } = usePolicyStatus(agentId);
 
   if (!activeSessionId || !activeSession) {
     return (
@@ -71,19 +69,23 @@ export default function InspectorPanel() {
             <div className="space-y-1.5 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-cds-text-secondary">ID</span>
-                <span className="font-mono text-cds-text-primary">{activeSession.id}</span>
+                <span className="font-mono text-cds-text-primary truncate max-w-[140px]">{activeSession.id}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-cds-text-secondary">Name</span>
-                <span className="text-cds-text-primary">{activeSession.name}</span>
+                <span className="text-cds-text-secondary">Status</span>
+                <span className="text-cds-text-primary capitalize">{activeSession.status}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-cds-text-secondary">Messages</span>
-                <span className="text-cds-text-primary">{activeSession.messageCount}</span>
+                <span className="text-cds-text-primary">{activeSession.history?.length ?? 0}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-cds-text-secondary">Tool calls</span>
-                <span className="text-cds-text-primary">{activeSession.toolCallCount}</span>
+                <span className="text-cds-text-secondary">Expires</span>
+                <span className="text-cds-text-primary text-[10px]">
+                  {activeSession.expires_at
+                    ? new Date(activeSession.expires_at).toLocaleTimeString()
+                    : '—'}
+                </span>
               </div>
             </div>
           </div>

@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { useAgentPlaygroundStore } from '@store/agentPlaygroundStore';
-import { useStopAgent, useApproveAll, useSendMessage } from '@hooks/useAgentPlayground';
+import { useCloseSession, useApproveAction, useSendMessage } from '@hooks/useAgentPlayground';
 import Button from '@components/ui/Button';
 import { cn } from '@utils/cn';
 
 export default function PlaygroundActionBar() {
+  const { agentId = 'agent_fea_opt' } = useParams<{ agentId?: string }>();
   const activeSessionId = useAgentPlaygroundStore((s) => s.activeSessionId);
   const isAgentRunning = useAgentPlaygroundStore((s) => s.isAgentRunning);
   const isSending = useAgentPlaygroundStore((s) => s.isSending);
@@ -12,16 +14,16 @@ export default function PlaygroundActionBar() {
   const setSending = useAgentPlaygroundStore((s) => s.setSending);
   const metrics = useAgentPlaygroundStore((s) => s.metrics);
 
-  const stopAgent = useStopAgent(activeSessionId ?? '');
-  const approveAll = useApproveAll(activeSessionId ?? '');
-  const sendMessage = useSendMessage(activeSessionId ?? '');
+  const closeSession = useCloseSession(agentId, activeSessionId);
+  const approveAction = useApproveAction(agentId, activeSessionId);
+  const sendMessageMutation = useSendMessage(agentId, activeSessionId);
 
   const [inputValue, setInputValue] = useState('');
 
   const handleSend = () => {
     if (!inputValue.trim() || !activeSessionId || isSending) return;
     setSending(true);
-    sendMessage.mutate(inputValue.trim(), {
+    sendMessageMutation.mutate(inputValue.trim(), {
       onSettled: () => {
         setSending(false);
       },
@@ -48,7 +50,7 @@ export default function PlaygroundActionBar() {
           variant="danger"
           size="sm"
           disabled={!isAgentRunning || !activeSessionId}
-          onClick={() => activeSessionId && stopAgent.mutate()}
+          onClick={() => activeSessionId && closeSession.mutate()}
         >
           Stop Agent
         </Button>
@@ -66,7 +68,7 @@ export default function PlaygroundActionBar() {
           variant="secondary"
           size="sm"
           disabled={!activeSessionId}
-          onClick={() => activeSessionId && approveAll.mutate()}
+          onClick={() => activeSessionId && approveAction.mutate()}
         >
           Approve All
         </Button>

@@ -1,27 +1,22 @@
 import { useEffect, useRef } from 'react';
-import { useAgentPlaygroundStore } from '@store/agentPlaygroundStore';
-import { useMessages } from '@hooks/useAgentPlayground';
+import { useSessionMessages } from '@hooks/useAgentPlayground';
 import ChatMessage from '@components/agents/ChatMessage';
 
-export default function ChatInterface() {
-  const activeSessionId = useAgentPlaygroundStore((s) => s.activeSessionId);
-  const setMessages = useAgentPlaygroundStore((s) => s.setMessages);
-  const { data: messages } = useMessages(activeSessionId);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+interface ChatInterfaceProps {
+  agentId?: string;
+  sessionId?: string | null;
+}
 
-  // Sync fetched messages into store
-  useEffect(() => {
-    if (messages) {
-      setMessages(messages);
-    }
-  }, [messages, setMessages]);
+export default function ChatInterface({ agentId = 'agent_fea_opt', sessionId = null }: ChatInterfaceProps) {
+  const { data: messages } = useSessionMessages(agentId, sessionId);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  if (!activeSessionId) {
+  if (!sessionId) {
     return (
       <div data-testid="chat-interface" className="flex-1 flex items-center justify-center">
         <p data-testid="chat-empty-state" className="text-sm text-cds-text-secondary">
