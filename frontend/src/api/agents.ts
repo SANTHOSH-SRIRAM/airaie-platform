@@ -25,30 +25,34 @@ export interface AgentVersion {
   published_at?: string;
 }
 
+// AgentSpec must match the backend agent.AgentSpec struct exactly — strictUnmarshalAgentSpec
+// rejects unknown fields. Do NOT add extra fields (e.g. model, llm_weight, reliability).
 export interface AgentSpec {
+  api_version: 'airaie.agentspec/v1';
+  kind: 'AgentSpec';
+  metadata: {
+    name: string;
+    version: string;  // semver e.g. "1.0.0"
+    owner: string;
+    domain_tags: string[];
+    description?: string;
+  };
   goal: string;
   tools: AgentToolPermission[];
-  scoring: {
+  scoring?: {
     strategy: 'weighted' | 'priority' | 'cost_optimized';
-    llm_weight?: number;
-    weights?: { compatibility: number; trust: number; cost: number; latency: number; reliability: number };
-    min_score_threshold?: number;
-    risk_penalty_weight?: number;
+    weights?: { compatibility: number; trust: number; cost: number; latency?: number };
   };
-  constraints: {
+  constraints?: {
     max_tools_per_run?: number;
     timeout_seconds?: number;
     max_retries?: number;
     budget_limit?: number;
   };
-  policy: {
-    auto_approve_threshold: number;
+  policy?: {
+    auto_approve_threshold?: number;
     require_approval_for?: string[];
     escalation_rules?: { condition: string; action: string }[];
-  };
-  model?: {
-    provider?: string;
-    model?: string;
   };
 }
 

@@ -145,11 +145,14 @@ export async function deleteIntent(id: string): Promise<void> {
 }
 
 export async function listIntentTypes(verticalSlug: string): Promise<IntentTypeDefinition[]> {
-  return apiOrMock(
+  const res = await apiOrMock<{ intent_types: IntentTypeDefinition[] } | IntentTypeDefinition[]>(
     `/v0/verticals/${verticalSlug}/intent-types`,
     { method: 'GET' },
     MOCK_INTENT_TYPES.filter((t) => t.vertical_slug === verticalSlug),
   );
+  // Backend returns { intent_types: [...] }; mock returns raw array
+  if (Array.isArray(res)) return res;
+  return (res as { intent_types: IntentTypeDefinition[] }).intent_types ?? [];
 }
 
 export async function getIntentType(slug: string): Promise<IntentTypeDefinition> {

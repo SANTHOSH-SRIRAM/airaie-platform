@@ -33,13 +33,18 @@ import { cn } from '@utils/cn';
 
 /* ---------- Static fixture tool definitions for the UI picker ---------- */
 
+// Tool IDs must match real DB tool IDs (GET /v0/tools). Versions from DB tool_versions table.
 const AVAILABLE_TOOLS = [
-  { id: 'fea-solver', name: 'FEA Solver', version: '2.1.0', permissions: ['read', 'exec'] as string[], maxCalls: 5 },
-  { id: 'mesh-generator', name: 'Mesh Generator', version: '1.0.0', permissions: ['read', 'exec'] as string[], maxCalls: 10 },
-  { id: 'result-analyzer', name: 'Result Analyzer', version: '1.0.0', permissions: ['read', 'exec'] as string[], maxCalls: 3 },
+  { id: 'sim.fea_solver', name: 'FEA Solver', version: '1.0.0', permissions: ['read', 'execute'] as string[], maxCalls: 5 },
+  { id: 'sim.mesh.generator', name: 'Mesh Generator', version: '1.0.0', permissions: ['read', 'execute'] as string[], maxCalls: 10 },
+  { id: 'sim.post.metric_extractor', name: 'Result Analyzer', version: '1.0.0', permissions: ['read', 'execute'] as string[], maxCalls: 3 },
+  { id: 'sim.cfd_solver', name: 'CFD Solver', version: '1.0.0', permissions: ['read', 'execute'] as string[], maxCalls: 3 },
+  { id: 'cad.geometry_check', name: 'Geometry Check', version: '1.0.0', permissions: ['read', 'execute'] as string[], maxCalls: 5 },
+  { id: 'report.generator', name: 'Report Generator', version: '1.0.0', permissions: ['read', 'execute'] as string[], maxCalls: 3 },
+  { id: 'tool_4d1a1980', name: 'Sample CSV Tool', version: '0.1.0', permissions: ['read', 'execute'] as string[], maxCalls: 5 },
 ];
 
-const DEFAULT_SELECTED_TOOLS = ['fea-solver', 'mesh-generator', 'result-analyzer'];
+const DEFAULT_SELECTED_TOOLS = ['sim.fea_solver', 'sim.mesh.generator', 'sim.post.metric_extractor'];
 
 const SCORING_WEIGHTS = [
   { label: 'Compatibility', value: 0.3 },
@@ -177,25 +182,44 @@ export default function AgentStudioPage() {
   /* ---------- Action handlers ---------- */
 
   const handleSaveDraft = async () => {
+    const agentName = agent?.name ?? 'agent';
+    const versionNum = (versions.length + 1).toString() + '.0.0';
+    const tools = AVAILABLE_TOOLS
+      .filter((t) => selectedTools.includes(t.id))
+      .map((t) => ({
+        tool_ref: `${t.id}@${t.version ?? '1.0.0'}`,
+        permissions: ['read', 'execute'] as string[],
+        max_invocations: t.maxCalls,
+      }));
+    if (tools.length === 0) {
+      alert('Select at least one tool before saving.');
+      return;
+    }
     const spec: AgentSpec = {
+      api_version: 'airaie.agentspec/v1',
+      kind: 'AgentSpec',
+      metadata: {
+        name: agentName,
+        version: versionNum,
+        owner: 'usr_dev_admin',
+        domain_tags: ['general'],
+        description: goal,
+      },
       goal,
-      tools: AVAILABLE_TOOLS
-        .filter((t) => selectedTools.includes(t.id))
-        .map((t) => ({ tool_ref: t.id, permissions: ['read', 'exec'], max_invocations: t.maxCalls })),
+      tools,
       scoring: {
         strategy: 'weighted',
-        llm_weight: llmWeight,
-        weights: { compatibility: 0.30, trust: 0.25, cost: 0.20, latency: 0.15, reliability: 0.10 },
+        weights: { compatibility: 0.30, trust: 0.25, cost: 0.20, latency: 0.15 },
       },
       constraints: { max_tools_per_run: 15, timeout_seconds: 600, max_retries: 3, budget_limit: 10.0 },
       policy: {
         auto_approve_threshold: 0.35,
-        require_approval_for: ['read', 'write', 'exec', 'delete'],
+        require_approval_for: ['write', 'execute'],
       },
-      model: { provider: selectedProvider, model: selectedModel },
     };
     try {
       await createVersion.mutateAsync(spec);
+      alert('Draft saved!');
     } catch (err) {
       alert(`Save failed: ${(err as { message?: string })?.message ?? String(err)}`);
     }
