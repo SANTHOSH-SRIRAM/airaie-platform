@@ -176,20 +176,31 @@ export async function approveSessionAction(agentId: string, sessionId: string): 
 
 // ── Derived data extractors (no separate endpoints needed) ─────────
 
-/** Extract ChatMessage[] from session history */
-export function extractMessages(session: AgentSession): ChatMessage[] {
-  return (session.history ?? []).map((msg, i) => mapSessionMessage(msg, i));
+/** Decode a base64 field or return as-is if already parsed */
+function decodeBase64Json<T>(value: string | T): T {
+  if (typeof value === 'string') {
+    try { return JSON.parse(atob(value)) as T; } catch { return [] as unknown as T; }
+  }
+  return value;
 }
 
-/** Extract DecisionTraceEntry[] from session context */
+/** Extract ChatMessage[] from session history (backend sends base64-encoded JSON) */
+export function extractMessages(session: AgentSession): ChatMessage[] {
+  const history = decodeBase64Json<BackendSessionMessage[]>(session.history);
+  return (history ?? []).map((msg, i) => mapSessionMessage(msg, i));
+}
+
+/** Extract DecisionTraceEntry[] from session context (backend sends base64-encoded JSON) */
 export function extractDecisionTrace(session: AgentSession): DecisionTraceEntry[] {
-  const trace = session.context?._decision_trace ?? [];
+  const ctx = decodeBase64Json<{ _decision_trace?: BackendDecisionTraceEntry[] }>(session.context);
+  const trace = ctx?._decision_trace ?? [];
   return trace.map(mapTraceEntry);
 }
 
 /** Derive AgentMetrics stub from session (backend has no /metrics endpoint) */
 export function deriveMetrics(session: AgentSession): AgentMetrics {
-  const msgCount = session.history?.length ?? 0;
+  const history = decodeBase64Json<BackendSessionMessage[]>(session.history);
+  const msgCount = history?.length ?? 0;
   return {
     ...MOCK_METRICS,
     iterations: { current: msgCount, max: 20 },

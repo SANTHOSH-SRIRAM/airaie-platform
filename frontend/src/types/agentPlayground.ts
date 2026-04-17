@@ -3,11 +3,11 @@ export interface AgentSession {
   id: string;
   agent_id: string;
   project_id: string;
-  context: {
+  context: string | {
     _decision_trace?: BackendDecisionTraceEntry[];
     [key: string]: unknown;
   };
-  history: BackendSessionMessage[];
+  history: string | BackendSessionMessage[];   // backend sends base64-encoded JSON
   status: 'active' | 'closed' | 'expired';
   created_at: string;
   expires_at: string;

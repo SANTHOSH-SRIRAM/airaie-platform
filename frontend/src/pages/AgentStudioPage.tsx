@@ -183,6 +183,8 @@ export default function AgentStudioPage() {
 
   const handleSaveDraft = async () => {
     const agentName = agent?.name ?? 'agent';
+    // metadata.name must match ^[a-z][a-z0-9._-]{2,63}$ — slugify the display name
+    const metaName = agentName.toLowerCase().replace(/[^a-z0-9._-]/g, '-').replace(/^[^a-z]/, 'a').slice(0, 63);
     const versionNum = (versions.length + 1).toString() + '.0.0';
     const tools = AVAILABLE_TOOLS
       .filter((t) => selectedTools.includes(t.id))
@@ -199,7 +201,7 @@ export default function AgentStudioPage() {
       api_version: 'airaie.agentspec/v1',
       kind: 'AgentSpec',
       metadata: {
-        name: agentName,
+        name: metaName,
         version: versionNum,
         owner: 'usr_dev_admin',
         domain_tags: ['general'],
