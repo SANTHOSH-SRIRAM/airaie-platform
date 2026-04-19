@@ -1,16 +1,37 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Brain, Search, ChevronDown, Sparkles, MoreHorizontal, FileText
+  Brain, Search, ChevronDown, Sparkles, MoreHorizontal, FileText, User
 } from 'lucide-react';
-import { cn } from '@utils/cn';
 import { useUiStore } from '@store/uiStore';
+import { useAuth } from '@contexts/AuthContext';
 import CreateAgentModal from '@components/agents/CreateAgentModal';
 import { useAgentList, useCreateAgent, agentCrudKeys } from '@hooks/useAgents';
 import { useQueryClient } from '@tanstack/react-query';
 import type { AgentListItem } from '@api/agents';
 
-function AgentCard({ agent, onClick }: { agent: AgentListItem; onClick?: () => void }) {
+/** Format a user ID or owner string into a friendly display label. */
+function formatOwner(ownerId: string | undefined, currentUserId: string | undefined): string {
+  if (!ownerId) return '—';
+  if (currentUserId && ownerId === currentUserId) return 'You';
+  // Shorten UUID-style IDs (usr_xxxx-xxxx-...) to first 8 chars after prefix
+  if (ownerId.startsWith('usr_')) {
+    return ownerId.slice(0, 12) + '…';
+  }
+  return ownerId.length > 16 ? ownerId.slice(0, 16) + '…' : ownerId;
+}
+
+function AgentCard({
+  agent,
+  currentUserId,
+  onClick,
+  onOpenPlayground,
+}: {
+  agent: AgentListItem;
+  currentUserId?: string;
+  onClick?: () => void;
+  onOpenPlayground?: () => void;
+}) {
   return (
     <div
       onClick={onClick}
@@ -18,17 +39,20 @@ function AgentCard({ agent, onClick }: { agent: AgentListItem; onClick?: () => v
     >
       <div className="absolute left-0 top-0 bottom-0 w-[4px] bg-[#9b2cdd]" />
 
-      <div className="flex-1 p-5 pl-7 pr-8 flex flex-col">
+      <div className="flex-1 min-w-0 p-5 pl-7 pr-8 flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Brain size={20} strokeWidth={2.5} className="text-[#9b2cdd] mr-1 drop-shadow" />
-            <h2 className="text-[15px] font-semibold text-[#1a1a1a] tracking-tight">{agent.name}</h2>
-            <span className="px-2 py-0.5 rounded-[6px] text-[10px] font-medium tracking-wide mt-0.5 bg-[#e8f5e9] text-[#4caf50]">
+          <div className="flex items-center gap-2 min-w-0">
+            <Brain size={20} strokeWidth={2.5} className="text-[#9b2cdd] mr-1 drop-shadow shrink-0" />
+            <h2 className="text-[15px] font-semibold text-[#1a1a1a] tracking-tight truncate">{agent.name}</h2>
+            <span className="px-2 py-0.5 rounded-[6px] text-[10px] font-medium tracking-wide mt-0.5 bg-[#e8f5e9] text-[#4caf50] shrink-0">
               Active
             </span>
           </div>
-          <button className="text-[#acacac] hover:text-[#6b6b6b] transition-colors rounded">
+          <button
+            onClick={(e) => e.stopPropagation()}
+            className="text-[#acacac] hover:text-[#6b6b6b] transition-colors rounded shrink-0"
+          >
             <MoreHorizontal size={16} />
           </button>
         </div>
@@ -36,17 +60,21 @@ function AgentCard({ agent, onClick }: { agent: AgentListItem; onClick?: () => v
         {/* Description */}
         <div className="mt-3.5 flex items-start gap-2 max-w-[85%]">
           <FileText size={14} strokeWidth={2} className="text-[#acacac] shrink-0 mt-0.5" />
-          <p className="text-[12px] text-[#6b6b6b] leading-relaxed">
+          <p className="text-[12px] text-[#6b6b6b] leading-relaxed line-clamp-2">
             {agent.description || 'No description provided.'}
           </p>
         </div>
 
         {/* Meta Line */}
         <div className="flex items-center gap-5 mt-5">
-          <div>
+          <div className="min-w-0">
             <div className="text-[9px] font-semibold uppercase tracking-wider text-[#acacac] mb-1.5">Owner</div>
-            <div className="inline-flex items-center gap-1.5 bg-[#f9f0ff] text-[#9b2cdd] px-2 py-1 rounded-[6px] text-[10px] font-medium">
-              {agent.owner || '—'}
+            <div
+              className="inline-flex items-center gap-1.5 bg-[#f9f0ff] text-[#9b2cdd] px-2 py-1 rounded-[6px] text-[10px] font-medium max-w-[200px]"
+              title={agent.owner || ''}
+            >
+              <User size={10} className="shrink-0" />
+              <span className="truncate">{formatOwner(agent.owner, currentUserId)}</span>
             </div>
           </div>
           <div>
@@ -63,7 +91,13 @@ function AgentCard({ agent, onClick }: { agent: AgentListItem; onClick?: () => v
         <h3 className="text-[10px] font-semibold uppercase tracking-wider text-[#acacac] mb-4">Recent Decisions</h3>
         <div className="flex-1 flex flex-col items-center justify-center -mt-4">
           <span className="text-[12px] text-[#acacac]">No decisions yet</span>
-          <button className="text-[11px] font-medium text-[#9b2cdd] hover:underline transition-all mt-6 absolute bottom-5">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenPlayground?.();
+            }}
+            className="text-[11px] font-medium text-[#9b2cdd] hover:underline transition-all mt-6 absolute bottom-5"
+          >
             Test in Playground
           </button>
         </div>
@@ -77,6 +111,7 @@ export default function AgentsPage() {
   const setSidebarContentType = useUiStore((state) => state.setSidebarContentType);
   const hideBottomBar = useUiStore((state) => state.hideBottomBar);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const { user } = useAuth();
 
   const { data: agents = [], isLoading, error } = useAgentList();
   const createAgent = useCreateAgent();
@@ -143,7 +178,13 @@ export default function AgentsPage() {
           </div>
         )}
         {agents.map(agent => (
-          <AgentCard key={agent.id} agent={agent} onClick={() => navigate(`/agent-studio/${agent.id}`)} />
+          <AgentCard
+            key={agent.id}
+            agent={agent}
+            currentUserId={user?.id}
+            onClick={() => navigate(`/agent-studio/${agent.id}`)}
+            onOpenPlayground={() => navigate(`/agent-playground/${agent.id}`)}
+          />
         ))}
       </div>
 

@@ -198,10 +198,12 @@ export default function AgentPlaygroundPage() {
   // Loading state while session is being created
   if (createSessionMutation.isPending && !sessionId) {
     return (
-      <div data-testid="agent-playground-page" className="flex flex-col h-full bg-[#faf9f6] overflow-hidden">
-        <AgentPlaygroundTopBar agentName="Loading..." agentVersion="" activeTab={activeTab} onTabChange={handleTabChange} />
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="animate-spin text-cds-text-secondary" size={24} />
+      <div data-testid="agent-playground-page" className="h-full min-h-0 overflow-hidden bg-[#f5f5f0]">
+        <div className="flex h-full min-h-0 flex-col gap-3 px-[14px] py-[14px] lg:px-[18px] lg:py-[18px]">
+          <AgentPlaygroundTopBar agentName="Loading..." agentVersion="" activeTab={activeTab} onTabChange={handleTabChange} />
+          <div className="flex flex-1 items-center justify-center rounded-[20px] border border-[#ece9e3] bg-white shadow-[0px_1px_10px_0px_rgba(0,0,0,0.05)]">
+            <Loader2 className="animate-spin text-[#9b978f]" size={24} />
+          </div>
         </div>
       </div>
     );
@@ -210,10 +212,12 @@ export default function AgentPlaygroundPage() {
   // Error state if session creation failed
   if (sessionError) {
     return (
-      <div data-testid="agent-playground-page" className="flex flex-col h-full bg-[#faf9f6] overflow-hidden">
-        <AgentPlaygroundTopBar agentName="Error" agentVersion="" activeTab={activeTab} onTabChange={handleTabChange} />
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-sm text-red-500">{sessionError} — is the backend running on localhost:8080?</p>
+      <div data-testid="agent-playground-page" className="h-full min-h-0 overflow-hidden bg-[#f5f5f0]">
+        <div className="flex h-full min-h-0 flex-col gap-3 px-[14px] py-[14px] lg:px-[18px] lg:py-[18px]">
+          <AgentPlaygroundTopBar agentName="Error" agentVersion="" activeTab={activeTab} onTabChange={handleTabChange} />
+          <div className="flex flex-1 items-center justify-center rounded-[20px] border border-[#ece9e3] bg-white shadow-[0px_1px_10px_0px_rgba(0,0,0,0.05)]">
+            <p className="text-sm text-red-500">{sessionError} — is the backend running on localhost:8080?</p>
+          </div>
         </div>
       </div>
     );
@@ -222,27 +226,30 @@ export default function AgentPlaygroundPage() {
   // Render evals tab
   if (activeTab === 'evals') {
     return (
-      <div data-testid="agent-playground-page" className="flex flex-col h-full bg-surface-bg overflow-hidden">
-        <AgentPlaygroundTopBar
-          agentName={agentDisplayName}
-          agentVersion={agentVersionLabel}
-          activeTab={activeTab}
-          onTabChange={handleTabChange}
-          onNewSession={handleNewSession}
-          newSessionPending={createSessionMutation.isPending}
-        />
-        <div className="flex-1 flex flex-col min-h-0">
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <EvalTab agentId={resolvedAgentId} />
+      <div data-testid="agent-playground-page" className="h-full min-h-0 overflow-hidden bg-[#f5f5f0]">
+        <div className="flex h-full min-h-0 flex-col gap-3 px-[14px] py-[14px] lg:px-[18px] lg:py-[18px]">
+          <AgentPlaygroundTopBar
+            agentName={agentDisplayName}
+            agentVersion={agentVersionLabel}
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            onNewSession={handleNewSession}
+            newSessionPending={createSessionMutation.isPending}
+          />
+          <div className="flex flex-1 flex-col min-h-0 overflow-hidden rounded-[20px] border border-[#ece9e3] bg-white shadow-[0px_1px_10px_0px_rgba(0,0,0,0.05)]">
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <EvalTab agentId={resolvedAgentId} />
+            </div>
+            <PlaygroundActionBar />
           </div>
-          <PlaygroundActionBar />
         </div>
       </div>
     );
   }
 
   return (
-    <div data-testid="agent-playground-page" className="flex flex-col h-full bg-[#faf9f6] overflow-hidden">
+    <div data-testid="agent-playground-page" className="h-full min-h-0 overflow-hidden bg-[#f5f5f0]">
+      <div className="flex h-full min-h-0 flex-col gap-3 px-[14px] py-[14px] lg:px-[18px] lg:py-[18px]">
       <AgentPlaygroundTopBar
         agentName={agentDisplayName}
         agentVersion={agentVersionLabel}
@@ -253,7 +260,7 @@ export default function AgentPlaygroundPage() {
       />
 
       {/* Execution controls bar */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-cds-border-subtle bg-cds-layer-01 shrink-0">
+      <div className="flex items-center gap-2 px-4 py-2 border border-[#ece9e3] bg-white rounded-[14px] shadow-[0px_1px_8px_0px_rgba(0,0,0,0.03)] shrink-0">
         <Button
           data-testid="dry-run-btn"
           variant="tertiary"
@@ -302,9 +309,9 @@ export default function AgentPlaygroundPage() {
       </div>
 
       {/* Main content area */}
-      <div className="flex-1 flex min-h-0">
-        {/* Chat area + inline action bar at bottom */}
-        <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-1 flex min-h-0 gap-3">
+        {/* Chat area + inline action bar at bottom (wrapped in card) */}
+        <div className="flex flex-1 flex-col min-h-0 overflow-hidden rounded-[20px] border border-[#ece9e3] bg-white shadow-[0px_1px_10px_0px_rgba(0,0,0,0.05)]">
           <ChatInterface agentId={resolvedAgentId} sessionId={sessionId} />
           <PlaygroundActionBar />
         </div>
@@ -315,7 +322,7 @@ export default function AgentPlaygroundPage() {
         {showProposal && execution.proposal && (
           <div
             data-testid="execution-panel"
-            className="w-[480px] border-l border-[#ece9e3] overflow-y-auto bg-white shrink-0"
+            className="w-[480px] overflow-y-auto rounded-[20px] border border-[#ece9e3] bg-white shadow-[0px_1px_10px_0px_rgba(0,0,0,0.05)] shrink-0"
           >
             <div className="p-4 space-y-4">
               <ProposalViewer
@@ -342,6 +349,7 @@ export default function AgentPlaygroundPage() {
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

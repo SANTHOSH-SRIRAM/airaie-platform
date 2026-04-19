@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   createSession,
   getSession,
+  listSessions,
   closeSession,
   sendMessage,
   approveSessionAction,
@@ -14,15 +15,33 @@ import {
 export const agentSessionKeys = {
   session: (agentId: string, sessionId: string) =>
     ['agent', agentId, 'session', sessionId] as const,
+  list: (agentId: string) => ['agent', agentId, 'sessions'] as const,
 };
+
+/**
+ * Lists active sessions for an agent. Newest first.
+ * Used to pick up existing sessions on page load instead of creating a new one every time.
+ */
+export function useSessionList(agentId: string) {
+  return useQuery({
+    queryKey: agentSessionKeys.list(agentId),
+    queryFn: () => listSessions(agentId),
+    enabled: !!agentId,
+    staleTime: 10_000,
+  });
+}
 
 /**
  * Creates a new session for an agent.
  * Call mutateAsync() on mount in AgentPlaygroundPage, store the returned session.id.
  */
 export function useCreateSession(agentId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => createSession(agentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: agentSessionKeys.list(agentId) });
+    },
   });
 }
 

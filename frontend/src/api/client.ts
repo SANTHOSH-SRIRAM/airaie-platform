@@ -20,9 +20,14 @@ export class ApiError extends Error {
   }
 }
 
-/** Returns the stored JWT access token, or null. */
+/** Returns the stored JWT access token, or null. Skips mock/invalid tokens. */
 function getAccessToken(): string | null {
-  return localStorage.getItem('airaie-access-token');
+  const token = localStorage.getItem('airaie-access-token');
+  if (!token) return null;
+  // Mock tokens from dev fallback are not valid JWTs — backend rejects them with 401.
+  // Don't send them, let the request proceed as anonymous (backend allows it in dev mode).
+  if (token.startsWith('mock-')) return null;
+  return token;
 }
 
 // Core fetch wrapper with proper error handling

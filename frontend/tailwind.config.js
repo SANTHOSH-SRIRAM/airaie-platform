@@ -70,6 +70,29 @@ export default {
         },
         focus: 'var(--color-focus)',
 
+        /* ── CDS compat tokens (theme-aware) ─────────────────── */
+        cds: {
+          'field-01':          'var(--color-cds-field-01)',
+          'background-hover':  'var(--color-cds-background-hover)',
+          'background-active': 'var(--color-cds-background-active)',
+          'icon-secondary':    'var(--color-cds-icon-secondary)',
+          'text-primary':      'var(--color-cds-text-primary)',
+          'text-secondary':    'var(--color-cds-text-secondary)',
+          'text-placeholder':  'var(--color-cds-text-placeholder)',
+          'text-helper':       'var(--color-cds-text-helper)',
+          'text-disabled':     'var(--color-cds-text-disabled)',
+          'text-error':        'var(--color-cds-text-error)',
+          'border-subtle':     'var(--color-cds-border-subtle)',
+          'border-strong':     'var(--color-cds-border-strong)',
+          'layer-01':          'var(--color-cds-layer-01)',
+          'layer-02':          'var(--color-cds-layer-02)',
+          'layer-hover-02':    'var(--color-cds-layer-hover-02)',
+          'layer-active-01':   'var(--color-cds-layer-active-01)',
+          'support-error':     'var(--color-cds-support-error)',
+          'support-warning':   'var(--color-cds-support-warning)',
+          'focus':             'var(--color-cds-focus)',
+        },
+
         /* ── Primitive palette (not theme-dependent) ─────────── */
         gray: {
           10:  'var(--gray-10)',

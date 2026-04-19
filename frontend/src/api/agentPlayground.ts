@@ -75,6 +75,15 @@ const DEFAULT_POLICY: PolicyStatus = {
 // ── Session lifecycle ──────────────────────────────────────────────
 
 /**
+ * GET /v0/agents/{id}/sessions
+ * Returns active sessions for an agent, newest first.
+ */
+export async function listSessions(agentId: string): Promise<AgentSession[]> {
+  const resp = await apiClient.get<{ sessions: AgentSession[] }>(`/v0/agents/${agentId}/sessions`);
+  return resp?.sessions ?? [];
+}
+
+/**
  * POST /v0/agents/{id}/sessions
  * Creates a new session. Must be called before sendMessage or runInSession.
  */
