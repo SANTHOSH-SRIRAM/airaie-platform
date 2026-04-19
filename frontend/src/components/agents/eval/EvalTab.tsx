@@ -1,9 +1,7 @@
 import { useState, useCallback } from 'react';
-import { Play, Loader2, CheckCircle, XCircle, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Play, Loader2, CheckCircle, XCircle, AlertTriangle, RotateCcw, FlaskConical, Filter, Download } from 'lucide-react';
 import Badge from '@components/ui/Badge';
 import Button from '@components/ui/Button';
-import EvalSummary from '@components/agents/eval/EvalSummary';
-import type { EvalRunSummary } from '@components/agents/eval/EvalSummary';
 import { cn } from '@utils/cn';
 
 /* ---------- Types ---------- */
@@ -102,21 +100,16 @@ const MOCK_COMPLETED: EvalTestCase[] = [
   },
 ];
 
-/* ---------- Helpers ---------- */
+/* ---------- Subtitle mapping (visual-only) ---------- */
 
-function computeSummary(cases: EvalTestCase[]): EvalRunSummary {
-  const passed = cases.filter((c) => c.status === 'pass').length;
-  const failed = cases.filter((c) => c.status === 'fail').length;
-  const errors = cases.filter((c) => c.status === 'error').length;
-  const total = cases.length;
-  const passRate = total > 0 ? (passed / total) * 100 : 0;
-  const scoredCases = cases.filter((c) => c.status === 'pass' || c.status === 'fail');
-  const avgScore = scoredCases.length > 0 ? scoredCases.reduce((s, c) => s + c.score, 0) / scoredCases.length : 0;
-  const avgCost = total > 0 ? cases.reduce((s, c) => s + c.cost, 0) / total : 0;
-  const totalDuration = cases.reduce((s, c) => s + c.duration_ms, 0);
+const CASE_SUBTITLES: Record<string, string> = {
+  eval_1: 'Baseline validation scenario',
+  eval_2: 'Optimization branch behavior',
+  eval_3: 'Mixed material decision quality',
+  eval_4: 'Failure handling and escalation path',
+};
 
-  return { total, passed, failed, errors, pass_rate: passRate, avg_score: avgScore, avg_cost: avgCost, total_duration_ms: totalDuration };
-}
+/* ---------- Status config ---------- */
 
 const statusConfig = {
   pending: { icon: null, badgeVariant: 'default' as const, label: 'Pending' },
@@ -169,166 +162,232 @@ export default function EvalTab({ agentId: _agentId }: EvalTabProps) {
     setHasRun(false);
   };
 
-  const summary = hasRun ? computeSummary(testCases) : null;
+  // Derived header chip text — always uses tokenized palette (no new colors).
+  const runningCount = testCases.filter((c) => c.status === 'running').length;
+  const passCount = testCases.filter((c) => c.status === 'pass').length;
+  const failCount = testCases.filter((c) => c.status === 'fail' || c.status === 'error').length;
 
-  // Find max score for bar chart scaling
-  const maxScore = Math.max(...testCases.map((c) => c.score), 1);
+  let statusChipText = 'All pending';
+  if (isRunning) {
+    statusChipText = `${Math.max(runningCount, 1)} running`;
+  } else if (hasRun) {
+    statusChipText = `${passCount} pass · ${failCount} fail`;
+  }
 
   return (
-    <div data-testid="eval-tab" className="flex flex-col h-full overflow-y-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-cds-border-subtle shrink-0">
-        <div>
-          <h2 className="text-sm font-semibold text-cds-text-primary">Agent Evaluation</h2>
-          <p className="text-xs text-cds-text-secondary mt-0.5">
-            Run test cases to evaluate agent performance ({testCases.length} cases)
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {hasRun && (
+    <div data-testid="eval-tab" className="flex flex-col h-full overflow-y-auto bg-surface-bg">
+      <div className="mx-auto w-full max-w-5xl px-10 py-10 space-y-8">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-6">
+          <div className="min-w-0">
+            <h1 className="text-3xl font-semibold text-content-primary">Agent Evaluation</h1>
+            <p className="text-sm text-content-secondary mt-1">
+              Run test cases to evaluate agent performance ({testCases.length} cases)
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Status chips */}
+            <span
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs',
+                'bg-brand-primary-muted text-content-secondary',
+              )}
+            >
+              <span aria-hidden="true">•</span>
+              {statusChipText}
+            </span>
+            <span
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs',
+                'border border-border text-content-secondary',
+              )}
+            >
+              <span aria-hidden="true">○</span>
+              Policy ready
+            </span>
+
+            {hasRun && (
+              <Button
+                data-testid="eval-reset-btn"
+                variant="ghost"
+                size="sm"
+                icon={<RotateCcw />}
+                onClick={resetEval}
+              >
+                Reset
+              </Button>
+            )}
             <Button
-              data-testid="eval-reset-btn"
-              variant="ghost"
+              data-testid="eval-run-btn"
+              variant="primary"
               size="sm"
-              icon={<RotateCcw />}
-              onClick={resetEval}
+              icon={isRunning ? <Loader2 className="animate-spin" /> : <FlaskConical />}
+              onClick={runEvaluation}
+              disabled={isRunning}
             >
-              Reset
+              {isRunning ? 'Running...' : 'Run Evaluation'}
             </Button>
-          )}
-          <Button
-            data-testid="eval-run-btn"
-            variant="primary"
-            size="sm"
-            icon={isRunning ? <Loader2 className="animate-spin" /> : <Play />}
-            onClick={runEvaluation}
-            disabled={isRunning}
-          >
-            {isRunning ? 'Running...' : 'Run Evaluation'}
-          </Button>
-        </div>
-      </div>
-
-      {/* Summary (after run) */}
-      {summary && (
-        <div className="px-6 py-4 border-b border-cds-border-subtle">
-          <EvalSummary summary={summary} />
-        </div>
-      )}
-
-      {/* Test Cases Table */}
-      <div className="flex-1 px-6 py-4">
-        <p className="text-[10px] font-medium tracking-wider text-cds-text-secondary uppercase mb-2">
-          TEST CASES
-        </p>
-
-        {/* Table Header */}
-        <div className="grid grid-cols-[1fr_5rem_8rem_5rem_1fr] gap-2 items-center px-3 py-1.5 text-[10px] font-medium tracking-wider text-cds-text-secondary uppercase border-b border-cds-border-subtle">
-          <span>Case Name</span>
-          <span>Status</span>
-          <span>Score</span>
-          <span>Cost</span>
-          <span>Tools Used</span>
+          </div>
         </div>
 
-        {/* Table Rows */}
-        {testCases.map((tc) => {
-          const config = statusConfig[tc.status];
-          const StatusIcon = config.icon;
+        {/* Divider */}
+        <div className="border-t border-border-subtle" />
 
-          return (
-            <div
-              key={tc.id}
-              data-testid="eval-test-case-row"
-              className="grid grid-cols-[1fr_5rem_8rem_5rem_1fr] gap-2 items-center px-3 py-2.5 border-b border-cds-border-subtle"
-            >
-              {/* Name */}
-              <span className="text-xs text-cds-text-primary truncate">{tc.name}</span>
-
-              {/* Status */}
-              <span className="flex items-center gap-1">
-                {StatusIcon && (
-                  <StatusIcon
-                    className={cn(
-                      'w-3.5 h-3.5',
-                      tc.status === 'running' && 'animate-spin text-blue-60',
-                      tc.status === 'pass' && 'text-green-50',
-                      tc.status === 'fail' && 'text-red-50',
-                      tc.status === 'error' && 'text-yellow-30',
-                    )}
-                  />
-                )}
-                <Badge variant={config.badgeVariant}>{config.label}</Badge>
-              </span>
-
-              {/* Score - bar chart */}
-              <div className="flex items-center gap-2">
-                <div className="flex-1 h-2 bg-gray-20 rounded-full overflow-hidden">
-                  <div
-                    className={cn(
-                      'h-full rounded-full transition-all duration-500',
-                      tc.score >= 0.8 ? 'bg-green-50' : tc.score >= 0.5 ? 'bg-yellow-30' : tc.score > 0 ? 'bg-red-50' : 'bg-gray-30',
-                    )}
-                    style={{ width: tc.score > 0 ? `${(tc.score / maxScore) * 100}%` : '0%' }}
-                  />
-                </div>
-                <span className="text-[10px] text-cds-text-secondary w-8 text-right">
-                  {tc.score > 0 ? tc.score.toFixed(2) : '-'}
-                </span>
-              </div>
-
-              {/* Cost */}
-              <span className="text-xs text-cds-text-primary">
-                {tc.cost > 0 ? `$${tc.cost.toFixed(2)}` : '-'}
-              </span>
-
-              {/* Tools used */}
-              <div className="flex items-center gap-1 overflow-hidden">
-                {tc.tools_used.length === 0 ? (
-                  <span className="text-xs text-cds-text-placeholder">-</span>
-                ) : (
-                  tc.tools_used.map((tool) => (
-                    <Badge key={tool} variant="default" badgeStyle="outline">
-                      {tool.split('@')[0]}
-                    </Badge>
-                  ))
-                )}
-              </div>
+        {/* Evaluation Cases section */}
+        <div className="space-y-4">
+          <div className="flex items-end justify-between gap-4">
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold text-content-primary">Evaluation Cases</h2>
+              <p className="text-xs text-content-secondary mt-0.5">
+                Core evaluation matrix for this session
+              </p>
             </div>
-          );
-        })}
-      </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs',
+                  'border border-border text-content-primary',
+                  'hover:bg-surface-hover transition-colors',
+                )}
+              >
+                <Filter className="w-3.5 h-3.5" />
+                Filter
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs',
+                  'border border-border text-content-primary',
+                  'hover:bg-surface-hover transition-colors',
+                )}
+              >
+                <Download className="w-3.5 h-3.5" />
+                Export
+              </button>
+            </div>
+          </div>
 
-      {/* Score Bar Chart */}
-      {hasRun && (
-        <div className="px-6 py-4 border-t border-cds-border-subtle">
-          <p className="text-[10px] font-medium tracking-wider text-cds-text-secondary uppercase mb-3">
-            SCORE DISTRIBUTION
-          </p>
-          <div className="flex items-end gap-3 h-24">
+          {/* Table */}
+          <div>
+            {/* Table header */}
+            <div
+              className={cn(
+                'grid grid-cols-[minmax(0,2.2fr)_7rem_6rem_6rem_minmax(0,1.4fr)] gap-4 items-center',
+                'px-3 py-2',
+                'text-2xs font-medium tracking-wider text-content-secondary uppercase',
+                'border-b border-border-subtle',
+              )}
+            >
+              <span>Case Name</span>
+              <span>Status</span>
+              <span>Score</span>
+              <span>Cost</span>
+              <span>Tools Used</span>
+            </div>
+
+            {/* Table rows */}
             {testCases.map((tc) => {
-              const barHeight = tc.score > 0 ? Math.max((tc.score / 1.0) * 100, 5) : 5;
+              const config = statusConfig[tc.status];
+              const StatusIcon = config.icon;
+              const subtitle = CASE_SUBTITLES[tc.id] ?? '';
+
               return (
-                <div key={tc.id} className="flex-1 flex flex-col items-center gap-1">
-                  <span className="text-[10px] text-cds-text-secondary">
-                    {tc.score > 0 ? tc.score.toFixed(2) : '-'}
-                  </span>
-                  <div
-                    className={cn(
-                      'w-full rounded-t transition-all duration-500',
-                      tc.status === 'pass' ? 'bg-green-50' : tc.status === 'fail' ? 'bg-red-50' : tc.status === 'error' ? 'bg-yellow-30' : 'bg-gray-30',
+                <div
+                  key={tc.id}
+                  data-testid="eval-test-case-row"
+                  className={cn(
+                    'grid grid-cols-[minmax(0,2.2fr)_7rem_6rem_6rem_minmax(0,1.4fr)] gap-4 items-center',
+                    'px-3 py-4 border-b border-border-subtle',
+                  )}
+                >
+                  {/* Name + subtitle */}
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-content-primary truncate">
+                      {tc.name}
+                    </div>
+                    {subtitle && (
+                      <div className="text-xs text-content-secondary mt-0.5 truncate">
+                        {subtitle}
+                      </div>
                     )}
-                    style={{ height: `${barHeight}%` }}
-                  />
-                  <span className="text-[9px] text-cds-text-secondary truncate max-w-full text-center">
-                    {tc.name.split(' ').slice(0, 2).join(' ')}
-                  </span>
+                  </div>
+
+                  {/* Status */}
+                  <div className="flex items-center">
+                    {tc.status === 'pending' ? (
+                      <span
+                        className={cn(
+                          'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs',
+                          'bg-brand-primary-muted text-content-primary',
+                        )}
+                      >
+                        Pending
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        {StatusIcon && (
+                          <StatusIcon
+                            className={cn(
+                              'w-3.5 h-3.5',
+                              tc.status === 'running' && 'animate-spin text-blue-60',
+                              tc.status === 'pass' && 'text-green-50',
+                              tc.status === 'fail' && 'text-red-50',
+                              tc.status === 'error' && 'text-yellow-30',
+                            )}
+                          />
+                        )}
+                        <Badge variant={config.badgeVariant}>{config.label}</Badge>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Score */}
+                  <div>
+                    {tc.score > 0 ? (
+                      <span className="font-mono text-xs text-content-primary">
+                        {tc.score.toFixed(2)}
+                      </span>
+                    ) : (
+                      <span className="text-content-placeholder">—</span>
+                    )}
+                  </div>
+
+                  {/* Cost */}
+                  <div>
+                    {tc.cost > 0 ? (
+                      <span className="font-mono text-xs text-content-primary">
+                        ${tc.cost.toFixed(2)}
+                      </span>
+                    ) : (
+                      <span className="text-content-placeholder">—</span>
+                    )}
+                  </div>
+
+                  {/* Tools used */}
+                  <div className="flex flex-wrap items-center gap-1 min-w-0">
+                    {tc.tools_used.length === 0 ? (
+                      <span className="text-content-placeholder">—</span>
+                    ) : (
+                      tc.tools_used.map((tool) => (
+                        <Badge
+                          key={tool}
+                          variant="default"
+                          badgeStyle="outline"
+                          className="font-mono text-2xs"
+                        >
+                          {tool.split('@')[0]}
+                        </Badge>
+                      ))
+                    )}
+                  </div>
                 </div>
               );
             })}
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
