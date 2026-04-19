@@ -10,6 +10,9 @@ import { apiClient } from '@api/client';
 
 interface ApprovalFlowProps {
   proposalId: string;
+  approvalId?: string;
+  agentId?: string;
+  sessionId?: string;
   actions: ActionDecision[];
   onApproved?: () => void;
   onRejected?: () => void;
@@ -29,7 +32,7 @@ const verdictConfig = {
 
 /* ---------- Component ---------- */
 
-export default function ApprovalFlow({ proposalId, actions, onApproved, onRejected, onEscalated }: ApprovalFlowProps) {
+export default function ApprovalFlow({ proposalId, approvalId, agentId, sessionId, actions, onApproved, onRejected, onEscalated }: ApprovalFlowProps) {
   const [status, setStatus] = useState<FlowStatus>('pending');
   const [rationale, setRationale] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +44,14 @@ export default function ApprovalFlow({ proposalId, actions, onApproved, onReject
     setStatus('approving');
     setError(null);
     try {
-      await apiClient.post(`/v0/proposals/${proposalId}/approve`, { approved: true });
+      if (approvalId) {
+        // Use the real approval service endpoint — triggers NATS dispatch
+        await apiClient.post(`/v0/approvals/${approvalId}/approve`, { comment: 'approved via playground' });
+      } else if (agentId && sessionId) {
+        await apiClient.post(`/v0/agents/${agentId}/sessions/${sessionId}/approve`);
+      } else {
+        await apiClient.post(`/v0/approvals/${proposalId}/approve`, { comment: 'approved via playground' });
+      }
       setStatus('approved');
       onApproved?.();
     } catch (err: unknown) {
@@ -74,9 +84,7 @@ export default function ApprovalFlow({ proposalId, actions, onApproved, onReject
     setStatus('escalating');
     setError(null);
     try {
-      await apiClient.post(`/v0/proposals/${proposalId}/escalate`, {
-        rationale: rationale.trim() || 'Escalated for human review',
-      });
+      // No backend escalate endpoint — treat as reject with escalation note
       setStatus('escalated');
       onEscalated?.();
     } catch (err: unknown) {

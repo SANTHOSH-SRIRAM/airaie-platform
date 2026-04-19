@@ -81,6 +81,9 @@ export function usePublishToolVersion(toolId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: toolKeys.versions(toolId) });
       qc.invalidateQueries({ queryKey: toolKeys.list() });
+      qc.invalidateQueries({ queryKey: toolKeys.detail(toolId) });
+      qc.invalidateQueries({ queryKey: toolKeys.detailFull(toolId) });
+      qc.invalidateQueries({ queryKey: toolKeys.detailVersions(toolId) });
     },
   });
 }
@@ -101,7 +104,11 @@ export function useUpdateTrustLevel() {
   return useMutation({
     mutationFn: (data: { toolId: string; version: string; trustLevel: TrustLevel }) =>
       updateTrustLevel(data.toolId, data.version, data.trustLevel),
-    onSuccess: () => qc.invalidateQueries({ queryKey: toolKeys.list() }),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: toolKeys.list() });
+      qc.invalidateQueries({ queryKey: toolKeys.versions(variables.toolId) });
+      qc.invalidateQueries({ queryKey: toolKeys.detailVersions(variables.toolId) });
+    },
   });
 }
 

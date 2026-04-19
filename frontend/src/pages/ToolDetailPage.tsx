@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import { useUiStore } from '@store/uiStore';
-import { useToolDetailFull, useToolDetailVersions, useToolRuns, useUpdateTool, useDeprecateToolVersion, useCreateRun } from '@hooks/useTools';
+import { useToolDetailFull, useToolDetailVersions, useToolRuns, useUpdateTool, useDeprecateToolVersion, useCreateRun, usePublishToolVersion, useUpdateTrustLevel } from '@hooks/useTools';
 import type { ToolAdapter, ToolCategory, ToolStatus, TrustLevel, ToolContractField, ToolDetail, ToolDetailVersion, ToolRunEntry } from '@/types/tool';
 import EditToolModal from '@components/tools/EditToolModal';
 
@@ -132,6 +132,25 @@ export default function ToolDetailPage() {
   // Mutations
   const deprecateMutation = useDeprecateToolVersion(id);
   const createRunMutation = useCreateRun();
+  const publishMutation = usePublishToolVersion(id);
+  const trustMutation = useUpdateTrustLevel();
+  const [publishingVersion, setPublishingVersion] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
+
+  const handlePublishVersion = async (version: string, currentTrust?: TrustLevel) => {
+    setPublishError(null);
+    setPublishingVersion(version);
+    try {
+      if (!currentTrust || currentTrust === 'untested') {
+        await trustMutation.mutateAsync({ toolId: id, version, trustLevel: 'verified' });
+      }
+      await publishMutation.mutateAsync(version);
+    } catch (err: unknown) {
+      setPublishError((err as { message?: string })?.message ?? 'Publish failed');
+    } finally {
+      setPublishingVersion(null);
+    }
+  };
 
   const observerRef = useRef<IntersectionObserver | null>(null);
 
@@ -301,10 +320,26 @@ export default function ToolDetailPage() {
                                  <p className="text-[13px] text-[#6b6b6b] mt-2 mb-3">{(ver as any).description || 'Added nonlinear analysis support and automatic convergence detection'}</p>
                                  {isCurrent && <p className="text-[11px] text-[#949494] font-mono">Changed: inputs <span className="text-[#a855f7]">(added convergence_tol)</span>, docker image <span className="text-[#a855f7]">(fea-solver:2.1)</span></p>}
                                  
-                                 <div className="flex gap-4 mt-3">
+                                 <div className="flex gap-4 mt-3 items-center">
                                     <button className="text-[11px] font-bold text-[#2196f3] hover:underline">Diff</button>
                                     <button className="text-[11px] font-bold text-[#6b6b6b] hover:underline">Rollback</button>
+                                    {ver.status === 'draft' && (
+                                      <button
+                                        onClick={() => handlePublishVersion(ver.version, ver.trust_level)}
+                                        disabled={publishingVersion === ver.version}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[4px] text-[11px] font-bold bg-[#4caf50] text-white hover:bg-[#43a047] disabled:opacity-60"
+                                      >
+                                        {publishingVersion === ver.version ? (
+                                          <><Loader2 size={11} className="animate-spin"/> Publishing…</>
+                                        ) : (
+                                          <><Upload size={11}/> Publish</>
+                                        )}
+                                      </button>
+                                    )}
                                  </div>
+                                 {publishError && publishingVersion === ver.version && (
+                                   <p className="text-[11px] text-[#e74c3c] mt-2">{publishError}</p>
+                                 )}
                               </div>
                               <span className="text-[12px] text-[#949494]">{formatDate(ver.published_at)}</span>
                            </div>

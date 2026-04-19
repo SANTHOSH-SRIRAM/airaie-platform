@@ -1,4 +1,4 @@
-import { apiClient, apiOrMock } from '@api/client';
+import { apiClient } from '@api/client';
 import type {
   AgentSession,
   BackendDecisionTraceEntry,
@@ -57,20 +57,9 @@ export function mapTraceEntry(entry: BackendDecisionTraceEntry): DecisionTraceEn
   };
 }
 
-// ── Derived mock data (shaped to match real API for apiOrMock fallback) ──
+// ── Derived defaults (no dedicated backend endpoints for these) ──
 
-const MOCK_SESSION: AgentSession = {
-  id: 'ses_mock_001',
-  agent_id: 'agent_fea_opt',
-  project_id: 'prj_default',
-  context: { _decision_trace: [] },
-  history: [],
-  status: 'active',
-  created_at: new Date().toISOString(),
-  expires_at: new Date(Date.now() + 3_600_000).toISOString(),
-};
-
-const MOCK_METRICS: AgentMetrics = {
+const DEFAULT_METRICS: AgentMetrics = {
   iterations: { current: 0, max: 5 },
   totalCost: 0,
   budgetRemaining: 10.0,
@@ -78,7 +67,7 @@ const MOCK_METRICS: AgentMetrics = {
   timeout: 600,
 };
 
-const MOCK_POLICY: PolicyStatus = {
+const DEFAULT_POLICY: PolicyStatus = {
   autoApproveThreshold: 0.85,
   autoApproveEnabled: true,
 };
@@ -99,11 +88,7 @@ export async function createSession(agentId: string): Promise<AgentSession> {
  * Use refetchInterval:3000 via useQuery for polling.
  */
 export async function getSession(agentId: string, sessionId: string): Promise<AgentSession> {
-  return apiOrMock<AgentSession>(
-    `/v0/agents/${agentId}/sessions/${sessionId}`,
-    { method: 'GET' },
-    MOCK_SESSION,
-  );
+  return apiClient.get<AgentSession>(`/v0/agents/${agentId}/sessions/${sessionId}`);
 }
 
 /**
@@ -202,12 +187,12 @@ export function deriveMetrics(session: AgentSession): AgentMetrics {
   const history = decodeBase64Json<BackendSessionMessage[]>(session.history);
   const msgCount = history?.length ?? 0;
   return {
-    ...MOCK_METRICS,
+    ...DEFAULT_METRICS,
     iterations: { current: msgCount, max: 20 },
   };
 }
 
 /** Policy status stub — derive from session context or return default */
 export function derivePolicyStatus(): PolicyStatus {
-  return MOCK_POLICY;
+  return DEFAULT_POLICY;
 }

@@ -5,17 +5,18 @@ import { useUiStore } from '@store/uiStore';
 import { useAgentPlaygroundStore } from '@store/agentPlaygroundStore';
 import { useCreateSession } from '@hooks/useAgentPlayground';
 import { useAgentExecution } from '@hooks/useRunAgent';
+import { useAgentVersions } from '@hooks/useAgents';
 import AgentPlaygroundTopBar from '@components/agents/AgentPlaygroundTopBar';
 import ChatInterface from '@components/agents/ChatInterface';
 import ProposalViewer from '@components/agents/execution/ProposalViewer';
 import PolicyDecisionDisplay from '@components/agents/execution/PolicyDecisionDisplay';
 import ApprovalFlow from '@components/agents/execution/ApprovalFlow';
+import RunOutputsPanel from '@components/agents/execution/RunOutputsPanel';
 import EvalTab from '@components/agents/eval/EvalTab';
 import Button from '@components/ui/Button';
 import Badge from '@components/ui/Badge';
 
 const DEFAULT_AGENT_ID = 'agent_fea_opt';
-const DEFAULT_VERSION = 3;
 
 export default function AgentPlaygroundPage() {
   const { agentId } = useParams<{ agentId?: string }>();
@@ -28,13 +29,21 @@ export default function AgentPlaygroundPage() {
   const closeRightPanel = useUiStore((s) => s.closeRightPanel);
 
   const setActiveSession = useAgentPlaygroundStore((s) => s.setActiveSession);
+  const pendingUserPrompt = useAgentPlaygroundStore((s) => s.pendingUserPrompt);
+  const clearPendingUserPrompt = useAgentPlaygroundStore((s) => s.clearPendingUserPrompt);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState('playground');
 
+  // Resolve latest published version from API
+  const { data: versionsData } = useAgentVersions(resolvedAgentId);
+  const latestVersion = (versionsData ?? [])
+    .filter((v) => v.status === 'published')
+    .reduce((max, v) => Math.max(max, v.version), 0) || 1;
+
   // Execution flow state
-  const execution = useAgentExecution(resolvedAgentId, DEFAULT_VERSION);
+  const execution = useAgentExecution(resolvedAgentId, latestVersion);
   const [showProposal, setShowProposal] = useState(false);
 
   const createSessionMutation = useCreateSession(resolvedAgentId);
@@ -80,8 +89,20 @@ export default function AgentPlaygroundPage() {
   }, [execution.phase]);
 
   const handleDryRun = () => {
-    execution.propose({ goal: 'Analyze bracket for structural integrity' });
+    // Default sample text so the demo Dry Run button produces real, non-zero
+    // counts. The user can override by typing in the chat input below.
+    execution.propose({ text: 'the quick brown fox jumps over the lazy dog the fox is quick' });
   };
+
+  // When the user types a prompt in the chat input and presses Send, run the
+  // agent's tool with that text as the `text` input port.
+  useEffect(() => {
+    if (!pendingUserPrompt) return;
+    execution.propose({ text: pendingUserPrompt.text });
+    clearPendingUserPrompt();
+    // execution is intentionally not in deps — it's recreated each render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingUserPrompt, clearPendingUserPrompt]);
 
   const handleApprove = () => {
     execution.approve();
@@ -208,34 +229,42 @@ export default function AgentPlaygroundPage() {
           <ChatInterface agentId={resolvedAgentId} sessionId={sessionId} />
         </div>
 
-        {/* Proposal / Policy panel (shown when reviewing) */}
-        {showProposal && execution.proposal && (
+        {/* Proposal / Policy / Outputs panel */}
+        {((showProposal && execution.proposal) || execution.runId) && (
           <div
             data-testid="execution-panel"
             className="w-[480px] border-l border-cds-border-subtle overflow-y-auto bg-cds-layer-01 shrink-0"
           >
             <div className="p-4 space-y-4">
-              {/* Proposal Viewer */}
-              <ProposalViewer
-                proposal={execution.proposal}
-                onApprove={handleApprove}
-                onReject={handleReject}
-              />
+              {/* Proposal Viewer (review phase only) */}
+              {showProposal && execution.proposal && (
+                <>
+                  <ProposalViewer
+                    proposal={execution.proposal}
+                    onApprove={handleApprove}
+                    onReject={handleReject}
+                  />
 
-              {/* Policy Decision */}
-              {execution.policyDecision && (
-                <PolicyDecisionDisplay decision={execution.policyDecision} />
+                  {execution.policyDecision && (
+                    <PolicyDecisionDisplay decision={execution.policyDecision} />
+                  )}
+
+                  {needsApproval && pendingActions.length > 0 && execution.proposal.status === 'draft' && (
+                    <ApprovalFlow
+                      proposalId={execution.proposal.id}
+                      approvalId={execution.approvalId ?? undefined}
+                      agentId={resolvedAgentId}
+                      sessionId={sessionId ?? undefined}
+                      actions={pendingActions}
+                      onApproved={handleApprove}
+                      onRejected={handleReject}
+                    />
+                  )}
+                </>
               )}
 
-              {/* Approval Flow (if needs_approval) */}
-              {needsApproval && pendingActions.length > 0 && execution.proposal.status === 'draft' && (
-                <ApprovalFlow
-                  proposalId={execution.proposal.id}
-                  actions={pendingActions}
-                  onApproved={handleApprove}
-                  onRejected={handleReject}
-                />
-              )}
+              {/* Live tool outputs from the worker (visible the moment a run starts) */}
+              {execution.runId && <RunOutputsPanel runId={execution.runId} />}
             </div>
           </div>
         )}

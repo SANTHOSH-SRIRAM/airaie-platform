@@ -62,3 +62,59 @@ const MOCK_ARTIFACTS: RunArtifact[] = [];
 
 export const fetchRunArtifacts = (runId: string): Promise<RunArtifact[]> =>
   apiOrMock(`/v0/runs/${runId}/artifacts`, { method: 'GET' }, MOCK_ARTIFACTS);
+
+/* ---------- Real backend run detail (used by playground outputs panel) ---------- */
+
+export interface RawNodeRunPort {
+  name: string;
+  value?: unknown;
+  artifact_id?: string;
+}
+
+export interface RawNodeRun {
+  id: string;
+  run_id: string;
+  node_id: string;
+  job_id?: string;
+  tool_ref: string;
+  status: 'QUEUED' | 'RUNNING' | 'BLOCKED' | 'SUCCEEDED' | 'FAILED' | 'SKIPPED' | 'CANCELED' | 'RETRYING';
+  attempt: number;
+  outputs?: string;          // base64-encoded JSON of RawNodeRunPort[]
+  exit_code?: number | null;
+  error_message?: string;
+  duration_ms?: number | null;
+  started_at?: string;
+  completed_at?: string;
+}
+
+export interface RawRun {
+  id: string;
+  status: string;
+  run_type?: string;
+  agent_id?: string;
+  started_at?: string;
+  completed_at?: string;
+  cost_actual?: number;
+}
+
+export interface RunDetailResponse {
+  run: RawRun;
+  node_runs?: RawNodeRun[];
+}
+
+export async function fetchRunWithNodes(runId: string): Promise<RunDetailResponse> {
+  const { apiClient } = await import('@api/client');
+  return apiClient.get<RunDetailResponse>(`/v0/runs/${runId}`);
+}
+
+/** Decode a node_run's base64-encoded outputs blob into a list of port values. */
+export function decodeNodeOutputs(outputs?: string): RawNodeRunPort[] {
+  if (!outputs) return [];
+  try {
+    const json = atob(outputs);
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}

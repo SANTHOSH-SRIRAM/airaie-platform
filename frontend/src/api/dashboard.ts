@@ -6,18 +6,10 @@ import type {
   GovernanceStudy,
   SystemStatus,
 } from '@/types/index';
-import { API_CONFIG } from '@constants/api';
 
-const BASE = API_CONFIG.BASE_URL;
-
-async function fetchOrMock<T>(url: string, mockData: T): Promise<T> {
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(API_CONFIG.TIMEOUT) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return (await res.json()) as T;
-  } catch {
-    return mockData;
-  }
+// Dashboard endpoints don't exist in the backend yet — always use mock data.
+async function fetchOrMock<T>(_url: string, mockData: T): Promise<T> {
+  return mockData;
 }
 
 // --- Mock data ---

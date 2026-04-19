@@ -17,17 +17,21 @@ export default function PlaygroundActionBar() {
   const closeSession = useCloseSession(agentId, activeSessionId);
   const approveAction = useApproveAction(agentId, activeSessionId);
   const sendMessageMutation = useSendMessage(agentId, activeSessionId);
+  const submitUserPrompt = useAgentPlaygroundStore((s) => s.submitUserPrompt);
 
   const [inputValue, setInputValue] = useState('');
 
   const handleSend = () => {
-    if (!inputValue.trim() || !activeSessionId || isSending) return;
+    const trimmed = inputValue.trim();
+    if (!trimmed || !activeSessionId || isSending) return;
     setSending(true);
-    sendMessageMutation.mutate(inputValue.trim(), {
-      onSettled: () => {
-        setSending(false);
-      },
+    // 1) Persist the message in the session history (chat record)
+    sendMessageMutation.mutate(trimmed, {
+      onSettled: () => setSending(false),
     });
+    // 2) Hand the text to the playground page so it can run the agent's tool
+    //    with this text as input (consumed via store).
+    submitUserPrompt(trimmed);
     setInputValue('');
   };
 

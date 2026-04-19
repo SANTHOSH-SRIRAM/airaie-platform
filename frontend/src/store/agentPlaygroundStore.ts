@@ -10,6 +10,8 @@ export interface AgentPlaygroundState {
   policyStatus: PolicyStatus | null;
   isAgentRunning: boolean;
   isSending: boolean;
+  /** Last user-typed prompt waiting to be consumed by the playground page to trigger a tool run. */
+  pendingUserPrompt: { text: string; nonce: number } | null;
 
   setSessions: (sessions: AgentSession[]) => void;
   setActiveSession: (id: string | null) => void;
@@ -20,6 +22,8 @@ export interface AgentPlaygroundState {
   setPolicyStatus: (policy: PolicyStatus) => void;
   setAgentRunning: (running: boolean) => void;
   setSending: (sending: boolean) => void;
+  submitUserPrompt: (text: string) => void;
+  clearPendingUserPrompt: () => void;
   clearSession: () => void;
 }
 
@@ -32,6 +36,7 @@ export const useAgentPlaygroundStore = create<AgentPlaygroundState>((set) => ({
   policyStatus: null,
   isAgentRunning: false,
   isSending: false,
+  pendingUserPrompt: null,
 
   setSessions: (sessions) => set({ sessions }),
   setActiveSession: (id) => set({ activeSessionId: id }),
@@ -42,5 +47,8 @@ export const useAgentPlaygroundStore = create<AgentPlaygroundState>((set) => ({
   setPolicyStatus: (policy) => set({ policyStatus: policy }),
   setAgentRunning: (running) => set({ isAgentRunning: running }),
   setSending: (sending) => set({ isSending: sending }),
-  clearSession: () => set({ messages: [], decisionTrace: [], metrics: null }),
+  // nonce makes each submission unique even if the same text is sent twice
+  submitUserPrompt: (text) => set({ pendingUserPrompt: { text, nonce: Date.now() } }),
+  clearPendingUserPrompt: () => set({ pendingUserPrompt: null }),
+  clearSession: () => set({ messages: [], decisionTrace: [], metrics: null, pendingUserPrompt: null }),
 }));
