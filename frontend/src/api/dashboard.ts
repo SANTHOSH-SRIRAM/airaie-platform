@@ -1,3 +1,4 @@
+import { apiClient } from '@api/client';
 import type {
   DashboardStats,
   ActiveRun,
@@ -7,76 +8,200 @@ import type {
   SystemStatus,
 } from '@/types/index';
 
-// Dashboard endpoints don't exist in the backend yet — always use mock data.
-async function fetchOrMock<T>(_url: string, mockData: T): Promise<T> {
-  return mockData;
+/* ---------- Backend response types (raw shapes) ---------- */
+
+interface RawRun {
+  id: string;
+  status: string;
+  run_type?: string;
+  agent_id?: string;
+  started_at?: string;
+  completed_at?: string;
+  cost_actual?: number;
+  duration_seconds?: number;
 }
 
-// --- Mock data ---
-
-const MOCK_STATS: DashboardStats = {
-  workflows: { total: 8, active: 3 },
-  agents: { total: 3, decisionsToday: 47 },
-  runs7d: { total: 156, successRate: 94 },
-  boards: { total: 2, pendingApproval: 1 },
-};
-
-const MOCK_ACTIVE_RUNS: ActiveRun[] = [
-  { id: 'run_001', name: 'FEA Validation Pipeline', runId: 'run_a1b2c3', nodesCompleted: 3, nodesTotal: 5, elapsedSeconds: 120, costUsd: 1.24, status: 'running', startedAt: new Date(Date.now() - 120_000).toISOString() },
-  { id: 'run_002', name: 'CFD Analysis Flow', runId: 'run_b2c3d4', nodesCompleted: 1, nodesTotal: 3, elapsedSeconds: 45, costUsd: 0.56, status: 'running', startedAt: new Date(Date.now() - 45_000).toISOString() },
-  { id: 'run_003', name: 'Material Testing Pipeline', runId: 'run_c3d4e5', nodesCompleted: 0, nodesTotal: 3, elapsedSeconds: 12, costUsd: 0.02, status: 'waiting', startedAt: new Date(Date.now() - 12_000).toISOString() },
-];
-
-const MOCK_RECENT_WORKFLOWS: RecentWorkflow[] = [
-  { id: 'wf_001', name: 'FEA Validation Pipeline', version: 'v3', versionStatus: 'published', nodeCount: 5, updatedAt: new Date(Date.now() - 120_000).toISOString(), status: 'active' },
-  { id: 'wf_002', name: 'CFD Analysis Flow', version: 'v1', versionStatus: 'draft', nodeCount: 3, updatedAt: new Date(Date.now() - 3_600_000).toISOString(), status: 'idle' },
-  { id: 'wf_003', name: 'Material Testing Pipeline', version: 'v2', versionStatus: 'published', nodeCount: 7, updatedAt: new Date(Date.now() - 10_800_000).toISOString(), status: 'active' },
-  { id: 'wf_004', name: 'Topology Optimization', version: 'v1', versionStatus: 'draft', nodeCount: 4, updatedAt: new Date(Date.now() - 86_400_000).toISOString(), status: 'idle' },
-  { id: 'wf_005', name: 'Mesh Quality Check', version: 'v1', versionStatus: 'published', nodeCount: 2, updatedAt: new Date(Date.now() - 172_800_000).toISOString(), status: 'idle' },
-];
-
-const MOCK_AGENT_ACTIVITY: AgentActivityEntry[] = [
-  { id: 'aa_001', agentName: 'FEA Optimizer', action: 'selected fea-solver', confidence: 0.92, timestamp: new Date(Date.now() - 120_000).toISOString() },
-  { id: 'aa_002', agentName: 'FEA Optimizer', action: 'selected mesh-gen', confidence: 0.87, timestamp: new Date(Date.now() - 900_000).toISOString() },
-  { id: 'aa_003', agentName: 'Design Advisor', action: 'escalated (low confidence)', confidence: 0.42, timestamp: new Date(Date.now() - 3_600_000).toISOString() },
-  { id: 'aa_004', agentName: 'FEA Optimizer', action: 'selected result-analyzer', confidence: 0.91, timestamp: new Date(Date.now() - 10_800_000).toISOString() },
-];
-
-const MOCK_GOVERNANCE: GovernanceStudy[] = [
-  { id: 'gov_001', name: 'Structural Validation Study', gatesPassed: 2, gatesTotal: 4, approvalStatus: 'pending', actions: ['study', 'explore', 'review'] },
-  { id: 'gov_002', name: 'Thermal Analysis Board', gatesPassed: 0, gatesTotal: 2, approvalStatus: 'in-review', actions: ['explore', 'review'] },
-];
-
-const MOCK_SYSTEM_STATUS: SystemStatus = {
-  overall: 'operational',
-  apiLatencyMs: 12,
-  natsConnected: true,
-  runnerSlots: { used: 3, total: 4 },
-  storageUsed: { bytes: 4_509_715_660, totalBytes: 10_737_418_240 },
-};
-
-// --- API functions ---
-
-export function fetchDashboardStats(): Promise<DashboardStats> {
-  return fetchOrMock(`${BASE}/dashboard/stats`, MOCK_STATS);
+interface RawAgent {
+  id: string;
+  name: string;
 }
 
-export function fetchActiveRuns(): Promise<ActiveRun[]> {
-  return fetchOrMock(`${BASE}/dashboard/active-runs`, MOCK_ACTIVE_RUNS);
+interface RawWorkflow {
+  id: string;
+  name: string;
+  current_version?: string;
+  status?: string;
+  node_count?: number;
+  updated_at?: string;
 }
 
-export function fetchRecentWorkflows(): Promise<RecentWorkflow[]> {
-  return fetchOrMock(`${BASE}/dashboard/recent-workflows`, MOCK_RECENT_WORKFLOWS);
+interface RawBoard {
+  id: string;
+  name: string;
+  status?: string;
+  gates_passed?: number;
+  gates_total?: number;
 }
 
-export function fetchAgentActivity(): Promise<AgentActivityEntry[]> {
-  return fetchOrMock(`${BASE}/dashboard/agent-activity`, MOCK_AGENT_ACTIVITY);
+/* ---------- Helpers ---------- */
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+async function safeArray<T>(path: string, key: string): Promise<T[]> {
+  try {
+    const res = await apiClient.get<Record<string, T[] | null>>(path);
+    return (res?.[key] ?? []) as T[];
+  } catch {
+    return [];
+  }
 }
 
-export function fetchGovernance(): Promise<GovernanceStudy[]> {
-  return fetchOrMock(`${BASE}/dashboard/governance`, MOCK_GOVERNANCE);
+/* ---------- Dashboard data ---------- */
+
+export async function fetchDashboardStats(): Promise<DashboardStats> {
+  const [agents, runs, workflows, boards] = await Promise.all([
+    safeArray<RawAgent>('/v0/agents', 'agents'),
+    safeArray<RawRun>('/v0/runs?limit=200', 'runs'),
+    safeArray<RawWorkflow>('/v0/workflows', 'workflows'),
+    safeArray<RawBoard>('/v0/boards', 'boards'),
+  ]);
+
+  const now = Date.now();
+  const runs7d = runs.filter((r) => {
+    const ts = r.started_at ?? r.completed_at;
+    if (!ts) return false;
+    return now - new Date(ts).getTime() < SEVEN_DAYS_MS;
+  });
+  const succeeded7d = runs7d.filter((r) => r.status === 'SUCCEEDED').length;
+  const successRate = runs7d.length > 0 ? Math.round((succeeded7d / runs7d.length) * 100) : 0;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const decisionsToday = runs.filter(
+    (r) => r.run_type === 'agent' && r.started_at && new Date(r.started_at) >= today,
+  ).length;
+
+  const activeWorkflows = workflows.filter(
+    (w) => w.status === 'active' || w.status === 'published',
+  ).length;
+  const pendingBoards = boards.filter(
+    (b) => b.status === 'PENDING' || b.status === 'IN_REVIEW',
+  ).length;
+
+  return {
+    workflows: { total: workflows.length, active: activeWorkflows },
+    agents: { total: agents.length, decisionsToday },
+    runs7d: { total: runs7d.length, successRate },
+    boards: { total: boards.length, pendingApproval: pendingBoards },
+  };
 }
 
-export function fetchSystemStatus(): Promise<SystemStatus> {
-  return fetchOrMock(`${BASE}/dashboard/system-status`, MOCK_SYSTEM_STATUS);
+export async function fetchActiveRuns(): Promise<ActiveRun[]> {
+  const runs = await safeArray<RawRun>('/v0/runs?limit=50', 'runs');
+  const active = runs.filter(
+    (r) => r.status === 'RUNNING' || r.status === 'QUEUED' || r.status === 'PENDING',
+  );
+  return active.slice(0, 5).map((r) => ({
+    id: r.id,
+    name: r.agent_id ? `Agent run ${r.agent_id.slice(0, 12)}` : `Run ${r.id.slice(0, 12)}`,
+    runId: r.id,
+    nodesCompleted: 0,
+    nodesTotal: 1,
+    elapsedSeconds: r.started_at
+      ? Math.floor((Date.now() - new Date(r.started_at).getTime()) / 1000)
+      : 0,
+    costUsd: r.cost_actual ?? 0,
+    status: r.status === 'RUNNING' ? 'running' : 'waiting',
+    startedAt: r.started_at ?? new Date().toISOString(),
+  }));
+}
+
+export async function fetchRecentWorkflows(): Promise<RecentWorkflow[]> {
+  const workflows = await safeArray<RawWorkflow>('/v0/workflows', 'workflows');
+  return workflows.slice(0, 5).map((w) => ({
+    id: w.id,
+    name: w.name,
+    version: w.current_version ?? 'v1',
+    versionStatus: (w.status === 'published' ? 'published' : 'draft') as 'published' | 'draft',
+    nodeCount: w.node_count ?? 0,
+    updatedAt: w.updated_at ?? new Date().toISOString(),
+    status: w.status === 'active' || w.status === 'published' ? 'active' : 'idle',
+  }));
+}
+
+export async function fetchAgentActivity(): Promise<AgentActivityEntry[]> {
+  const [runs, agents] = await Promise.all([
+    safeArray<RawRun>('/v0/runs?limit=50', 'runs'),
+    safeArray<RawAgent>('/v0/agents', 'agents'),
+  ]);
+  const agentNameById = new Map(agents.map((a) => [a.id, a.name]));
+  const agentRuns = runs
+    .filter((r) => r.run_type === 'agent' && r.agent_id)
+    .sort((a, b) => {
+      const ta = new Date(a.started_at ?? 0).getTime();
+      const tb = new Date(b.started_at ?? 0).getTime();
+      return tb - ta;
+    })
+    .slice(0, 5);
+  return agentRuns.map((r) => ({
+    id: r.id,
+    agentName: agentNameById.get(r.agent_id!) ?? r.agent_id!,
+    action: r.status === 'SUCCEEDED' ? 'run completed' : `run ${r.status.toLowerCase()}`,
+    confidence: r.status === 'SUCCEEDED' ? 1.0 : 0.5,
+    timestamp: r.started_at ?? r.completed_at ?? new Date().toISOString(),
+  }));
+}
+
+export async function fetchGovernance(): Promise<GovernanceStudy[]> {
+  const boards = await safeArray<RawBoard>('/v0/boards', 'boards');
+  return boards.slice(0, 5).map((b) => ({
+    id: b.id,
+    name: b.name,
+    gatesPassed: b.gates_passed ?? 0,
+    gatesTotal: b.gates_total ?? 0,
+    approvalStatus: (b.status === 'IN_REVIEW'
+      ? 'in-review'
+      : b.status === 'PENDING'
+      ? 'pending'
+      : 'approved') as GovernanceStudy['approvalStatus'],
+    actions: ['study', 'review'],
+  }));
+}
+
+interface RawHealth {
+  status: string;
+  uptime?: string;
+  checks?: {
+    database?: { status?: string; latency?: string };
+    nats?: { status?: string; reconnects?: number };
+  };
+}
+
+export async function fetchSystemStatus(): Promise<SystemStatus> {
+  try {
+    const h = await apiClient.get<RawHealth>('/v0/health');
+    const dbHealthy = h.checks?.database?.status === 'healthy';
+    const natsHealthy = h.checks?.nats?.status === 'healthy';
+    const overall = dbHealthy && natsHealthy ? 'operational' : 'degraded';
+    // Parse latency like "693µs" or "12ms" → ms
+    const latencyStr = h.checks?.database?.latency ?? '0ms';
+    const apiLatencyMs = latencyStr.endsWith('µs')
+      ? Math.max(1, Math.round(parseFloat(latencyStr) / 1000))
+      : Math.round(parseFloat(latencyStr) || 0);
+    return {
+      overall: overall as SystemStatus['overall'],
+      apiLatencyMs,
+      natsConnected: natsHealthy,
+      runnerSlots: { used: 0, total: 4 },
+      storageUsed: { bytes: 0, totalBytes: 0 },
+    };
+  } catch {
+    return {
+      overall: 'down',
+      apiLatencyMs: 0,
+      natsConnected: false,
+      runnerSlots: { used: 0, total: 4 },
+      storageUsed: { bytes: 0, totalBytes: 0 },
+    };
+  }
 }

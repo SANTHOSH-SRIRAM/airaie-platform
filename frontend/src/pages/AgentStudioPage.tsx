@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   useAgent,
@@ -91,6 +91,7 @@ function WeightToken({ label, value }: { label: string; value: number }) {
 export default function AgentStudioPage() {
   const navigate = useNavigate();
   const { agentId } = useParams<{ agentId?: string }>();
+  const [searchParams] = useSearchParams();
 
   /* ---------- Real API hooks ---------- */
   const { data: agent, isLoading: agentLoading } = useAgent(agentId ?? null);
@@ -118,7 +119,9 @@ export default function AgentStudioPage() {
   });
 
   /* ---------- Editor state ---------- */
-  const [activeTab, setActiveTab] = useState('builder');
+  // Initial tab can be overridden via ?tab=runs|evals|playground from another page.
+  const initialTab = searchParams.get('tab') ?? 'builder';
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [goal, setGoal] = useState('');
   // LLM weight + provider/model are not part of the v1 AgentSpec (the gateway
   // configures them via env vars). They remain editable knobs but are local-only.

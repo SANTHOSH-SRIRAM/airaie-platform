@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Zap, Loader2, RotateCcw } from 'lucide-react';
 import { useUiStore } from '@store/uiStore';
 import { useAgentPlaygroundStore } from '@store/agentPlaygroundStore';
@@ -20,7 +20,17 @@ const DEFAULT_AGENT_ID = 'agent_fea_opt';
 
 export default function AgentPlaygroundPage() {
   const { agentId } = useParams<{ agentId?: string }>();
+  const navigate = useNavigate();
   const resolvedAgentId = agentId ?? DEFAULT_AGENT_ID;
+
+  // If we landed here without a real agentId, the default points at a
+  // fixture agent that doesn't exist in the DB and session creation will
+  // FK-fail. Send the user back to pick an agent.
+  useEffect(() => {
+    if (!agentId) {
+      navigate('/agents', { replace: true });
+    }
+  }, [agentId, navigate]);
 
   const setSidebarContentType = useUiStore((s) => s.setSidebarContentType);
   const setBottomBar = useUiStore((s) => s.setBottomBar);
@@ -37,6 +47,17 @@ export default function AgentPlaygroundPage() {
   const [sessionError, setSessionError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState('playground');
+
+  // Tab navigation: Builder/Runs live on the Studio page (Runs is a tab there);
+  // Playground/Evals stay local on this page.
+  const handleTabChange = (tab: string) => {
+    if (tab === 'builder' || tab === 'runs') {
+      const suffix = tab === 'runs' ? '?tab=runs' : '';
+      navigate(`/agent-studio/${resolvedAgentId}${suffix}`);
+      return;
+    }
+    setActiveTab(tab);
+  };
 
   // Resolve latest published version from API
   const { data: versionsData } = useAgentVersions(resolvedAgentId);
@@ -133,7 +154,7 @@ export default function AgentPlaygroundPage() {
   if (createSessionMutation.isPending && !sessionId) {
     return (
       <div data-testid="agent-playground-page" className="flex flex-col h-full">
-        <AgentPlaygroundTopBar agentName="Loading..." agentVersion="" activeTab={activeTab} onTabChange={setActiveTab} />
+        <AgentPlaygroundTopBar agentName="Loading..." agentVersion="" activeTab={activeTab} onTabChange={handleTabChange} />
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="animate-spin text-cds-text-secondary" size={24} />
         </div>
@@ -145,7 +166,7 @@ export default function AgentPlaygroundPage() {
   if (sessionError) {
     return (
       <div data-testid="agent-playground-page" className="flex flex-col h-full">
-        <AgentPlaygroundTopBar agentName="Error" agentVersion="" activeTab={activeTab} onTabChange={setActiveTab} />
+        <AgentPlaygroundTopBar agentName="Error" agentVersion="" activeTab={activeTab} onTabChange={handleTabChange} />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-sm text-red-500">{sessionError} — is the backend running on localhost:8080?</p>
         </div>
@@ -161,7 +182,7 @@ export default function AgentPlaygroundPage() {
           agentName="FEA Optimizer Agent"
           agentVersion="v2"
           activeTab={activeTab}
-          onTabChange={setActiveTab}
+          onTabChange={handleTabChange}
         />
         <EvalTab agentId={resolvedAgentId} />
       </div>
@@ -174,7 +195,7 @@ export default function AgentPlaygroundPage() {
         agentName="FEA Optimizer Agent"
         agentVersion="v2"
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
       />
 
       {/* Execution controls bar */}
