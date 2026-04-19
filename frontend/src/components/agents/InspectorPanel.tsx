@@ -16,7 +16,10 @@ const INSPECTOR_TABS = [
 type InspectorTab = typeof INSPECTOR_TABS[number]['id'];
 
 export default function InspectorPanel() {
-  const { agentId = 'agent_fea_opt' } = useParams<{ agentId?: string }>();
+  // Inspector is rendered via a global right-panel slot; useParams may be empty.
+  const { agentId: paramAgentId } = useParams<{ agentId?: string }>();
+  const storeAgentId = useAgentPlaygroundStore((s) => s.activeAgentId);
+  const agentId = storeAgentId ?? paramAgentId ?? 'agent_fea_opt';
   const activeSessionId = useAgentPlaygroundStore((s) => s.activeSessionId);
   const setPolicyStatus = useAgentPlaygroundStore((s) => s.setPolicyStatus);
   const [activeTab, setActiveTab] = useState<InspectorTab>('overview');

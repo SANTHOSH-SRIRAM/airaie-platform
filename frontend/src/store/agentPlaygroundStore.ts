@@ -12,6 +12,11 @@ export interface AgentPlaygroundState {
   isSending: boolean;
   /** Last user-typed prompt waiting to be consumed by the playground page to trigger a tool run. */
   pendingUserPrompt: { text: string; nonce: number } | null;
+  /** Run ID returned from the most recent tool-aware chat message; rendered in RunOutputsPanel. */
+  chatRunId: string | null;
+  /** Agent ID currently being viewed in the playground; set by AgentPlaygroundPage on mount.
+      Used by global slots (ActionBar, InspectorPanel) that lose URL params. */
+  activeAgentId: string | null;
 
   setSessions: (sessions: AgentSession[]) => void;
   setActiveSession: (id: string | null) => void;
@@ -24,6 +29,8 @@ export interface AgentPlaygroundState {
   setSending: (sending: boolean) => void;
   submitUserPrompt: (text: string) => void;
   clearPendingUserPrompt: () => void;
+  setChatRunId: (id: string | null) => void;
+  setActiveAgentId: (id: string | null) => void;
   clearSession: () => void;
 }
 
@@ -37,6 +44,8 @@ export const useAgentPlaygroundStore = create<AgentPlaygroundState>((set) => ({
   isAgentRunning: false,
   isSending: false,
   pendingUserPrompt: null,
+  chatRunId: null,
+  activeAgentId: null,
 
   setSessions: (sessions) => set({ sessions }),
   setActiveSession: (id) => set({ activeSessionId: id }),
@@ -50,5 +59,7 @@ export const useAgentPlaygroundStore = create<AgentPlaygroundState>((set) => ({
   // nonce makes each submission unique even if the same text is sent twice
   submitUserPrompt: (text) => set({ pendingUserPrompt: { text, nonce: Date.now() } }),
   clearPendingUserPrompt: () => set({ pendingUserPrompt: null }),
-  clearSession: () => set({ messages: [], decisionTrace: [], metrics: null, pendingUserPrompt: null }),
+  setChatRunId: (id) => set({ chatRunId: id }),
+  setActiveAgentId: (id) => set({ activeAgentId: id }),
+  clearSession: () => set({ messages: [], decisionTrace: [], metrics: null, pendingUserPrompt: null, chatRunId: null }),
 }));

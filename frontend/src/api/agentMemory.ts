@@ -17,7 +17,12 @@ export interface CreateMemoryData {
 
 export function listMemories(agentId: string, type?: MemoryType): Promise<AgentMemory[]> {
   const params = type ? `?type=${type}` : '';
-  return apiClient.get<AgentMemory[]>(`/v0/agents/${agentId}/memories${params}`);
+  return apiClient
+    .get<AgentMemory[] | { memories: AgentMemory[] | null }>(`/v0/agents/${agentId}/memories${params}`)
+    .then((res) => {
+      if (Array.isArray(res)) return res;
+      return res.memories ?? [];
+    });
 }
 
 /* ---------- Mutation Endpoints ---------- */

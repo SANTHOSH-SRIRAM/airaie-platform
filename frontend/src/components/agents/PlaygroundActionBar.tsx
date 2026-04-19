@@ -6,7 +6,12 @@ import Button from '@components/ui/Button';
 import { cn } from '@utils/cn';
 
 export default function PlaygroundActionBar() {
-  const { agentId = 'agent_fea_opt' } = useParams<{ agentId?: string }>();
+  // useParams returns empty here because this bar is rendered via a global
+  // bottom-bar slot, not as a route child. Prefer the store value set by
+  // AgentPlaygroundPage; fall back to params/default for legacy callers.
+  const { agentId: paramAgentId } = useParams<{ agentId?: string }>();
+  const storeAgentId = useAgentPlaygroundStore((s) => s.activeAgentId);
+  const agentId = storeAgentId ?? paramAgentId ?? 'agent_fea_opt';
   const activeSessionId = useAgentPlaygroundStore((s) => s.activeSessionId);
   const isAgentRunning = useAgentPlaygroundStore((s) => s.isAgentRunning);
   const isSending = useAgentPlaygroundStore((s) => s.isSending);
@@ -17,7 +22,7 @@ export default function PlaygroundActionBar() {
   const closeSession = useCloseSession(agentId, activeSessionId);
   const approveAction = useApproveAction(agentId, activeSessionId);
   const sendMessageMutation = useSendMessage(agentId, activeSessionId);
-  const submitUserPrompt = useAgentPlaygroundStore((s) => s.submitUserPrompt);
+  const setChatRunId = useAgentPlaygroundStore((s) => s.setChatRunId);
 
   const [inputValue, setInputValue] = useState('');
 
@@ -25,13 +30,15 @@ export default function PlaygroundActionBar() {
     const trimmed = inputValue.trim();
     if (!trimmed || !activeSessionId || isSending) return;
     setSending(true);
-    // 1) Persist the message in the session history (chat record)
+    // Send the chat message. The backend's tool-aware LLM may decide to invoke
+    // a tool and dispatch a run; if so, the response carries run_id and the
+    // RunOutputsPanel subscribes to it.
     sendMessageMutation.mutate(trimmed, {
+      onSuccess: (result) => {
+        if (result.runId) setChatRunId(result.runId);
+      },
       onSettled: () => setSending(false),
     });
-    // 2) Hand the text to the playground page so it can run the agent's tool
-    //    with this text as input (consumed via store).
-    submitUserPrompt(trimmed);
     setInputValue('');
   };
 

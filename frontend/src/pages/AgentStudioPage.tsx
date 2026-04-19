@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   useAgent,
   useAgentVersions,
@@ -7,7 +8,10 @@ import {
   useValidateAgentVersion,
   usePublishAgentVersion,
 } from '@hooks/useAgents';
-import type { AgentSpec } from '@api/agents';
+import { useToolList } from '@hooks/useTools';
+import { listMemories } from '@api/agentMemory';
+import EvalTab from '@components/agents/eval/EvalTab';
+import type { AgentSpec, AgentToolPermission } from '@api/agents';
 import {
   ArrowLeft,
   Brain,
@@ -31,60 +35,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 
-/* ---------- Static fixture tool definitions for the UI picker ---------- */
-
-// Tool IDs must match real DB tool IDs (GET /v0/tools). Versions from DB tool_versions table.
-const AVAILABLE_TOOLS = [
-  { id: 'sim.fea_solver', name: 'FEA Solver', version: '1.0.0', permissions: ['read', 'execute'] as string[], maxCalls: 5 },
-  { id: 'sim.mesh.generator', name: 'Mesh Generator', version: '1.0.0', permissions: ['read', 'execute'] as string[], maxCalls: 10 },
-  { id: 'sim.post.metric_extractor', name: 'Result Analyzer', version: '1.0.0', permissions: ['read', 'execute'] as string[], maxCalls: 3 },
-  { id: 'sim.cfd_solver', name: 'CFD Solver', version: '1.0.0', permissions: ['read', 'execute'] as string[], maxCalls: 3 },
-  { id: 'cad.geometry_check', name: 'Geometry Check', version: '1.0.0', permissions: ['read', 'execute'] as string[], maxCalls: 5 },
-  { id: 'report.generator', name: 'Report Generator', version: '1.0.0', permissions: ['read', 'execute'] as string[], maxCalls: 3 },
-  { id: 'tool_4d1a1980', name: 'Sample CSV Tool', version: '0.1.0', permissions: ['read', 'execute'] as string[], maxCalls: 5 },
-];
-
-const DEFAULT_SELECTED_TOOLS = ['sim.fea_solver', 'sim.mesh.generator', 'sim.post.metric_extractor'];
-
-const SCORING_WEIGHTS = [
-  { label: 'Compatibility', value: 0.3 },
-  { label: 'Trust', value: 0.25 },
-  { label: 'Cost', value: 0.2 },
-  { label: 'Latency', value: 0.15 },
-  { label: 'Reliability', value: 0.1 },
-];
-
-const POLICY_RULES = [
-  'Auto-approve candidates above 0.85 confidence.',
-  'Keep evaluation spend under $10 per run.',
-  'Escalate any recommendation below 0.60 confidence.',
-];
-
-const PIPELINE_TEMPLATE = [
-  { id: 'provider', subtitle: 'anthropic', accent: '#ad35ff', icon: Diamond, trailing: 'chevron' as const },
-  { id: 'agent', subtitle: 'Goal: Minimize weight under constraints', accent: '#ad35ff', icon: Brain, selected: true },
-  {
-    id: 'tools',
-    accent: '#2f8cff',
-    icon: Wrench,
-  },
-  { id: 'policy', subtitle: 'Auto-approve > 0.85\nBudget cap: $10.00', accent: '#ff9800', icon: Shield },
-  { id: 'memory', subtitle: '12 entries', accent: '#607d8b', icon: Database, compact: true, value: '12 entries' },
-];
-
-const PERFORMANCE_STATS = [
-  { label: 'Total runs', value: '47' },
-  { label: 'Success rate', value: '91%' },
-  { label: 'Avg cost/run', value: '$1.85' },
-  { label: 'Avg confidence', value: '0.88' },
-  { label: 'Avg iterations', value: '2.3' },
-];
-
-const RECENT_DECISIONS = [
-  { title: 'Selected fea-solver', confidence: '0.92', detail: '2 min ago · $0.50', tone: 'success' as const },
-  { title: 'Selected mesh-gen', confidence: '0.87', detail: '15 min ago · $0.42', tone: 'success' as const },
-  { title: 'Escalated (low confidence)', confidence: '0.40', detail: '1h ago · $0.18', tone: 'danger' as const },
-];
+/* ---------- Constants ---------- */
 
 const TABS = [
   { id: 'builder', label: 'Builder' },
@@ -144,20 +95,39 @@ export default function AgentStudioPage() {
   /* ---------- Real API hooks ---------- */
   const { data: agent, isLoading: agentLoading } = useAgent(agentId ?? null);
   const { data: versions = [] } = useAgentVersions(agentId ?? null);
-  const latestVersion = versions.length > 0 ? versions[versions.length - 1] : undefined;
+  // Pick the highest-numbered published version; fall back to highest draft.
+  const latestVersion = useMemo(() => {
+    if (!versions.length) return undefined;
+    const sorted = [...versions].sort((a, b) => b.version - a.version);
+    return sorted.find((v) => v.status === 'published') ?? sorted[0];
+  }, [versions]);
 
   const createVersion = useCreateAgentVersion(agentId ?? '');
   const validateVersion = useValidateAgentVersion(agentId ?? '');
   const publishVersion = usePublishAgentVersion(agentId ?? '');
 
+  // Real tool catalog from the registry
+  const { data: toolCatalog = [] } = useToolList();
+
+  // Real memory entries for this agent (drives the Memory pipeline card)
+  const { data: memories = [] } = useQuery({
+    queryKey: ['agentMemories', agentId],
+    queryFn: () => listMemories(agentId!),
+    enabled: !!agentId,
+    staleTime: 60_000,
+  });
+
   /* ---------- Editor state ---------- */
   const [activeTab, setActiveTab] = useState('builder');
   const [goal, setGoal] = useState('');
+  // LLM weight + provider/model are not part of the v1 AgentSpec (the gateway
+  // configures them via env vars). They remain editable knobs but are local-only.
   const [llmWeight, setLlmWeight] = useState(0.7);
   const [selectedProvider, setSelectedProvider] = useState('anthropic');
   const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-6');
-  const [selectedTools, setSelectedTools] = useState<string[]>(DEFAULT_SELECTED_TOOLS);
-  const [selectedToolId, setSelectedToolId] = useState('mesh-generator');
+  // selectedToolRefs holds full "tool_id@version" strings — same format as spec.tools[].tool_ref
+  const [selectedToolRefs, setSelectedToolRefs] = useState<string[]>([]);
+  const [highlightedToolRef, setHighlightedToolRef] = useState<string | null>(null);
 
   /* ---------- Sync state from real data when it arrives ---------- */
   useEffect(() => {
@@ -170,14 +140,158 @@ export default function AgentStudioPage() {
     if (latestVersion?.spec_json) {
       const spec = latestVersion.spec_json;
       if (spec.goal) setGoal(spec.goal);
-      if (spec.scoring?.llm_weight !== undefined) setLlmWeight(spec.scoring.llm_weight);
-      if (spec.model?.provider) setSelectedProvider(spec.model.provider);
-      if (spec.model?.model) setSelectedModel(spec.model.model);
       if (spec.tools?.length) {
-        setSelectedTools(spec.tools.map((t) => t.tool_ref));
+        setSelectedToolRefs(spec.tools.map((t) => t.tool_ref));
       }
     }
   }, [latestVersion]);
+
+  /* ---------- Derived data ---------- */
+
+  // Index of registry tools by full ref (id@currentVersion). Tools without a
+  // current version still get an entry keyed by id for fallback lookups.
+  const toolByRef = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; version: string; permissions: string[]; maxCalls: number }>();
+    for (const t of toolCatalog) {
+      const ver = t.currentVersion?.replace(/^v/, '') || '0.1.0';
+      map.set(`${t.id}@${ver}`, {
+        id: t.id,
+        name: t.name,
+        version: ver,
+        permissions: ['read', 'execute'],
+        maxCalls: 5,
+      });
+    }
+    return map;
+  }, [toolCatalog]);
+
+  // Catalog rows for the picker: every published tool, marked selected/not.
+  const catalogRows = useMemo(() => {
+    return toolCatalog.map((t) => {
+      const ver = t.currentVersion?.replace(/^v/, '') || '0.1.0';
+      const ref = `${t.id}@${ver}`;
+      return {
+        id: t.id,
+        ref,
+        name: t.name,
+        version: ver,
+        permissions: ['read', 'execute'],
+        maxCalls: 5,
+      };
+    });
+  }, [toolCatalog]);
+
+  // Spec-defined tools (the ones THIS agent actually uses), enriched with
+  // catalog metadata for display. Falls back to the bare tool_ref when the
+  // tool isn't in the registry list yet.
+  const specToolDetails = useMemo(() => {
+    const specTools: AgentToolPermission[] = latestVersion?.spec_json?.tools ?? [];
+    return specTools.map((t) => {
+      const meta = toolByRef.get(t.tool_ref);
+      const [id, version] = t.tool_ref.split('@');
+      return {
+        ref: t.tool_ref,
+        id,
+        version,
+        name: meta?.name ?? id,
+        permissions: t.permissions ?? ['execute'],
+        maxCalls: t.max_invocations ?? 1,
+      };
+    });
+  }, [latestVersion, toolByRef]);
+
+  // Scoring weights derived from spec.scoring.weights — fall back to the
+  // platform default mix if the spec didn't define any.
+  const scoringWeights = useMemo(() => {
+    const w = latestVersion?.spec_json?.scoring?.weights;
+    if (!w) {
+      return [
+        { label: 'Compatibility', value: 0.5 },
+        { label: 'Trust', value: 0.3 },
+        { label: 'Cost', value: 0.2 },
+      ];
+    }
+    const out: { label: string; value: number }[] = [];
+    if (w.compatibility != null) out.push({ label: 'Compatibility', value: w.compatibility });
+    if (w.trust != null) out.push({ label: 'Trust', value: w.trust });
+    if (w.cost != null) out.push({ label: 'Cost', value: w.cost });
+    if (w.latency != null) out.push({ label: 'Latency', value: w.latency });
+    return out;
+  }, [latestVersion]);
+
+  // Policy + constraints rules derived from the spec.
+  const policyRules = useMemo(() => {
+    const spec = latestVersion?.spec_json;
+    if (!spec) return [] as string[];
+    const rules: string[] = [];
+    const p = spec.policy;
+    const c = spec.constraints;
+    if (p?.auto_approve_threshold != null) {
+      rules.push(`Auto-approve candidates above ${p.auto_approve_threshold} confidence.`);
+    }
+    if (p?.require_approval_for?.length) {
+      rules.push(`Require approval for: ${p.require_approval_for.join(', ')}.`);
+    }
+    if (c?.budget_limit != null) {
+      rules.push(`Budget cap: $${c.budget_limit.toFixed(2)} per run.`);
+    }
+    if (c?.max_tools_per_run != null) {
+      rules.push(`Max ${c.max_tools_per_run} tool invocations per run.`);
+    }
+    if (c?.timeout_seconds != null) {
+      rules.push(`Run timeout: ${c.timeout_seconds}s.`);
+    }
+    if (c?.max_retries != null) {
+      rules.push(`Up to ${c.max_retries} retry attempts on failure.`);
+    }
+    return rules;
+  }, [latestVersion]);
+
+  // Recent runs for this agent — drives Performance + Recent Decisions panels.
+  const { data: recentRuns = [] } = useQuery<Array<{ id: string; status: string; cost_actual?: number; started_at?: string; completed_at?: string }>>({
+    queryKey: ['agentRuns', agentId],
+    queryFn: async () => {
+      const { apiClient } = await import('@api/client');
+      const res = await apiClient.get<{ runs?: Array<Record<string, unknown>> | null }>(`/v0/runs?agent_id=${agentId}&limit=20`);
+      return (res.runs ?? []) as Array<{ id: string; status: string; cost_actual?: number; started_at?: string; completed_at?: string }>;
+    },
+    enabled: !!agentId,
+    staleTime: 30_000,
+  });
+
+  const performanceStats = useMemo(() => {
+    const total = recentRuns.length;
+    if (total === 0) {
+      return [
+        { label: 'Total runs', value: '0' },
+        { label: 'Success rate', value: '—' },
+        { label: 'Avg cost/run', value: '—' },
+      ];
+    }
+    const succeeded = recentRuns.filter((r) => r.status === 'SUCCEEDED').length;
+    const successRate = Math.round((succeeded / total) * 100);
+    const totalCost = recentRuns.reduce((sum, r) => sum + (r.cost_actual ?? 0), 0);
+    const avgCost = totalCost / total;
+    return [
+      { label: 'Total runs', value: String(total) },
+      { label: 'Success rate', value: `${successRate}%` },
+      { label: 'Avg cost/run', value: `$${avgCost.toFixed(4)}` },
+    ];
+  }, [recentRuns]);
+
+  const recentDecisions = useMemo(() => {
+    return recentRuns.slice(0, 5).map((r) => {
+      const ts = r.started_at ?? r.completed_at;
+      const when = ts ? new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+      const tone: 'success' | 'danger' = r.status === 'SUCCEEDED' ? 'success' : 'danger';
+      return {
+        title: r.id,
+        confidence: r.status,
+        detail: `${when}${r.cost_actual ? ` · $${r.cost_actual.toFixed(4)}` : ''}`,
+        tone,
+      };
+    });
+  }, [recentRuns]);
 
   /* ---------- Action handlers ---------- */
 
@@ -186,13 +300,11 @@ export default function AgentStudioPage() {
     // metadata.name must match ^[a-z][a-z0-9._-]{2,63}$ — slugify the display name
     const metaName = agentName.toLowerCase().replace(/[^a-z0-9._-]/g, '-').replace(/^[^a-z]/, 'a').slice(0, 63);
     const versionNum = (versions.length + 1).toString() + '.0.0';
-    const tools = AVAILABLE_TOOLS
-      .filter((t) => selectedTools.includes(t.id))
-      .map((t) => ({
-        tool_ref: `${t.id}@${t.version ?? '1.0.0'}`,
-        permissions: ['read', 'execute'] as string[],
-        max_invocations: t.maxCalls,
-      }));
+    const tools = selectedToolRefs.map((ref) => ({
+      tool_ref: ref,
+      permissions: ['read', 'execute'] as string[],
+      max_invocations: toolByRef.get(ref)?.maxCalls ?? 5,
+    }));
     if (tools.length === 0) {
       alert('Select at least one tool before saving.');
       return;
@@ -261,6 +373,25 @@ export default function AgentStudioPage() {
     navigate(`/agent-playground/${agentId}`);
   };
 
+  // Tab clicks: Builder/Playground navigate to real routes; Evals/Runs are
+  // in-page sections (no separate route yet) so they just switch local state.
+  const handleTabClick = (tabId: string) => {
+    if (tabId === 'builder') {
+      setActiveTab('builder');
+      return;
+    }
+    if (tabId === 'playground') {
+      handleTestInPlayground();
+      return;
+    }
+    // evals + runs: switch local tab; renderer will show a placeholder
+    setActiveTab(tabId);
+  };
+
+  const handleRunEvals = () => {
+    setActiveTab('evals');
+  };
+
   /* ---------- Derived display values ---------- */
 
   const agentName = agent?.name ?? 'Agent Studio';
@@ -276,15 +407,15 @@ export default function AgentStudioPage() {
   const healthChecks = [
     { label: 'Goal defined', status: (!!goal && goal.length > 0) ? 'pass' : 'fail' },
     { label: 'Model configured', status: !!selectedModel ? 'pass' : 'fail' },
-    { label: `Tools assigned (${selectedTools.length})`, status: selectedTools.length > 0 ? 'pass' : 'fail' },
-    { label: 'Policy rules set', status: 'pass' as const },
+    { label: `Tools assigned (${specToolDetails.length})`, status: specToolDetails.length > 0 ? 'pass' : 'fail' },
+    { label: 'Policy rules set', status: policyRules.length > 0 ? 'pass' : 'warn' },
     { label: 'Evals not run', status: 'warn' as const },
   ] as Array<{ label: string; status: 'pass' | 'fail' | 'warn' }>;
 
   const passCount = healthChecks.filter((c) => c.status === 'pass').length;
 
-  /* ---------- Tool rows for the pipeline panel ---------- */
-  const activeToolDefs = AVAILABLE_TOOLS.filter((t) => selectedTools.includes(t.id));
+  /* ---------- Tool rows for the pipeline panel (ones in this agent's spec) ---------- */
+  const activeToolDefs = specToolDetails;
 
   /* ---------- Loading state ---------- */
   if (agentLoading) {
@@ -328,7 +459,7 @@ export default function AgentStudioPage() {
                   <button
                     key={tab.id}
                     type="button"
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => handleTabClick(tab.id)}
                     className={cn(
                       'relative pb-1 text-[14px] transition-colors',
                       active ? 'font-medium text-[#1a1a1a]' : 'text-[#9b978f] hover:text-[#3a3a3a]'
@@ -467,57 +598,61 @@ export default function AgentStudioPage() {
                   </div>
                 </div>
 
-                {/* Policy */}
+                {/* Policy (derived from spec) */}
                 <div className="relative pl-2">
-                  {PIPELINE_TEMPLATE.slice(3, 4).map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <div
-                        key={item.id}
-                        className="rounded-[16px] border border-[#ece9e3] bg-white px-4 py-4 shadow-[0px_1px_8px_0px_rgba(0,0,0,0.03)]"
-                        style={{ borderLeftWidth: 3, borderLeftColor: item.accent }}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full">
-                            <Icon size={15} color={item.accent} />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-[13px] font-semibold text-[#1f1f1f]">Policy</p>
-                            <p className="mt-1 whitespace-pre-line text-[12px] leading-[1.45] text-[#9b978f]">
-                              {item.subtitle}
-                            </p>
-                          </div>
-                        </div>
+                  <div
+                    className="rounded-[16px] border border-[#ece9e3] bg-white px-4 py-4 shadow-[0px_1px_8px_0px_rgba(0,0,0,0.03)]"
+                    style={{ borderLeftWidth: 3, borderLeftColor: '#ff9800' }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full">
+                        <Shield size={15} color="#ff9800" />
                       </div>
-                    );
-                  })}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] font-semibold text-[#1f1f1f]">Policy</p>
+                        {(() => {
+                          const spec = latestVersion?.spec_json;
+                          const lines: string[] = [];
+                          if (spec?.policy?.auto_approve_threshold != null) {
+                            lines.push(`Auto-approve > ${spec.policy.auto_approve_threshold}`);
+                          }
+                          if (spec?.constraints?.budget_limit != null) {
+                            lines.push(`Budget cap: $${spec.constraints.budget_limit.toFixed(2)}`);
+                          }
+                          return lines.length > 0 ? (
+                            <p className="mt-1 whitespace-pre-line text-[12px] leading-[1.45] text-[#9b978f]">
+                              {lines.join('\n')}
+                            </p>
+                          ) : (
+                            <p className="mt-1 text-[12px] text-[#9b978f]">No policy defined</p>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Memory */}
+                {/* Memory (real entry count for this agent) */}
                 <div className="relative pl-2">
-                  {PIPELINE_TEMPLATE.slice(4).map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <div
-                        key={item.id}
-                        className="rounded-[16px] border border-[#ece9e3] bg-white px-4 py-4 shadow-[0px_1px_8px_0px_rgba(0,0,0,0.03)]"
-                        style={{ borderLeftWidth: 3, borderLeftColor: item.accent }}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full">
-                            <Icon size={15} color={item.accent} />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-3">
-                              <p className="truncate text-[13px] font-semibold text-[#1f1f1f]">Memory</p>
-                              <span className="shrink-0 text-[12px] text-[#9b978f]">{item.value}</span>
-                            </div>
-                            <p className="mt-1 text-[12px] leading-[1.45] text-[#9b978f]">{item.subtitle}</p>
-                          </div>
-                        </div>
+                  <div
+                    className="rounded-[16px] border border-[#ece9e3] bg-white px-4 py-4 shadow-[0px_1px_8px_0px_rgba(0,0,0,0.03)]"
+                    style={{ borderLeftWidth: 3, borderLeftColor: '#607d8b' }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full">
+                        <Database size={15} color="#607d8b" />
                       </div>
-                    );
-                  })}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="truncate text-[13px] font-semibold text-[#1f1f1f]">Memory</p>
+                          <span className="shrink-0 text-[12px] text-[#9b978f]">{memories.length} entries</span>
+                        </div>
+                        <p className="mt-1 text-[12px] leading-[1.45] text-[#9b978f]">
+                          {memories.length === 0 ? 'No memories yet' : `${memories.length} learned items`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
               </div>
@@ -540,7 +675,33 @@ export default function AgentStudioPage() {
           {/* Center panel — editor */}
           <section className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[20px] border border-[#ece9e3] bg-white shadow-[0px_1px_10px_0px_rgba(0,0,0,0.05)]">
             <div className="h-full overflow-y-auto px-6 pb-28 pt-6 scrollbar-hide lg:px-7">
-              <div className="space-y-8">
+              {activeTab === 'evals' && agentId && (
+                <div className="space-y-4">
+                  <SectionLabel>Evals</SectionLabel>
+                  <EvalTab agentId={agentId} />
+                </div>
+              )}
+              {activeTab === 'runs' && (
+                <div className="space-y-4">
+                  <SectionLabel>Runs for this agent</SectionLabel>
+                  {recentDecisions.length === 0 ? (
+                    <p className="text-[14px] text-[#9b978f]">No runs yet.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {recentDecisions.map((d) => (
+                        <div key={d.title} className="flex items-center justify-between rounded-[12px] border border-[#ece9e3] bg-white px-4 py-3">
+                          <div>
+                            <p className="font-mono text-[13px] text-[#1f1f1f]">{d.title}</p>
+                            <p className="text-[12px] text-[#9b978f]">{d.detail}</p>
+                          </div>
+                          <span className={cn('text-[12px] font-medium uppercase', d.tone === 'success' ? 'text-[#4caf50]' : 'text-[#e74c3c]')}>{d.confidence}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className={cn('space-y-8', activeTab !== 'builder' && 'hidden')}>
 
                 {/* Goal */}
                 <section>
@@ -659,20 +820,25 @@ export default function AgentStudioPage() {
                       <span>Max Calls</span>
                     </div>
 
-                    {AVAILABLE_TOOLS.map((tool) => {
-                      const isSelected = selectedTools.includes(tool.id);
-                      const isActive = tool.id === selectedToolId;
+                    {catalogRows.length === 0 && (
+                      <p className="px-4 py-6 text-center text-[13px] text-[#9b978f]">
+                        No tools registered yet. Visit <button className="text-[#ad35ff] underline" onClick={() => navigate('/tools')}>Tools</button> to register one.
+                      </p>
+                    )}
+                    {catalogRows.map((tool) => {
+                      const isSelected = selectedToolRefs.includes(tool.ref);
+                      const isActive = tool.ref === highlightedToolRef;
 
                       return (
                         <button
-                          key={tool.id}
+                          key={tool.ref}
                           type="button"
                           onClick={() => {
-                            setSelectedToolId(tool.id);
-                            setSelectedTools((prev) =>
-                              prev.includes(tool.id)
-                                ? prev.filter((id) => id !== tool.id)
-                                : [...prev, tool.id]
+                            setHighlightedToolRef(tool.ref);
+                            setSelectedToolRefs((prev) =>
+                              prev.includes(tool.ref)
+                                ? prev.filter((r) => r !== tool.ref)
+                                : [...prev, tool.ref]
                             );
                           }}
                           className={cn(
@@ -694,12 +860,7 @@ export default function AgentStudioPage() {
                           <span className="font-mono text-[13px] text-[#99958f]">{tool.version}</span>
                           <div className="flex items-center gap-2">
                             {tool.permissions.map((permission) => (
-                              <PermissionPill
-                                key={permission}
-                                muted={permission !== 'exec' && tool.id === 'result-analyzer' && !isSelected}
-                              >
-                                {permission}
-                              </PermissionPill>
+                              <PermissionPill key={permission}>{permission}</PermissionPill>
                             ))}
                           </div>
                           <div className="flex justify-end">
@@ -735,14 +896,20 @@ export default function AgentStudioPage() {
                     </div>
 
                     <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                      {SCORING_WEIGHTS.map((weight) => (
+                      {scoringWeights.map((weight) => (
                         <WeightToken key={weight.label} label={weight.label} value={weight.value} />
                       ))}
                     </div>
 
-                    <p className="mt-4 text-[12px] font-medium text-[#4caf50]">
-                      Weights must sum to 1.0 · Current: 1.0
-                    </p>
+                    {(() => {
+                      const sum = scoringWeights.reduce((s, w) => s + w.value, 0);
+                      const ok = Math.abs(sum - 1.0) < 0.01;
+                      return (
+                        <p className={cn('mt-4 text-[12px] font-medium', ok ? 'text-[#4caf50]' : 'text-[#ff9800]')}>
+                          Weights must sum to 1.0 · Current: {sum.toFixed(2)}
+                        </p>
+                      );
+                    })()}
                   </div>
                 </section>
 
@@ -750,7 +917,10 @@ export default function AgentStudioPage() {
                 <section>
                   <SectionLabel>Policy Rules</SectionLabel>
                   <div className="space-y-3">
-                    {POLICY_RULES.map((rule) => (
+                    {policyRules.length === 0 && (
+                      <p className="text-[13px] text-[#9b978f]">No policy or constraints set in spec.</p>
+                    )}
+                    {policyRules.map((rule) => (
                       <div key={rule} className="text-[14px] leading-[1.55] text-[#4f4a43]">
                         {rule}
                       </div>
@@ -774,13 +944,14 @@ export default function AgentStudioPage() {
                 </button>
                 <button
                   type="button"
+                  onClick={handleRunEvals}
                   className="inline-flex h-[36px] min-w-[114px] items-center justify-center gap-2 rounded-[11px] border border-[#d87aff] bg-white px-4 text-[12px] font-medium text-[#a43df0] transition-colors hover:bg-[#fcf5ff]"
                 >
                   <FlaskConical size={13} strokeWidth={2} />
                   <span>Run Evals</span>
                 </button>
                 <span className="whitespace-nowrap text-[12px] text-[#8f8a83]">
-                  {selectedTools.length} tools · 2 policies · 12 memories
+                  {specToolDetails.length} tools · {policyRules.length} policies · {memories.length} memories
                 </span>
               </div>
             </div>
@@ -850,16 +1021,16 @@ export default function AgentStudioPage() {
                 </p>
               </section>
 
-              {/* Performance */}
+              {/* Performance (computed from real runs for this agent) */}
               <section className="border-b border-[#f0ede8] py-5">
                 <SectionLabel>Performance</SectionLabel>
                 <div className="space-y-2.5 text-[14px]">
-                  {PERFORMANCE_STATS.map((item) => (
+                  {performanceStats.map((item) => (
                     <div key={item.label} className="flex items-center justify-between gap-3">
                       <span className="text-[#8f8a83]">{item.label}</span>
                       <span className={cn(
                         'font-medium text-[#1f1f1f]',
-                        item.label === 'Success rate' && 'text-[#4caf50]'
+                        item.label === 'Success rate' && item.value !== '—' && 'text-[#4caf50]'
                       )}>
                         {item.value}
                       </span>
@@ -868,16 +1039,19 @@ export default function AgentStudioPage() {
                 </div>
               </section>
 
-              {/* Recent decisions */}
+              {/* Recent decisions (real runs for this agent) */}
               <section className="border-b border-[#f0ede8] py-5">
-                <SectionLabel>Recent Decisions</SectionLabel>
+                <SectionLabel>Recent Runs</SectionLabel>
                 <div className="space-y-4">
-                  {RECENT_DECISIONS.map((decision) => (
+                  {recentDecisions.length === 0 && (
+                    <p className="text-[13px] text-[#9b978f]">No runs yet for this agent.</p>
+                  )}
+                  {recentDecisions.map((decision) => (
                     <div key={decision.title} className="space-y-1">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-[14px] font-medium text-[#1f1f1f]">{decision.title}</p>
+                        <p className="font-mono text-[12px] font-medium text-[#1f1f1f] truncate">{decision.title}</p>
                         <span className={cn(
-                          'text-[14px] font-medium',
+                          'text-[12px] font-medium uppercase',
                           decision.tone === 'success' ? 'text-[#4caf50]' : 'text-[#e74c3c]'
                         )}>
                           {decision.confidence}
@@ -948,12 +1122,13 @@ export default function AgentStudioPage() {
             </button>
             <button
               type="button"
+              onClick={handleRunEvals}
               className="inline-flex h-[40px] min-w-[124px] items-center justify-center gap-2 rounded-[12px] border border-[#d87aff] bg-white px-4 text-[14px] font-medium text-[#a43df0]"
             >
               <FlaskConical size={16} />
               <span>Run Evals</span>
             </button>
-            <span className="text-[14px] text-[#8f8a83]">{selectedTools.length} tools · 2 policies · 12 memories</span>
+            <span className="text-[14px] text-[#8f8a83]">{specToolDetails.length} tools · {policyRules.length} policies · {memories.length} memories</span>
           </div>
         </div>
 

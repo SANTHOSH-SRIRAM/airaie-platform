@@ -29,8 +29,10 @@ export default function AgentPlaygroundPage() {
   const closeRightPanel = useUiStore((s) => s.closeRightPanel);
 
   const setActiveSession = useAgentPlaygroundStore((s) => s.setActiveSession);
+  const setActiveAgentId = useAgentPlaygroundStore((s) => s.setActiveAgentId);
   const pendingUserPrompt = useAgentPlaygroundStore((s) => s.pendingUserPrompt);
   const clearPendingUserPrompt = useAgentPlaygroundStore((s) => s.clearPendingUserPrompt);
+  const chatRunId = useAgentPlaygroundStore((s) => s.chatRunId);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
@@ -73,13 +75,15 @@ export default function AgentPlaygroundPage() {
     setSidebarContentType('sessions');
     setBottomBar('agent-playground');
     openRightPanel('inspector');
+    setActiveAgentId(resolvedAgentId);
 
     return () => {
       setSidebarContentType('navigation');
       hideBottomBar();
       closeRightPanel();
+      setActiveAgentId(null);
     };
-  }, [setSidebarContentType, setBottomBar, hideBottomBar, openRightPanel, closeRightPanel]);
+  }, [setSidebarContentType, setBottomBar, hideBottomBar, openRightPanel, closeRightPanel, setActiveAgentId, resolvedAgentId]);
 
   // Show proposal panel when reviewing
   useEffect(() => {
@@ -230,7 +234,7 @@ export default function AgentPlaygroundPage() {
         </div>
 
         {/* Proposal / Policy / Outputs panel */}
-        {((showProposal && execution.proposal) || execution.runId) && (
+        {((showProposal && execution.proposal) || execution.runId || chatRunId) && (
           <div
             data-testid="execution-panel"
             className="w-[480px] border-l border-cds-border-subtle overflow-y-auto bg-cds-layer-01 shrink-0"
@@ -263,8 +267,12 @@ export default function AgentPlaygroundPage() {
                 </>
               )}
 
-              {/* Live tool outputs from the worker (visible the moment a run starts) */}
-              {execution.runId && <RunOutputsPanel runId={execution.runId} />}
+              {/* Live tool outputs from the worker (visible the moment a run starts).
+                  Source can be either the dry-run/approve path (execution.runId) or the
+                  tool-aware chat path (chatRunId from the session message handler). */}
+              {(execution.runId || chatRunId) && (
+                <RunOutputsPanel runId={(execution.runId ?? chatRunId)!} />
+              )}
             </div>
           </div>
         )}

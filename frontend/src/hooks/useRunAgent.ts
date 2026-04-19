@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useRunAgent } from '@hooks/useAgents';
 import { apiClient } from '@api/client';
 import type { ActionProposal } from '@components/agents/execution/ProposalViewer';
@@ -34,11 +34,16 @@ export function useAgentExecution(agentId: string, version: number): AgentExecut
   const [error, setError] = useState<string | null>(null);
 
   const runAgentMutation = useRunAgent(agentId, version);
+  // Remember the inputs from the last propose() so approve() can re-use them
+  // for the live run (otherwise the live run regenerates the proposal with
+  // empty inputs and the tool sees no data).
+  const lastProposeInputsRef = useRef<Record<string, unknown>>({});
 
   // Dry run: get proposal without executing
   const propose = useCallback(async (inputs: Record<string, unknown>) => {
     setPhase('proposing');
     setError(null);
+    lastProposeInputsRef.current = inputs;
     try {
       const result = await runAgentMutation.mutateAsync({ inputs, dryRun: true });
       const apiProposal = (result as Record<string, unknown>).proposal as ActionProposal | undefined;
@@ -79,12 +84,13 @@ export function useAgentExecution(agentId: string, version: number): AgentExecut
     }
   }, [runAgentMutation]);
 
-  // Approve: transition proposal to approved and trigger execution
+  // Approve: transition proposal to approved and trigger execution.
+  // Re-use the inputs that produced the proposal so the live run sends the
+  // same payload to the tool.
   const approve = useCallback(() => {
     if (proposal) {
       setProposal({ ...proposal, status: 'approved' });
-      // Auto-execute after approval
-      execute({});
+      execute(lastProposeInputsRef.current);
     }
   }, [proposal, execute]);
 

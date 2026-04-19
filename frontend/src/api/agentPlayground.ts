@@ -103,19 +103,34 @@ export async function closeSession(agentId: string, sessionId: string): Promise<
 
 /**
  * POST /v0/agents/{id}/sessions/{sid}/messages
- * Sends a chat message and returns the assistant response.
- * Response is wrapped: { message: BackendSessionMessage }
+ * Sends a chat message. When the agent's tool-aware LLM decides to invoke a
+ * tool, the response includes run_id (and possibly approval_id) so the UI
+ * can subscribe to the resulting run's outputs.
  */
+export interface SendMessageResult {
+  message: ChatMessage;
+  runId?: string;
+  approvalId?: string;
+}
+
 export async function sendMessage(
   agentId: string,
   sessionId: string,
   content: string,
-): Promise<ChatMessage> {
-  const resp = await apiClient.post<{ message: BackendSessionMessage }>(
+): Promise<SendMessageResult> {
+  const resp = await apiClient.post<{
+    message: BackendSessionMessage;
+    run_id?: string;
+    approval_id?: string;
+  }>(
     `/v0/agents/${agentId}/sessions/${sessionId}/messages`,
     { content, context_updates: {} },
   );
-  return mapSessionMessage(resp.message, Date.now());
+  return {
+    message: mapSessionMessage(resp.message, Date.now()),
+    runId: resp.run_id,
+    approvalId: resp.approval_id,
+  };
 }
 
 // ── Session run (dry-run / live) ───────────────────────────────────
