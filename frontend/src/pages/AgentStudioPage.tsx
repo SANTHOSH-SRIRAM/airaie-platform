@@ -11,6 +11,7 @@ import {
 import { useToolList } from '@hooks/useTools';
 import { listMemories } from '@api/agentMemory';
 import EvalTab from '@components/agents/eval/EvalTab';
+import RunsTab from '@components/agents/runs/RunsTab';
 import type { AgentSpec, AgentToolPermission } from '@api/agents';
 import {
   ArrowLeft,
@@ -685,24 +686,12 @@ export default function AgentStudioPage() {
                 </div>
               )}
               {activeTab === 'runs' && (
-                <div className="space-y-4">
-                  <SectionLabel>Runs for this agent</SectionLabel>
-                  {recentDecisions.length === 0 ? (
-                    <p className="text-[14px] text-[#9b978f]">No runs yet.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {recentDecisions.map((d) => (
-                        <div key={d.title} className="flex items-center justify-between rounded-[12px] border border-[#ece9e3] bg-white px-4 py-3">
-                          <div>
-                            <p className="font-mono text-[13px] text-[#1f1f1f]">{d.title}</p>
-                            <p className="text-[12px] text-[#9b978f]">{d.detail}</p>
-                          </div>
-                          <span className={cn('text-[12px] font-medium uppercase', d.tone === 'success' ? 'text-[#4caf50]' : 'text-[#e74c3c]')}>{d.confidence}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <RunsTab
+                  runs={recentRuns}
+                  agentName={agentName}
+                  versionLabel={versionLabel}
+                  versionStatus={versionStatus}
+                />
               )}
               <div className={cn('space-y-8', activeTab !== 'builder' && 'hidden')}>
 
