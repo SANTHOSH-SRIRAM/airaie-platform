@@ -3,11 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Zap, Loader2, RotateCcw } from 'lucide-react';
 import { useUiStore } from '@store/uiStore';
 import { useAgentPlaygroundStore } from '@store/agentPlaygroundStore';
-import { useCreateSession } from '@hooks/useAgentPlayground';
+import { useCreateSession, useSessionList } from '@hooks/useAgentPlayground';
 import { useAgentExecution } from '@hooks/useRunAgent';
-import { useAgentVersions } from '@hooks/useAgents';
+import { useAgent, useAgentVersions } from '@hooks/useAgents';
 import AgentPlaygroundTopBar from '@components/agents/AgentPlaygroundTopBar';
 import ChatInterface from '@components/agents/ChatInterface';
+import PlaygroundActionBar from '@components/agents/PlaygroundActionBar';
 import ProposalViewer from '@components/agents/execution/ProposalViewer';
 import PolicyDecisionDisplay from '@components/agents/execution/PolicyDecisionDisplay';
 import ApprovalFlow from '@components/agents/execution/ApprovalFlow';
@@ -60,19 +61,44 @@ export default function AgentPlaygroundPage() {
   };
 
   // Resolve latest published version from API
+  const { data: agentData } = useAgent(resolvedAgentId);
   const { data: versionsData } = useAgentVersions(resolvedAgentId);
-  const latestVersion = (versionsData ?? [])
+  const latestVersionNum = (versionsData ?? [])
     .filter((v) => v.status === 'published')
     .reduce((max, v) => Math.max(max, v.version), 0) || 1;
+  const latestVersion = latestVersionNum;
+  const agentDisplayName = agentData?.name ?? 'Agent';
+  const agentVersionLabel = `v${latestVersionNum}`;
 
   // Execution flow state
   const execution = useAgentExecution(resolvedAgentId, latestVersion);
   const [showProposal, setShowProposal] = useState(false);
 
   const createSessionMutation = useCreateSession(resolvedAgentId);
+  const { data: existingSessions = [] } = useSessionList(resolvedAgentId);
 
-  // Create a session when the page mounts for this agentId
+  // Drop a stale (expired/missing) session id so the auto-pick logic re-runs.
+  // existingSessions contains only ACTIVE sessions from the backend.
   useEffect(() => {
+    if (!sessionId) return;
+    if (existingSessions.length === 0) return; // still loading or empty
+    const stillActive = existingSessions.some((s) => s.id === sessionId);
+    if (!stillActive) {
+      setSessionId(null);
+      setActiveSession(null);
+    }
+  }, [sessionId, existingSessions, setActiveSession]);
+
+  // Pick up the most recent existing session on mount; only create a new
+  // one if there are none. The "+ New Session" button creates explicitly.
+  useEffect(() => {
+    if (sessionId) return; // already have one selected
+    if (existingSessions.length > 0) {
+      const latest = existingSessions[0]; // backend returns newest-first
+      setSessionId(latest.id);
+      setActiveSession(latest.id);
+      return;
+    }
     let cancelled = false;
     createSessionMutation.mutateAsync()
       .then((sess) => {
@@ -87,14 +113,33 @@ export default function AgentPlaygroundPage() {
         }
       });
     return () => { cancelled = true; };
-    // Run once on mount per agentId
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedAgentId]);
+  }, [resolvedAgentId, existingSessions.length]);
+
+  // When the user clicks a different session in the sidebar, sync local state.
+  const activeSessionFromStore = useAgentPlaygroundStore((s) => s.activeSessionId);
+  useEffect(() => {
+    if (activeSessionFromStore && activeSessionFromStore !== sessionId) {
+      setSessionId(activeSessionFromStore);
+    }
+  }, [activeSessionFromStore, sessionId]);
+
+  const handleNewSession = async () => {
+    try {
+      const sess = await createSessionMutation.mutateAsync();
+      setSessionId(sess.id);
+      setActiveSession(sess.id);
+      setSessionError(null);
+    } catch (err: unknown) {
+      setSessionError((err as { message?: string })?.message ?? 'Failed to create session');
+    }
+  };
 
   // Set layout on mount, clean up on unmount
   useEffect(() => {
     setSidebarContentType('sessions');
-    setBottomBar('agent-playground');
+    // PlaygroundActionBar is rendered inline (full chat-column width)
+    // instead of via the global floating bottom-bar slot.
     openRightPanel('inspector');
     setActiveAgentId(resolvedAgentId);
 
@@ -153,7 +198,7 @@ export default function AgentPlaygroundPage() {
   // Loading state while session is being created
   if (createSessionMutation.isPending && !sessionId) {
     return (
-      <div data-testid="agent-playground-page" className="flex flex-col h-full">
+      <div data-testid="agent-playground-page" className="flex flex-col h-full bg-[#faf9f6] overflow-hidden">
         <AgentPlaygroundTopBar agentName="Loading..." agentVersion="" activeTab={activeTab} onTabChange={handleTabChange} />
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="animate-spin text-cds-text-secondary" size={24} />
@@ -165,7 +210,7 @@ export default function AgentPlaygroundPage() {
   // Error state if session creation failed
   if (sessionError) {
     return (
-      <div data-testid="agent-playground-page" className="flex flex-col h-full">
+      <div data-testid="agent-playground-page" className="flex flex-col h-full bg-[#faf9f6] overflow-hidden">
         <AgentPlaygroundTopBar agentName="Error" agentVersion="" activeTab={activeTab} onTabChange={handleTabChange} />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-sm text-red-500">{sessionError} — is the backend running on localhost:8080?</p>
@@ -177,25 +222,34 @@ export default function AgentPlaygroundPage() {
   // Render evals tab
   if (activeTab === 'evals') {
     return (
-      <div data-testid="agent-playground-page" className="flex flex-col h-full">
+      <div data-testid="agent-playground-page" className="flex flex-col h-full bg-surface-bg overflow-hidden">
         <AgentPlaygroundTopBar
-          agentName="FEA Optimizer Agent"
-          agentVersion="v2"
+          agentName={agentDisplayName}
+          agentVersion={agentVersionLabel}
           activeTab={activeTab}
           onTabChange={handleTabChange}
+          onNewSession={handleNewSession}
+          newSessionPending={createSessionMutation.isPending}
         />
-        <EvalTab agentId={resolvedAgentId} />
+        <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <EvalTab agentId={resolvedAgentId} />
+          </div>
+          <PlaygroundActionBar />
+        </div>
       </div>
     );
   }
 
   return (
-    <div data-testid="agent-playground-page" className="flex flex-col h-full">
+    <div data-testid="agent-playground-page" className="flex flex-col h-full bg-[#faf9f6] overflow-hidden">
       <AgentPlaygroundTopBar
-        agentName="FEA Optimizer Agent"
-        agentVersion="v2"
+        agentName={agentDisplayName}
+        agentVersion={agentVersionLabel}
         activeTab={activeTab}
         onTabChange={handleTabChange}
+        onNewSession={handleNewSession}
+        newSessionPending={createSessionMutation.isPending}
       />
 
       {/* Execution controls bar */}
@@ -249,50 +303,41 @@ export default function AgentPlaygroundPage() {
 
       {/* Main content area */}
       <div className="flex-1 flex min-h-0">
-        {/* Chat area */}
+        {/* Chat area + inline action bar at bottom */}
         <div className="flex-1 flex flex-col min-h-0">
           <ChatInterface agentId={resolvedAgentId} sessionId={sessionId} />
+          <PlaygroundActionBar />
         </div>
 
-        {/* Proposal / Policy / Outputs panel */}
-        {((showProposal && execution.proposal) || execution.runId || chatRunId) && (
+        {/* Proposal / Policy review panel (Dry Run flow only).
+            Live tool outputs are now rendered INLINE in the chat thread via
+            <InlineToolCallCard /> — no side panel for chat-driven runs. */}
+        {showProposal && execution.proposal && (
           <div
             data-testid="execution-panel"
-            className="w-[480px] border-l border-cds-border-subtle overflow-y-auto bg-cds-layer-01 shrink-0"
+            className="w-[480px] border-l border-[#ece9e3] overflow-y-auto bg-white shrink-0"
           >
             <div className="p-4 space-y-4">
-              {/* Proposal Viewer (review phase only) */}
-              {showProposal && execution.proposal && (
-                <>
-                  <ProposalViewer
-                    proposal={execution.proposal}
-                    onApprove={handleApprove}
-                    onReject={handleReject}
-                  />
+              <ProposalViewer
+                proposal={execution.proposal}
+                onApprove={handleApprove}
+                onReject={handleReject}
+              />
 
-                  {execution.policyDecision && (
-                    <PolicyDecisionDisplay decision={execution.policyDecision} />
-                  )}
-
-                  {needsApproval && pendingActions.length > 0 && execution.proposal.status === 'draft' && (
-                    <ApprovalFlow
-                      proposalId={execution.proposal.id}
-                      approvalId={execution.approvalId ?? undefined}
-                      agentId={resolvedAgentId}
-                      sessionId={sessionId ?? undefined}
-                      actions={pendingActions}
-                      onApproved={handleApprove}
-                      onRejected={handleReject}
-                    />
-                  )}
-                </>
+              {execution.policyDecision && (
+                <PolicyDecisionDisplay decision={execution.policyDecision} />
               )}
 
-              {/* Live tool outputs from the worker (visible the moment a run starts).
-                  Source can be either the dry-run/approve path (execution.runId) or the
-                  tool-aware chat path (chatRunId from the session message handler). */}
-              {(execution.runId || chatRunId) && (
-                <RunOutputsPanel runId={(execution.runId ?? chatRunId)!} />
+              {needsApproval && pendingActions.length > 0 && execution.proposal.status === 'draft' && (
+                <ApprovalFlow
+                  proposalId={execution.proposal.id}
+                  approvalId={execution.approvalId ?? undefined}
+                  agentId={resolvedAgentId}
+                  sessionId={sessionId ?? undefined}
+                  actions={pendingActions}
+                  onApproved={handleApprove}
+                  onRejected={handleReject}
+                />
               )}
             </div>
           </div>
