@@ -10,6 +10,8 @@ import PageSkeleton from '@components/ui/PageSkeleton';
 import DashboardPage from '@pages/DashboardPage';
 import LoginPage from '@pages/LoginPage';
 import RegisterPage from '@pages/RegisterPage';
+import ForgotPasswordPage from '@pages/ForgotPasswordPage';
+import ResetPasswordPage from '@pages/ResetPasswordPage';
 
 /* -- Lazy-loaded pages (heavy deps: ReactFlow, recharts, rich editors) -- */
 const WorkflowsPage = lazy(() => import('@pages/WorkflowsPage'));
@@ -60,6 +62,8 @@ function App() {
         {/* Public auth routes (no AppShell) */}
         <Route path={ROUTES.LOGIN} element={<LoginPage />} />
         <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
+        <Route path={ROUTES.FORGOT_PASSWORD} element={<ForgotPasswordPage />} />
+        <Route path={ROUTES.RESET_PASSWORD} element={<ResetPasswordPage />} />
 
         {/* Protected app routes (with AppShell) */}
         <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>

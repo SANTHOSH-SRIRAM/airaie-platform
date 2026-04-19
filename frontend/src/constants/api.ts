@@ -19,9 +19,12 @@ export const API_ENDPOINTS = {
     REGISTER: '/auth/register',
     LOGOUT: '/auth/logout',
     REFRESH: '/auth/refresh',
+    WHOAMI: '/auth/whoami',
     FORGOT_PASSWORD: '/auth/forgot-password',
     RESET_PASSWORD: '/auth/reset-password',
-    ME: '/auth/me',
+    CHANGE_PASSWORD: '/auth/change-password',
+    SESSIONS: '/auth/sessions',
+    KEYS: '/auth/keys',
   },
 
   // Projects

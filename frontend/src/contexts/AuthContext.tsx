@@ -1,14 +1,16 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import type { User } from '@/types/auth';
+import { USE_MOCKS, IS_DEV } from '@/utils/env';
 
 interface AuthContextValue {
   user: User | null;
   accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  error: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
 }
 
@@ -22,6 +24,25 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+/** Decode JWT payload to read expiry without validation (client-side check only). */
+function decodeJWTPayload(token: string): { exp?: number } | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1]));
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+/** Returns true if the token is expired or will expire within bufferMs. */
+function isTokenExpired(token: string, bufferMs = 60_000): boolean {
+  const payload = decodeJWTPayload(token);
+  if (!payload?.exp) return true;
+  return Date.now() >= payload.exp * 1000 - bufferMs;
+}
+
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(() => {
     try {
@@ -31,10 +52,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return null;
     }
   });
-  const [accessToken, setAccessToken] = useState<string | null>(
-    () => localStorage.getItem(TOKEN_KEY)
-  );
+  const [accessToken, setAccessToken] = useState<string | null>(() => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    // Validate stored token hasn't expired
+    if (token && token !== 'mock-token-123' && isTokenExpired(token, 0)) {
+      return null; // expired — will attempt refresh
+    }
+    return token;
+  });
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const isAuthenticated = !!accessToken && !!user;
 
@@ -55,52 +82,70 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [user]);
 
+  const clearAuth = useCallback(() => {
+    setAccessToken(null);
+    setUser(null);
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+    localStorage.removeItem(USER_KEY);
+  }, []);
+
   const login = useCallback(async (email: string, password: string) => {
     setIsLoading(true);
+    setError(null);
     try {
       const res = await fetch('/v0/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
-      }).catch(() => null); // Catch network errors (backend not running)
+      }).catch(() => null);
 
+      // Mock fallback: ONLY in development mode when mocks are enabled
       if (!res || !res.ok) {
-        console.warn('Backend unavailable or login failed. Using mock authentication for UI development.');
-        setAccessToken('mock-token-123');
-        localStorage.setItem(REFRESH_KEY, 'mock-refresh-123');
-        setUser({
-          id: 'dev-user-1',
-          email,
-          name: email.split('@')[0],
-          role: 'admin',
-          tier: 'pro',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
-        return;
+        if (USE_MOCKS) {
+          console.warn('[DEV] Backend unavailable — using mock authentication.');
+          setAccessToken('mock-token-dev');
+          localStorage.setItem(REFRESH_KEY, 'mock-refresh-dev');
+          setUser({
+            id: 'dev-user-1',
+            email,
+            name: email.split('@')[0],
+            role: 'admin',
+            tier: 'pro',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+          return;
+        }
+        // Production: surface the error
+        const body = res ? await res.json().catch(() => ({})) : {};
+        throw new Error(body?.error?.message || 'Login failed. Please check your credentials.');
       }
 
       const data = await res.json();
       setAccessToken(data.access_token);
       localStorage.setItem(REFRESH_KEY, data.refresh_token);
 
-      // Fetch user info
+      // Fetch user info from whoami
       const whoamiRes = await fetch('/v0/auth/whoami', {
         headers: { Authorization: `Bearer ${data.access_token}` },
       });
       if (whoamiRes.ok) {
         const whoami = await whoamiRes.json();
-        const userObj: User = {
+        setUser({
           id: whoami.user_id,
           email: whoami.email,
-          name: whoami.email.split('@')[0],
+          name: whoami.name || whoami.email.split('@')[0],
           role: whoami.role || 'user',
           tier: 'free',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-        };
-        setUser(userObj);
+        });
       }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Login failed';
+      setError(message);
+      throw err;
     } finally {
       setIsLoading(false);
     }
@@ -108,6 +153,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const register = useCallback(async (name: string, email: string, password: string) => {
     setIsLoading(true);
+    setError(null);
     try {
       const res = await fetch('/v0/auth/register', {
         method: 'POST',
@@ -116,28 +162,49 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }).catch(() => null);
 
       if (!res || !res.ok) {
-        console.warn('Backend unavailable or registration failed. Falling back to mock login.');
+        if (USE_MOCKS) {
+          console.warn('[DEV] Backend unavailable — mock registration.');
+        } else {
+          const body = res ? await res.json().catch(() => ({})) : {};
+          throw new Error(body?.error?.message || 'Registration failed.');
+        }
       }
 
-      // Auto-login after registration (or mock registration)
+      // Auto-login after registration
       await login(email, password);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Registration failed';
+      setError(message);
+      throw err;
     } finally {
       setIsLoading(false);
     }
   }, [login]);
 
-  const logout = useCallback(() => {
-    setAccessToken(null);
-    setUser(null);
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_KEY);
-    localStorage.removeItem(USER_KEY);
-  }, []);
+  const logout = useCallback(async () => {
+    // Call backend logout to revoke tokens
+    const refreshToken = localStorage.getItem(REFRESH_KEY);
+    try {
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (token && token !== 'mock-token-dev') {
+        await fetch('/v0/auth/logout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        }).catch(() => null); // best-effort
+      }
+    } finally {
+      clearAuth();
+    }
+  }, [clearAuth]);
 
   const refreshTokenFn = useCallback(async () => {
     const storedRefresh = localStorage.getItem(REFRESH_KEY);
-    if (!storedRefresh) {
-      logout();
+    if (!storedRefresh || storedRefresh.startsWith('mock-')) {
+      if (!USE_MOCKS) clearAuth();
       return;
     }
 
@@ -149,7 +216,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       });
 
       if (!res.ok) {
-        logout();
+        clearAuth();
         return;
       }
 
@@ -157,13 +224,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setAccessToken(data.access_token);
       localStorage.setItem(REFRESH_KEY, data.refresh_token);
     } catch {
-      logout();
+      clearAuth();
     }
-  }, [logout]);
+  }, [clearAuth]);
 
   // Auto-refresh token before expiry (every 12 minutes for 15-minute tokens)
   useEffect(() => {
-    if (!accessToken) return;
+    if (!accessToken || accessToken.startsWith('mock-')) return;
 
     const interval = setInterval(() => {
       refreshTokenFn();
@@ -172,6 +239,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => clearInterval(interval);
   }, [accessToken, refreshTokenFn]);
 
+  // On mount: check if stored token is expired and try refresh
+  useEffect(() => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (token && token !== 'mock-token-dev' && isTokenExpired(token)) {
+      refreshTokenFn();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -179,6 +255,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         accessToken,
         isAuthenticated,
         isLoading,
+        error,
         login,
         register,
         logout,

@@ -1,4 +1,5 @@
 import { API_CONFIG } from '@constants/api';
+import { USE_MOCKS } from '@/utils/env';
 
 export class ApiError extends Error {
   status: number;
@@ -19,9 +20,6 @@ export class ApiError extends Error {
   }
 }
 
-// Check env flag for mock mode
-const USE_MOCKS = import.meta.env.VITE_USE_MOCKS !== 'false';
-
 /** Returns the stored JWT access token, or null. */
 function getAccessToken(): string | null {
   return localStorage.getItem('airaie-access-token');
@@ -34,7 +32,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   // Build headers with auth token
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'X-Project-Id': 'prj_default', // Default project for dev
+    'X-Project-Id': 'prj_default',
   };
   const token = getAccessToken();
   if (token) {
@@ -50,11 +48,39 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     signal: options?.signal ?? AbortSignal.timeout(API_CONFIG.TIMEOUT),
   });
 
-  // Handle 401 — redirect to login
+  // Handle 401 — dispatch event so AuthContext can handle it cleanly (not a hard redirect)
   if (res.status === 401) {
+    // Attempt token refresh before giving up
+    const refreshToken = localStorage.getItem('airaie-refresh-token');
+    if (refreshToken && !refreshToken.startsWith('mock-')) {
+      try {
+        const refreshRes = await fetch('/v0/auth/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+        if (refreshRes.ok) {
+          const data = await refreshRes.json();
+          localStorage.setItem('airaie-access-token', data.access_token);
+          localStorage.setItem('airaie-refresh-token', data.refresh_token);
+          // Retry the original request with the new token
+          const retryHeaders = { ...headers, ...options?.headers, Authorization: `Bearer ${data.access_token}` };
+          const retryRes = await fetch(url, { ...options, headers: retryHeaders });
+          if (retryRes.ok) {
+            if (retryRes.status === 204) return undefined as T;
+            return retryRes.json() as Promise<T>;
+          }
+        }
+      } catch {
+        // Refresh failed — fall through to auth clear
+      }
+    }
+
+    // Clear auth state and redirect via SPA navigation
     localStorage.removeItem('airaie-access-token');
     localStorage.removeItem('airaie-refresh-token');
     localStorage.removeItem('airaie-user');
+    window.dispatchEvent(new CustomEvent('auth:unauthorized'));
     if (window.location.pathname !== '/login') {
       window.location.href = '/login';
     }

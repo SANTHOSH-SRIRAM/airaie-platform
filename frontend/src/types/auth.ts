@@ -1,10 +1,13 @@
+export type UserRole = 'viewer' | 'engineer' | 'maintainer' | 'admin' | 'owner' | 'user';
+export type UserTier = 'free' | 'pro' | 'enterprise';
+
 export interface User {
   id: string;
   email: string;
   name: string;
   avatar?: string;
-  role: 'user' | 'admin';
-  tier: 'free' | 'pro' | 'enterprise';
+  role: UserRole;
+  tier: UserTier;
   createdAt: string;
   updatedAt: string;
 }
@@ -22,18 +25,32 @@ export interface RegisterRequest {
 }
 
 export interface AuthResponse {
-  user: User;
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: number;
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
 }
 
 export interface ResetPasswordRequest {
   token: string;
-  password: string;
+  new_password: string;
 }
 
 export interface ChangePasswordRequest {
-  currentPassword: string;
-  newPassword: string;
+  current_password: string;
+  new_password: string;
+}
+
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface UserSession {
+  id: string;
+  user_id: string;
+  user_agent: string;
+  ip_address: string;
+  created_at: string;
+  last_active: string;
+  expires_at: string;
 }

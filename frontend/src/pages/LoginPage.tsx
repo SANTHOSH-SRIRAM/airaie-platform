@@ -180,12 +180,12 @@ export default function LoginPage() {
                 <label htmlFor="password" className="text-[12.5px] font-medium text-[#1a1a1a]">
                   Password
                 </label>
-                <button
-                  type="button"
+                <Link
+                  to="/forgot-password"
                   className="text-[11.5px] text-[#1a1a1a] underline underline-offset-2 hover:text-[#6b6b6b] transition-colors"
                 >
                   Forgot password?
-                </button>
+                </Link>
               </div>
               <div className="relative">
                 <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#acacac]" />
