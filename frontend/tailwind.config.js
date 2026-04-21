@@ -147,7 +147,7 @@ export default {
           50: 'var(--orange-50)',
           60: 'var(--orange-60)',
         },
-        purple: { 50: 'var(--purple-50)', 60: 'var(--purple-60)' },
+        purple: { 10: 'var(--purple-10)', 50: 'var(--purple-50)', 60: 'var(--purple-60)' },
         teal:   { 50: 'var(--teal-50)', 60: 'var(--teal-60)' },
       },
 
