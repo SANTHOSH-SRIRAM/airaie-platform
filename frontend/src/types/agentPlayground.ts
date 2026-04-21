@@ -3,6 +3,7 @@ export interface AgentSession {
   id: string;
   agent_id: string;
   project_id: string;
+  user_id?: string;   // owner; empty/absent for legacy pre-migration-024 sessions
   context: string | {
     _decision_trace?: BackendDecisionTraceEntry[];
     [key: string]: unknown;
@@ -30,6 +31,8 @@ export interface BackendSessionMessage {
   content: string;
   context_updates: Record<string, unknown>;
   timestamp: string;
+  run_id?: string;       // populated when the assistant invoked a tool
+  approval_id?: string;
 }
 
 export interface ToolCallProposal {
@@ -49,6 +52,8 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   toolCallProposal?: ToolCallProposal;
+  /** Set when the assistant invoked a tool — drives inline tool-call card. */
+  runId?: string;
 }
 
 export interface DecisionTraceEntry {
@@ -61,11 +66,11 @@ export interface DecisionTraceEntry {
 }
 
 export interface AgentMetrics {
-  iterations: { current: number; max: number };
-  totalCost: number;
-  budgetRemaining: number;
-  duration: number;
-  timeout: number;
+  iterations: { current: number; max: number | null };
+  totalCost: number | null;
+  budgetRemaining: number | null;
+  duration: number | null;
+  timeout: number | null;
 }
 
 export interface PolicyStatus {

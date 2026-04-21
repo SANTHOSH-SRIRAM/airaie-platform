@@ -6,7 +6,6 @@ import type {
   ChatMessage,
   DecisionTraceEntry,
   AgentMetrics,
-  PolicyStatus,
 } from '@/types/agentPlayground';
 
 // ── Mapping helpers ──────────────────────────────────────────────
@@ -22,6 +21,7 @@ export function mapSessionMessage(
     role: msg.role === 'assistant' ? 'agent' : 'user',
     content: msg.content,
     timestamp: msg.timestamp,
+    runId: msg.run_id,
   };
 }
 
@@ -57,20 +57,7 @@ export function mapTraceEntry(entry: BackendDecisionTraceEntry): DecisionTraceEn
   };
 }
 
-// ── Derived defaults (no dedicated backend endpoints for these) ──
-
-const DEFAULT_METRICS: AgentMetrics = {
-  iterations: { current: 0, max: 5 },
-  totalCost: 0,
-  budgetRemaining: 10.0,
-  duration: 0,
-  timeout: 600,
-};
-
-const DEFAULT_POLICY: PolicyStatus = {
-  autoApproveThreshold: 0.85,
-  autoApproveEnabled: true,
-};
+// ── Derived data (no dedicated backend endpoints for these) ──
 
 // ── Session lifecycle ──────────────────────────────────────────────
 
@@ -98,6 +85,19 @@ export async function createSession(agentId: string): Promise<AgentSession> {
  */
 export async function getSession(agentId: string, sessionId: string): Promise<AgentSession> {
   return apiClient.get<AgentSession>(`/v0/agents/${agentId}/sessions/${sessionId}`);
+}
+
+/**
+ * GET /v0/agents/{id}/sessions
+ * Returns all sessions for an agent, newest first. Pass activeOnly=true to
+ * exclude expired/closed sessions.
+ */
+export async function listSessions(agentId: string, activeOnly = false): Promise<AgentSession[]> {
+  const params = activeOnly ? '?active_only=true' : '';
+  const res = await apiClient.get<{ sessions: AgentSession[] | null; count: number }>(
+    `/v0/agents/${agentId}/sessions${params}`,
+  );
+  return res.sessions ?? [];
 }
 
 /**
@@ -206,17 +206,14 @@ export function extractDecisionTrace(session: AgentSession): DecisionTraceEntry[
   return trace.map(mapTraceEntry);
 }
 
-/** Derive AgentMetrics stub from session (backend has no /metrics endpoint) */
+/** Derive AgentMetrics from session — only iteration count has a real source. */
 export function deriveMetrics(session: AgentSession): AgentMetrics {
   const history = decodeBase64Json<BackendSessionMessage[]>(session.history);
-  const msgCount = history?.length ?? 0;
   return {
-    ...DEFAULT_METRICS,
-    iterations: { current: msgCount, max: 20 },
+    iterations: { current: history?.length ?? 0, max: null },
+    totalCost: null,
+    budgetRemaining: null,
+    duration: null,
+    timeout: null,
   };
-}
-
-/** Policy status stub — derive from session context or return default */
-export function derivePolicyStatus(): PolicyStatus {
-  return DEFAULT_POLICY;
 }

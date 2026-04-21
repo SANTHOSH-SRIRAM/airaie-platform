@@ -1,16 +1,8 @@
 import type { AgentMetrics } from '@/types/agentPlayground';
-import ProgressBar from '@components/ui/ProgressBar';
 import { cn } from '@utils/cn';
 
 interface LiveMetricsProps {
   metrics: AgentMetrics | undefined | null;
-}
-
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return s > 0 ? `${m}m ${s}s` : `${m}m`;
 }
 
 export default function LiveMetrics({ metrics }: LiveMetricsProps) {
@@ -25,9 +17,7 @@ export default function LiveMetrics({ metrics }: LiveMetricsProps) {
     );
   }
 
-  const totalBudget = metrics.totalCost + metrics.budgetRemaining;
-  const budgetUsedPercent = totalBudget > 0 ? Math.round((metrics.totalCost / totalBudget) * 100) : 0;
-  const durationWarning = metrics.timeout > 0 && (metrics.duration / metrics.timeout) > 0.8;
+  const maxLabel = metrics.iterations.max != null ? String(metrics.iterations.max) : '—';
 
   return (
     <div data-testid="live-metrics" className="space-y-3">
@@ -40,53 +30,49 @@ export default function LiveMetrics({ metrics }: LiveMetricsProps) {
         <div className="flex items-center justify-between text-xs">
           <span className="text-cds-text-secondary">Iterations</span>
           <span className="text-cds-text-primary font-medium">
-            {metrics.iterations.current} / {metrics.iterations.max}
+            {metrics.iterations.current} / {maxLabel}
           </span>
         </div>
 
         {/* Total cost */}
         <div className="flex items-center justify-between text-xs">
           <span className="text-cds-text-secondary">Total cost</span>
-          <span data-testid="metric-cost" className="text-cds-text-primary font-medium">
-            ${metrics.totalCost.toFixed(2)}
+          <span
+            data-testid="metric-cost"
+            className={cn('font-medium', metrics.totalCost != null ? 'text-cds-text-primary' : 'text-cds-text-secondary')}
+          >
+            {metrics.totalCost != null ? `$${metrics.totalCost.toFixed(2)}` : '—'}
           </span>
         </div>
 
         {/* Budget remaining */}
-        <div>
-          <div className="flex items-center justify-between text-xs mb-1">
-            <span className="text-cds-text-secondary">Budget remaining</span>
-            <span data-testid="metric-budget" className="text-cds-text-primary font-medium">
-              ${metrics.budgetRemaining.toFixed(2)}
-            </span>
-          </div>
-          <ProgressBar
-            value={budgetUsedPercent}
-            max={100}
-            variant={budgetUsedPercent > 80 ? 'red' : 'blue'}
-            size="sm"
-            showPercent={false}
-          />
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-cds-text-secondary">Budget remaining</span>
+          <span
+            data-testid="metric-budget"
+            className={cn('font-medium', metrics.budgetRemaining != null ? 'text-cds-text-primary' : 'text-cds-text-secondary')}
+          >
+            {metrics.budgetRemaining != null ? `$${metrics.budgetRemaining.toFixed(2)}` : '—'}
+          </span>
         </div>
 
         {/* Duration */}
         <div className="flex items-center justify-between text-xs">
           <span className="text-cds-text-secondary">Duration</span>
-          <span className="text-cds-text-primary font-medium">
-            {formatDuration(metrics.duration)}
+          <span className={cn('font-medium', metrics.duration != null ? 'text-cds-text-primary' : 'text-cds-text-secondary')}>
+            {metrics.duration != null
+              ? (metrics.duration < 60 ? `${metrics.duration}s` : `${Math.floor(metrics.duration / 60)}m ${metrics.duration % 60}s`)
+              : '—'}
           </span>
         </div>
 
         {/* Timeout */}
         <div className="flex items-center justify-between text-xs">
           <span className="text-cds-text-secondary">Timeout</span>
-          <span
-            className={cn(
-              'font-medium',
-              durationWarning ? 'text-yellow-30' : 'text-cds-text-primary',
-            )}
-          >
-            {formatDuration(metrics.timeout)}
+          <span className={cn('font-medium', metrics.timeout != null ? 'text-cds-text-primary' : 'text-cds-text-secondary')}>
+            {metrics.timeout != null
+              ? (metrics.timeout < 60 ? `${metrics.timeout}s` : `${Math.floor(metrics.timeout / 60)}m ${metrics.timeout % 60}s`)
+              : '—'}
           </span>
         </div>
       </div>

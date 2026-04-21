@@ -7,19 +7,24 @@ interface ChatInterfaceProps {
   sessionId?: string | null;
 }
 
-export default function ChatInterface({ agentId = 'agent_fea_opt', sessionId = null }: ChatInterfaceProps) {
+export default function ChatInterface({ agentId, sessionId = null }: ChatInterfaceProps) {
   const { data: messages } = useSessionMessages(agentId, sessionId);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll only the messages container (NOT the whole page) when new
+  // messages arrive. Using scrollIntoView() on a sentinel <div> bubbles the
+  // scroll up to the nearest scrollable ancestor, which can be the window if
+  // the layout's overflow chain is broken — that pushed the entire page off
+  // screen. Scrolling the container directly keeps the page anchored.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = scrollContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   if (!sessionId) {
     return (
-      <div data-testid="chat-interface" className="flex-1 flex items-center justify-center">
-        <p data-testid="chat-empty-state" className="text-sm text-cds-text-secondary">
+      <div data-testid="chat-interface" className="flex-1 flex items-center justify-center bg-[#faf9f6]">
+        <p data-testid="chat-empty-state" className="text-sm text-[#9b978f]">
           Select a session or create a new one to start chatting.
         </p>
       </div>
@@ -28,8 +33,8 @@ export default function ChatInterface({ agentId = 'agent_fea_opt', sessionId = n
 
   if (!messages || messages.length === 0) {
     return (
-      <div data-testid="chat-interface" className="flex-1 flex items-center justify-center">
-        <p data-testid="chat-empty-state" className="text-sm text-cds-text-secondary">
+      <div data-testid="chat-interface" className="flex-1 flex items-center justify-center bg-[#faf9f6]">
+        <p data-testid="chat-empty-state" className="text-sm text-[#9b978f]">
           Start the conversation by sending a message below.
         </p>
       </div>
@@ -37,12 +42,15 @@ export default function ChatInterface({ agentId = 'agent_fea_opt', sessionId = n
   }
 
   return (
-    <div data-testid="chat-interface" className="flex-1 flex flex-col min-h-0">
-      <div data-testid="chat-messages" className="flex-1 overflow-y-auto px-6 py-4">
+    <div data-testid="chat-interface" className="flex-1 flex flex-col min-h-0 bg-[#faf9f6]">
+      <div
+        ref={scrollContainerRef}
+        data-testid="chat-messages"
+        className="flex-1 overflow-y-auto px-8 py-6"
+      >
         {messages.map((msg) => (
           <ChatMessage key={msg.id} message={msg} />
         ))}
-        <div ref={messagesEndRef} />
       </div>
     </div>
   );

@@ -7,9 +7,15 @@ import { cn } from '@utils/cn';
 export interface RunRow {
   id: string;
   status: string;
+  run_type?: string;
   cost_actual?: number;
   started_at?: string;
   completed_at?: string;
+}
+
+export interface HealthCheck {
+  label: string;
+  ok: boolean;
 }
 
 interface RunsTabProps {
@@ -17,9 +23,10 @@ interface RunsTabProps {
   agentName: string;
   versionLabel?: string;
   versionStatus?: string;
+  healthChecks?: HealthCheck[];
 }
 
-/* ---------- Decorative copy (module-scope; mirrors EvalTab CASE_SUBTITLES pattern) ---------- */
+/* ---------- Decorative copy ---------- */
 
 const HERO_SUBTITLE =
   'This layout reorganizes the runs page into a dashboard-like command center: top-level KPIs first, grouped execution cards second, and summary insights pinned to the side.';
@@ -29,12 +36,6 @@ const TODAY_SECTION_SUBTITLE =
 
 const EARLIER_SECTION_SUBTITLE =
   'Archived executions are compressed into a lighter list with quick access to the same stats.';
-
-const DEFAULT_RUN_DESCRIPTION =
-  'Manual run completed instantly with no external tools invoked.';
-
-const DEFAULT_TRACE_PREVIEW =
-  'Input parsed → word totals generated → response returned.';
 
 const DEFAULT_CURRENT_STATE_TITLE = 'Agent ready for more tests';
 const DEFAULT_CURRENT_STATE_BODY =
@@ -71,7 +72,12 @@ function formatDuration(run: RunRow): string {
     const s = Math.round(ms / 1000);
     return `${s}s`;
   }
-  return '0s';
+  return '—';
+}
+
+function formatMode(runType?: string): string {
+  if (!runType) return '—';
+  return runType.charAt(0).toUpperCase() + runType.slice(1).toLowerCase();
 }
 
 function titleCase(s: string): string {
@@ -79,7 +85,7 @@ function titleCase(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
-/* ---------- Status pill (inline; no new Badge variant) ---------- */
+/* ---------- Status pill ---------- */
 
 function StatusPill({ status }: { status: string }) {
   const upper = (status ?? '').toUpperCase();
@@ -178,8 +184,8 @@ export default function RunsTab({
   agentName: _agentName,
   versionLabel: _versionLabel,
   versionStatus: _versionStatus,
+  healthChecks = [],
 }: RunsTabProps) {
-  // Partition into today vs earlier buckets.
   const { todayRuns, archivedRuns } = useMemo(() => {
     const today: RunRow[] = [];
     const earlier: RunRow[] = [];
@@ -191,7 +197,6 @@ export default function RunsTab({
     return { todayRuns: today, archivedRuns: earlier };
   }, [runs]);
 
-  // KPI values.
   const { total, todayCount, avgCostLabel } = useMemo(() => {
     const t = runs.length;
     const tc = todayRuns.length;
@@ -204,8 +209,12 @@ export default function RunsTab({
     };
   }, [runs, todayRuns]);
 
-  // Health check placeholder until backend exposes a real endpoint.
-  const healthCheckLabel = '2/5';
+  const healthPassed = healthChecks.filter((h) => h.ok).length;
+  const healthTotal = healthChecks.length;
+  const healthCheckLabel = healthTotal > 0 ? `${healthPassed}/${healthTotal}` : '—';
+  const healthSub = healthTotal > 0 && healthPassed < healthTotal
+    ? `${healthTotal - healthPassed} check${healthTotal - healthPassed === 1 ? '' : 's'} failing`
+    : undefined;
 
   const hasRuns = runs.length > 0;
 
@@ -267,7 +276,7 @@ export default function RunsTab({
             testId="runs-kpi-health"
             label="Health check"
             value={healthCheckLabel}
-            sub="Builder setup still incomplete"
+            sub={healthSub}
           />
         </div>
 
@@ -331,10 +340,6 @@ export default function RunsTab({
                               </p>
                             </div>
 
-                            <p className="text-sm text-content-secondary">
-                              {DEFAULT_RUN_DESCRIPTION}
-                            </p>
-
                             <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-content-secondary">
                               <span>
                                 Cost{' '}
@@ -348,34 +353,17 @@ export default function RunsTab({
                                   {formatDuration(run)}
                                 </span>
                               </span>
-                              <span>
-                                Tools{' '}
-                                <span className="ml-1 font-semibold text-content-primary">
-                                  0
-                                </span>
-                              </span>
-                            </div>
-
-                            <div className="rounded-lg bg-surface-hover px-4 py-3">
-                              <p className="text-2xs font-semibold uppercase tracking-[0.12em] text-content-secondary">
-                                Trace preview
-                              </p>
-                              <p className="mt-1 text-xs text-content-secondary leading-relaxed">
-                                {DEFAULT_TRACE_PREVIEW}
-                              </p>
                             </div>
                           </div>
 
-                          {/* Right: 2x2 mini-grid */}
-                          <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:min-w-[180px] sm:border-l sm:border-border-subtle sm:pl-5">
+                          {/* Right: mini-grid */}
+                          <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:min-w-[160px] sm:border-l sm:border-border-subtle sm:pl-5">
                             <MiniStat
                               label="Status"
                               value={statusLabel}
                               valueClassName={statusClass}
                             />
-                            <MiniStat label="Mode" value="Manual" />
-                            <MiniStat label="Messages" value="1" />
-                            <MiniStat label="Policies" value="0" />
+                            <MiniStat label="Mode" value={formatMode(run.run_type)} />
                           </div>
                         </div>
                       </div>
@@ -421,7 +409,7 @@ export default function RunsTab({
                             {run.id}
                           </p>
                           <p className="text-xs text-content-secondary truncate">
-                            {formatTimestamp(ts)} · {statusLabel} · ${cost.toFixed(4)} · 0 tools
+                            {formatTimestamp(ts)} · {statusLabel} · ${cost.toFixed(4)}
                           </p>
                         </div>
                         <ChevronRight

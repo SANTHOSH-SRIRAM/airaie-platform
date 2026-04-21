@@ -9,6 +9,7 @@ import {
   usePublishAgentVersion,
 } from '@hooks/useAgents';
 import { useToolList } from '@hooks/useTools';
+import { useAuth } from '@contexts/AuthContext';
 import { listMemories } from '@api/agentMemory';
 import EvalTab from '@components/agents/eval/EvalTab';
 import RunsTab from '@components/agents/runs/RunsTab';
@@ -93,6 +94,7 @@ export default function AgentStudioPage() {
   const navigate = useNavigate();
   const { agentId } = useParams<{ agentId?: string }>();
   const [searchParams] = useSearchParams();
+  const { user } = useAuth();
 
   /* ---------- Real API hooks ---------- */
   const { data: agent, isLoading: agentLoading } = useAgent(agentId ?? null);
@@ -319,7 +321,7 @@ export default function AgentStudioPage() {
       metadata: {
         name: metaName,
         version: versionNum,
-        owner: 'usr_dev_admin',
+        owner: user?.id ?? 'usr_anonymous',
         domain_tags: ['general'],
         description: goal,
       },
@@ -691,6 +693,7 @@ export default function AgentStudioPage() {
                   agentName={agentName}
                   versionLabel={versionLabel}
                   versionStatus={versionStatus}
+                  healthChecks={healthChecks.map((h) => ({ label: h.label, ok: h.status === 'pass' }))}
                 />
               )}
               <div className={cn('space-y-8', activeTab !== 'builder' && 'hidden')}>

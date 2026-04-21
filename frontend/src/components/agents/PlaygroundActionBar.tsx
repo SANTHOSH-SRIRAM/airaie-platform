@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { Square, Trash2, Check, Paperclip, ArrowUp } from 'lucide-react';
 import { useAgentPlaygroundStore } from '@store/agentPlaygroundStore';
 import { useCloseSession, useApproveAction, useSendMessage } from '@hooks/useAgentPlayground';
-import Button from '@components/ui/Button';
 import { cn } from '@utils/cn';
 
 export default function PlaygroundActionBar() {
@@ -11,7 +11,7 @@ export default function PlaygroundActionBar() {
   // AgentPlaygroundPage; fall back to params/default for legacy callers.
   const { agentId: paramAgentId } = useParams<{ agentId?: string }>();
   const storeAgentId = useAgentPlaygroundStore((s) => s.activeAgentId);
-  const agentId = storeAgentId ?? paramAgentId ?? 'agent_fea_opt';
+  const agentId = storeAgentId ?? paramAgentId ?? null;
   const activeSessionId = useAgentPlaygroundStore((s) => s.activeSessionId);
   const isAgentRunning = useAgentPlaygroundStore((s) => s.isAgentRunning);
   const isSending = useAgentPlaygroundStore((s) => s.isSending);
@@ -52,80 +52,94 @@ export default function PlaygroundActionBar() {
   return (
     <div
       data-testid="playground-action-bar"
-      className="flex items-center gap-3 h-14 px-4 border-t border-cds-border-subtle bg-cds-layer-01"
+      className="shrink-0 px-6 pt-3 pb-4 bg-[#faf9f6] border-t border-[#ece9e3]"
     >
-      {/* Left: action buttons */}
-      <div className="flex items-center gap-2 shrink-0">
-        <Button
-          data-testid="stop-agent-btn"
-          variant="danger"
-          size="sm"
-          disabled={!isAgentRunning || !activeSessionId}
-          onClick={() => activeSessionId && closeSession.mutate()}
-        >
-          Stop Agent
-        </Button>
-        <Button
-          data-testid="clear-session-btn"
-          variant="secondary"
-          size="sm"
-          disabled={!activeSessionId}
-          onClick={() => clearSession()}
-        >
-          Clear Session
-        </Button>
-        <Button
-          data-testid="approve-all-btn"
-          variant="secondary"
-          size="sm"
-          disabled={!activeSessionId}
-          onClick={() => activeSessionId && approveAction.mutate()}
-        >
-          Approve All
-        </Button>
+      {/* Floating control pill — Stop / Clear / Approve + status */}
+      <div className="mx-auto mb-3 flex max-w-3xl items-center justify-center">
+        <div className="inline-flex items-center gap-2 rounded-full border border-[#ece9e3] bg-white px-2 py-1.5 shadow-[0px_4px_12px_0px_rgba(0,0,0,0.06)]">
+          <button
+            data-testid="stop-agent-btn"
+            type="button"
+            disabled={!isAgentRunning || !activeSessionId}
+            onClick={() => activeSessionId && closeSession.mutate()}
+            className="inline-flex items-center gap-1.5 rounded-full border border-[#fecaca] bg-white px-3 py-1.5 text-[12px] font-medium text-[#e74c3c] hover:bg-[#fef2f2] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Square className="w-3 h-3" strokeWidth={2.5} />
+            Stop Agent
+          </button>
+          <button
+            data-testid="clear-session-btn"
+            type="button"
+            disabled={!activeSessionId}
+            onClick={() => clearSession()}
+            className="inline-flex items-center gap-1.5 rounded-full border border-[#e7e3dd] bg-white px-3 py-1.5 text-[12px] font-medium text-[#4f4a43] hover:bg-[#faf8f5] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Trash2 className="w-3 h-3" />
+            Clear Session
+          </button>
+          <button
+            data-testid="approve-all-btn"
+            type="button"
+            disabled={!activeSessionId}
+            onClick={() => activeSessionId && approveAction.mutate()}
+            className="inline-flex items-center gap-1.5 rounded-full border border-[#86efac] bg-white px-3 py-1.5 text-[12px] font-medium text-[#16a34a] hover:bg-[#f0fdf4] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Check className="w-3 h-3" strokeWidth={2.5} />
+            Approve All
+          </button>
+          <span className="ml-2 mr-2 inline-flex items-center gap-1.5 text-[12px] text-[#6f6a63]">
+            {isAgentRunning ? (
+              <>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#a855f7] animate-pulse" />
+                <span>
+                  Agent active
+                  {metrics && ` · Step ${metrics.iterations.current}/${metrics.iterations.max} running`}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#d0cdc8]" />
+                <span className="text-[#9b978f]">Agent idle</span>
+              </>
+            )}
+          </span>
+        </div>
       </div>
 
-      {/* Center: status */}
-      <div className="flex items-center gap-2 text-xs text-cds-text-secondary mx-auto shrink-0">
-        {isAgentRunning ? (
-          <>
-            <span className="w-2 h-2 rounded-full bg-green-50 animate-pulse" />
-            <span>
-              Agent active
-              {metrics && ` \u00b7 Step ${metrics.iterations.current}/${metrics.iterations.max} running`}
-            </span>
-          </>
-        ) : (
-          <span className="text-cds-text-placeholder">Agent idle</span>
-        )}
-      </div>
-
-      {/* Right: chat input */}
-      <div className="flex items-center gap-2 flex-1 max-w-md ml-auto">
-        <input
-          data-testid="chat-input"
-          type="text"
-          className={cn(
-            'flex-1 h-8 px-3 text-sm bg-cds-field-01 text-cds-text-primary rounded',
-            'border border-cds-border-strong',
-            'placeholder:text-cds-text-placeholder',
-            'focus:outline-2 focus:outline-cds-focus focus:outline-offset-[-2px]',
-          )}
-          placeholder="Send a message..."
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={!activeSessionId}
-        />
-        <Button
+      {/* Send input row */}
+      <div className="mx-auto flex max-w-3xl items-center gap-2">
+        <div className="relative flex-1">
+          <Paperclip className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9b978f]" />
+          <input
+            data-testid="chat-input"
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={!activeSessionId}
+            placeholder="Send context or ask a question..."
+            className={cn(
+              'w-full h-12 pl-10 pr-4 text-[14px] rounded-[14px] bg-white text-[#1f1f1f] placeholder:text-[#9b978f]',
+              'border border-[#ece9e3] shadow-[0px_2px_8px_0px_rgba(0,0,0,0.04)]',
+              'focus:outline-none focus:border-[#d8b4fe] focus:ring-2 focus:ring-[#f3e8ff]',
+              'disabled:opacity-60 disabled:cursor-not-allowed',
+            )}
+          />
+        </div>
+        <button
           data-testid="send-message-btn"
-          variant="primary"
-          size="sm"
-          disabled={!inputValue.trim() || isSending || !activeSessionId}
+          type="button"
           onClick={handleSend}
+          disabled={!inputValue.trim() || isSending || !activeSessionId}
+          className={cn(
+            'w-12 h-12 inline-flex items-center justify-center rounded-full shrink-0 transition-colors',
+            'bg-[#a855f7] text-white shadow-[0px_4px_12px_0px_rgba(168,85,247,0.3)]',
+            'hover:bg-[#9333ea] disabled:bg-[#d0cdc8] disabled:shadow-none disabled:cursor-not-allowed',
+          )}
+          aria-label="Send"
         >
-          Send
-        </Button>
+          <ArrowUp className="w-5 h-5" strokeWidth={2.5} />
+        </button>
       </div>
     </div>
   );

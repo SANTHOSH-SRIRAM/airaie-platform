@@ -9,7 +9,6 @@ import {
   extractMessages,
   extractDecisionTrace,
   deriveMetrics,
-  derivePolicyStatus,
 } from '@api/agentPlayground';
 
 export const agentSessionKeys = {
@@ -19,29 +18,25 @@ export const agentSessionKeys = {
 };
 
 /**
- * Lists active sessions for an agent. Newest first.
- * Used to pick up existing sessions on page load instead of creating a new one every time.
- */
-export function useSessionList(agentId: string) {
-  return useQuery({
-    queryKey: agentSessionKeys.list(agentId),
-    queryFn: () => listSessions(agentId),
-    enabled: !!agentId,
-    staleTime: 10_000,
-  });
-}
-
-/**
  * Creates a new session for an agent.
  * Call mutateAsync() on mount in AgentPlaygroundPage, store the returned session.id.
  */
 export function useCreateSession(agentId: string) {
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: () => createSession(agentId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: agentSessionKeys.list(agentId) });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: agentSessionKeys.list(agentId) }),
+  });
+}
+
+/** Lists ACTIVE (non-expired) sessions for an agent, newest first. Polls every 5s. */
+export function useSessionList(agentId: string | null) {
+  return useQuery({
+    queryKey: agentSessionKeys.list(agentId ?? ''),
+    queryFn: () => listSessions(agentId!, true), // activeOnly=true
+    enabled: !!agentId,
+    refetchInterval: 5000,
+    staleTime: 5000,
   });
 }
 
@@ -130,9 +125,7 @@ export function useSessionMetrics(agentId: string, sessionId: string | null) {
   return { data: session ? deriveMetrics(session) : null, ...rest };
 }
 
-/**
- * Returns policy status (currently static from spec, no backend endpoint).
- */
+/** @deprecated No backend endpoint for policy status — use spec_json.policy from useAgentVersions. */
 export function usePolicyStatus(_agentId: string) {
-  return { data: derivePolicyStatus() };
+  return { data: null };
 }

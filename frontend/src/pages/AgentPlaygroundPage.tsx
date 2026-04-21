@@ -6,6 +6,7 @@ import { useAgentPlaygroundStore } from '@store/agentPlaygroundStore';
 import { useCreateSession, useSessionList } from '@hooks/useAgentPlayground';
 import { useAgentExecution } from '@hooks/useRunAgent';
 import { useAgent, useAgentVersions } from '@hooks/useAgents';
+import { useAuth } from '@contexts/AuthContext';
 import AgentPlaygroundTopBar from '@components/agents/AgentPlaygroundTopBar';
 import ChatInterface from '@components/agents/ChatInterface';
 import PlaygroundActionBar from '@components/agents/PlaygroundActionBar';
@@ -17,12 +18,10 @@ import EvalTab from '@components/agents/eval/EvalTab';
 import Button from '@components/ui/Button';
 import Badge from '@components/ui/Badge';
 
-const DEFAULT_AGENT_ID = 'agent_fea_opt';
-
 export default function AgentPlaygroundPage() {
   const { agentId } = useParams<{ agentId?: string }>();
   const navigate = useNavigate();
-  const resolvedAgentId = agentId ?? DEFAULT_AGENT_ID;
+  const resolvedAgentId = agentId ?? '';
 
   // If we landed here without a real agentId, the default points at a
   // fixture agent that doesn't exist in the DB and session creation will
@@ -39,6 +38,7 @@ export default function AgentPlaygroundPage() {
   const openRightPanel = useUiStore((s) => s.openRightPanel);
   const closeRightPanel = useUiStore((s) => s.closeRightPanel);
 
+  const { user } = useAuth();
   const setActiveSession = useAgentPlaygroundStore((s) => s.setActiveSession);
   const setActiveAgentId = useAgentPlaygroundStore((s) => s.setActiveAgentId);
   const pendingUserPrompt = useAgentPlaygroundStore((s) => s.pendingUserPrompt);
@@ -89,14 +89,19 @@ export default function AgentPlaygroundPage() {
     }
   }, [sessionId, existingSessions, setActiveSession]);
 
-  // Pick up the most recent existing session on mount; only create a new
-  // one if there are none. The "+ New Session" button creates explicitly.
+  // Owner-aware auto-pick: resume only the caller's own session; create fresh otherwise.
+  // Thanks to Task 1 (backend), existingSessions is already server-scoped by user_id.
+  // Belt-and-braces: also filter client-side on session.user_id === user.id.
   useEffect(() => {
+    if (!resolvedAgentId || !user?.id) return;
     if (sessionId) return; // already have one selected
-    if (existingSessions.length > 0) {
-      const latest = existingSessions[0]; // backend returns newest-first
-      setSessionId(latest.id);
-      setActiveSession(latest.id);
+    const owned = (existingSessions ?? []).filter(
+      (s) => s.user_id === user.id || s.user_id == null,
+    );
+    const newest = owned[0]; // list is ordered newest-first by backend
+    if (newest) {
+      setSessionId(newest.id);
+      setActiveSession(newest.id);
       return;
     }
     let cancelled = false;
@@ -114,7 +119,7 @@ export default function AgentPlaygroundPage() {
       });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedAgentId, existingSessions.length]);
+  }, [resolvedAgentId, user?.id, existingSessions.length]);
 
   // When the user clicks a different session in the sidebar, sync local state.
   const activeSessionFromStore = useAgentPlaygroundStore((s) => s.activeSessionId);

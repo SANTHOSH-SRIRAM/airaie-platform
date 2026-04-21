@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAgentPlaygroundStore } from '@store/agentPlaygroundStore';
-import { useSession, useSessionTrace, useSessionMetrics, usePolicyStatus } from '@hooks/useAgentPlayground';
+import { useSession, useSessionTrace, useSessionMetrics } from '@hooks/useAgentPlayground';
+import { useAgentVersions } from '@hooks/useAgents';
 import DecisionTraceTimeline from '@components/agents/DecisionTraceTimeline';
 import LiveMetrics from '@components/agents/LiveMetrics';
 import PolicyStatusCard from '@components/agents/PolicyStatusCard';
@@ -16,18 +17,30 @@ const INSPECTOR_TABS = [
 type InspectorTab = typeof INSPECTOR_TABS[number]['id'];
 
 export default function InspectorPanel() {
-  // Inspector is rendered via a global right-panel slot; useParams may be empty.
   const { agentId: paramAgentId } = useParams<{ agentId?: string }>();
   const storeAgentId = useAgentPlaygroundStore((s) => s.activeAgentId);
-  const agentId = storeAgentId ?? paramAgentId ?? 'agent_fea_opt';
+  const agentId = storeAgentId ?? paramAgentId ?? null;
   const activeSessionId = useAgentPlaygroundStore((s) => s.activeSessionId);
-  const setPolicyStatus = useAgentPlaygroundStore((s) => s.setPolicyStatus);
   const [activeTab, setActiveTab] = useState<InspectorTab>('overview');
 
-  const { data: activeSession } = useSession(agentId, activeSessionId);
-  const { data: traceData } = useSessionTrace(agentId, activeSessionId);
-  const { data: metricsData } = useSessionMetrics(agentId, activeSessionId);
-  const { data: policyData } = usePolicyStatus(agentId);
+  const { data: activeSession } = useSession(agentId ?? '', activeSessionId);
+  const { data: traceData } = useSessionTrace(agentId ?? '', activeSessionId);
+  const { data: metricsData } = useSessionMetrics(agentId ?? '', activeSessionId);
+
+  // Get the latest published version to read spec_json.policy.
+  const { data: versions = [] } = useAgentVersions(agentId);
+  const latestVersion = versions.length
+    ? [...versions].sort((a, b) => b.version - a.version).find((v) => v.status === 'published') ?? versions[0]
+    : undefined;
+  const specPolicy = latestVersion?.spec_json?.policy ?? null;
+
+  if (!agentId) {
+    return (
+      <div data-testid="inspector-panel" className="p-4 flex items-center justify-center h-full">
+        <p className="text-sm text-cds-text-secondary">No agent selected.</p>
+      </div>
+    );
+  }
 
   if (!activeSessionId || !activeSession) {
     return (
@@ -112,16 +125,7 @@ export default function InspectorPanel() {
 
           {/* POLICY STATUS */}
           <div className="p-3">
-            {policyData ? (
-              <PolicyStatusCard
-                policyStatus={policyData}
-                onToggleAutoApprove={(enabled) => {
-                  setPolicyStatus({ ...policyData, autoApproveEnabled: enabled });
-                }}
-              />
-            ) : (
-              <p className="text-xs text-cds-text-secondary">Loading policy...</p>
-            )}
+            <PolicyStatusCard policy={specPolicy} />
           </div>
         </>
       )}

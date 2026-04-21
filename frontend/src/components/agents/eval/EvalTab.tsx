@@ -2,114 +2,26 @@ import { useState, useCallback } from 'react';
 import { Loader2, CheckCircle, XCircle, AlertTriangle, RotateCcw, FlaskConical, Filter, Download } from 'lucide-react';
 import Badge from '@components/ui/Badge';
 import Button from '@components/ui/Button';
-import { useSessionList } from '@hooks/useAgentPlayground';
+import { useAgentEvalCases, useRunAgentEvals } from '@hooks/useAgentEvals';
+import type { EvalRunResult } from '@api/agentEvals';
 import { cn } from '@utils/cn';
 
 /* ---------- Types ---------- */
 
-interface EvalTestCase {
+interface EvalRowState {
   id: string;
   name: string;
   status: 'pending' | 'running' | 'pass' | 'fail' | 'error';
-  score: number;
-  cost: number;
+  score: number | null;
+  cost: number | null;
+  duration_ms: number | null;
   tools_used: string[];
-  duration_ms: number;
 }
 
 interface EvalTabProps {
   agentId: string;
   sessionId: string | null;
 }
-
-/* ---------- Mock Data ---------- */
-
-const MOCK_TEST_CASES: EvalTestCase[] = [
-  {
-    id: 'eval_1',
-    name: 'Bracket FEA with standard load',
-    status: 'pending',
-    score: 0,
-    cost: 0,
-    tools_used: [],
-    duration_ms: 0,
-  },
-  {
-    id: 'eval_2',
-    name: 'Topology optimization for weight reduction',
-    status: 'pending',
-    score: 0,
-    cost: 0,
-    tools_used: [],
-    duration_ms: 0,
-  },
-  {
-    id: 'eval_3',
-    name: 'Multi-material stress analysis',
-    status: 'pending',
-    score: 0,
-    cost: 0,
-    tools_used: [],
-    duration_ms: 0,
-  },
-  {
-    id: 'eval_4',
-    name: 'Edge case: zero-thickness geometry',
-    status: 'pending',
-    score: 0,
-    cost: 0,
-    tools_used: [],
-    duration_ms: 0,
-  },
-];
-
-const MOCK_COMPLETED: EvalTestCase[] = [
-  {
-    id: 'eval_1',
-    name: 'Bracket FEA with standard load',
-    status: 'pass',
-    score: 0.94,
-    cost: 0.85,
-    tools_used: ['mesh-generator@1.0', 'fea-solver@2.1', 'result-analyzer@1.0'],
-    duration_ms: 12400,
-  },
-  {
-    id: 'eval_2',
-    name: 'Topology optimization for weight reduction',
-    status: 'pass',
-    score: 0.88,
-    cost: 1.20,
-    tools_used: ['mesh-generator@1.0', 'fea-solver@2.1', 'result-analyzer@1.0', 'material-db@1.2'],
-    duration_ms: 18700,
-  },
-  {
-    id: 'eval_3',
-    name: 'Multi-material stress analysis',
-    status: 'fail',
-    score: 0.52,
-    cost: 0.95,
-    tools_used: ['mesh-generator@1.0', 'fea-solver@2.1'],
-    duration_ms: 9800,
-  },
-  {
-    id: 'eval_4',
-    name: 'Edge case: zero-thickness geometry',
-    status: 'error',
-    score: 0,
-    cost: 0.30,
-    tools_used: ['mesh-generator@1.0'],
-    duration_ms: 3200,
-  },
-];
-
-/* ---------- Subtitle mapping (visual-only) ---------- */
-
-const CASE_SUBTITLES: Record<string, string> = {
-  eval_1: 'Baseline validation scenario',
-  eval_2: 'Optimization branch behavior',
-  eval_3: 'Mixed material decision quality',
-  eval_4: 'Failure handling and escalation path',
-};
 
 /* ---------- Status config ---------- */
 
@@ -124,60 +36,81 @@ const statusConfig = {
 /* ---------- Component ---------- */
 
 export default function EvalTab({ agentId, sessionId }: EvalTabProps) {
-  const { data: sessionList = [] } = useSessionList(agentId);
   const shortSessionId = sessionId ? sessionId.slice(-8) : null;
 
-  const [testCases, setTestCases] = useState<EvalTestCase[]>(MOCK_TEST_CASES);
+  const { data: evalCases = [], isLoading } = useAgentEvalCases(agentId);
+  const runMutation = useRunAgentEvals(agentId);
+
+  const [rowStates, setRowStates] = useState<EvalRowState[] | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [hasRun, setHasRun] = useState(false);
 
-  const runEvaluation = useCallback(() => {
+  // Derive display rows: use rowStates when a run is active, else use fresh eval cases.
+  const displayRows: EvalRowState[] = rowStates ?? evalCases.map((ec) => ({
+    id: ec.id,
+    name: ec.name,
+    status: 'pending',
+    score: null,
+    cost: null,
+    duration_ms: null,
+    tools_used: [],
+  }));
+
+  const runEvaluation = useCallback(async () => {
+    if (!evalCases.length) return;
+
+    // Seed all rows as pending/running immediately for responsiveness.
+    const initial: EvalRowState[] = evalCases.map((ec) => ({
+      id: ec.id,
+      name: ec.name,
+      status: 'running',
+      score: null,
+      cost: null,
+      duration_ms: null,
+      tools_used: [],
+    }));
+    setRowStates(initial);
     setIsRunning(true);
     setHasRun(false);
 
-    // Simulate running each test case progressively
-    const cases = [...MOCK_TEST_CASES];
-    let currentIndex = 0;
-
-    const runNext = () => {
-      if (currentIndex < cases.length) {
-        // Set current case to running
-        cases[currentIndex] = { ...cases[currentIndex], status: 'running' };
-        setTestCases([...cases]);
-
-        setTimeout(() => {
-          // Replace with completed result
-          cases[currentIndex] = MOCK_COMPLETED[currentIndex];
-          setTestCases([...cases]);
-          currentIndex++;
-          runNext();
-        }, 800 + Math.random() * 600);
-      } else {
-        setIsRunning(false);
-        setHasRun(true);
+    try {
+      const response = await runMutation.mutateAsync({ dry_run: true });
+      // Map results back onto rows.
+      const resultMap = new Map<string, EvalRunResult>();
+      for (const r of response.results ?? []) {
+        resultMap.set(r.eval_case_id, r);
       }
-    };
-
-    runNext();
-  }, []);
+      setRowStates(initial.map((row) => {
+        const result = resultMap.get(row.id);
+        if (!result) return { ...row, status: 'pending' };
+        return {
+          ...row,
+          status: result.status,
+          score: result.score,
+          duration_ms: result.duration_ms,
+        };
+      }));
+    } catch {
+      setRowStates(initial.map((r) => ({ ...r, status: 'error' })));
+    } finally {
+      setIsRunning(false);
+      setHasRun(true);
+    }
+  }, [evalCases, runMutation]);
 
   const resetEval = () => {
-    setTestCases(MOCK_TEST_CASES);
+    setRowStates(null);
     setIsRunning(false);
     setHasRun(false);
   };
 
-  // Derived header chip text — always uses tokenized palette (no new colors).
-  const runningCount = testCases.filter((c) => c.status === 'running').length;
-  const passCount = testCases.filter((c) => c.status === 'pass').length;
-  const failCount = testCases.filter((c) => c.status === 'fail' || c.status === 'error').length;
+  const passCount = displayRows.filter((r) => r.status === 'pass').length;
+  const failCount = displayRows.filter((r) => r.status === 'fail' || r.status === 'error').length;
+  const runningCount = displayRows.filter((r) => r.status === 'running').length;
 
-  let statusChipText = 'All pending';
-  if (isRunning) {
-    statusChipText = `${Math.max(runningCount, 1)} running`;
-  } else if (hasRun) {
-    statusChipText = `${passCount} pass · ${failCount} fail`;
-  }
+  let statusChipText = `${evalCases.length} cases`;
+  if (isRunning) statusChipText = `${Math.max(runningCount, 1)} running`;
+  else if (hasRun) statusChipText = `${passCount} pass · ${failCount} fail`;
 
   return (
     <div data-testid="eval-tab" className="flex flex-col h-full overflow-y-auto bg-surface-bg">
@@ -187,8 +120,7 @@ export default function EvalTab({ agentId, sessionId }: EvalTabProps) {
           <div className="min-w-0">
             <h1 className="text-3xl font-semibold text-content-primary">Agent Evaluation</h1>
             <p className="text-sm text-content-secondary mt-1">
-              Run test cases to evaluate agent performance · {testCases.length} cases
-              {sessionList.length > 0 && ` · ${sessionList.length} active session${sessionList.length === 1 ? '' : 's'}`}
+              Run test cases to evaluate agent performance · {evalCases.length} cases
             </p>
           </div>
 
@@ -228,7 +160,7 @@ export default function EvalTab({ agentId, sessionId }: EvalTabProps) {
               data-testid="eval-run-btn"
               type="button"
               onClick={runEvaluation}
-              disabled={isRunning}
+              disabled={isRunning || evalCases.length === 0}
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium shrink-0',
                 'bg-purple-50 text-white hover:bg-purple-60 transition-colors',
@@ -262,7 +194,7 @@ export default function EvalTab({ agentId, sessionId }: EvalTabProps) {
                     <span className="font-mono text-content-primary">{shortSessionId}</span>
                   </>
                 ) : (
-                  ' for this session'
+                  ' for this agent'
                 )}
               </p>
             </div>
@@ -306,108 +238,121 @@ export default function EvalTab({ agentId, sessionId }: EvalTabProps) {
               <span>Case Name</span>
               <span>Status</span>
               <span>Score</span>
-              <span>Cost</span>
+              <span>Duration</span>
               <span>Tools Used</span>
             </div>
 
-            {/* Table rows */}
-            {testCases.map((tc) => {
-              const config = statusConfig[tc.status];
-              const StatusIcon = config.icon;
-              const subtitle = CASE_SUBTITLES[tc.id] ?? '';
+            {/* Empty state */}
+            {isLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="w-5 h-5 animate-spin text-content-secondary" />
+              </div>
+            ) : displayRows.length === 0 ? (
+              <div
+                data-testid="eval-empty-state"
+                className="flex flex-col items-center justify-center py-16 text-center"
+              >
+                <FlaskConical className="w-8 h-8 text-purple-50 mb-3 opacity-60" />
+                <p className="text-sm font-medium text-content-primary">No evaluation cases defined yet.</p>
+                <p className="text-xs text-content-secondary mt-1">
+                  Add eval cases via the API to start benchmarking this agent.
+                </p>
+              </div>
+            ) : (
+              displayRows.map((tc) => {
+                const config = statusConfig[tc.status];
+                const StatusIcon = config.icon;
 
-              return (
-                <div
-                  key={tc.id}
-                  data-testid="eval-test-case-row"
-                  className={cn(
-                    'grid grid-cols-[minmax(0,2.2fr)_7rem_6rem_6rem_minmax(0,1.4fr)] gap-4 items-center',
-                    'px-3 py-4 border-b border-border-subtle',
-                  )}
-                >
-                  {/* Name + subtitle */}
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-content-primary truncate">
-                      {tc.name}
-                    </div>
-                    {subtitle && (
-                      <div className="text-xs text-content-secondary mt-0.5 truncate">
-                        {subtitle}
+                return (
+                  <div
+                    key={tc.id}
+                    data-testid="eval-test-case-row"
+                    className={cn(
+                      'grid grid-cols-[minmax(0,2.2fr)_7rem_6rem_6rem_minmax(0,1.4fr)] gap-4 items-center',
+                      'px-3 py-4 border-b border-border-subtle',
+                    )}
+                  >
+                    {/* Name */}
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-content-primary truncate">
+                        {tc.name}
                       </div>
-                    )}
-                  </div>
+                    </div>
 
-                  {/* Status */}
-                  <div className="flex items-center">
-                    {tc.status === 'pending' ? (
-                      <span
-                        className={cn(
-                          'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                          'bg-purple-10 text-purple-60',
-                        )}
-                      >
-                        Pending
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1">
-                        {StatusIcon && (
-                          <StatusIcon
-                            className={cn(
-                              'w-3.5 h-3.5',
-                              tc.status === 'running' && 'animate-spin text-blue-60',
-                              tc.status === 'pass' && 'text-green-50',
-                              tc.status === 'fail' && 'text-red-50',
-                              tc.status === 'error' && 'text-yellow-30',
-                            )}
-                          />
-                        )}
-                        <Badge variant={config.badgeVariant}>{config.label}</Badge>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Score */}
-                  <div>
-                    {tc.score > 0 ? (
-                      <span className="font-mono text-xs text-content-primary">
-                        {tc.score.toFixed(2)}
-                      </span>
-                    ) : (
-                      <span className="text-content-placeholder">—</span>
-                    )}
-                  </div>
-
-                  {/* Cost */}
-                  <div>
-                    {tc.cost > 0 ? (
-                      <span className="font-mono text-xs text-content-primary">
-                        ${tc.cost.toFixed(2)}
-                      </span>
-                    ) : (
-                      <span className="text-content-placeholder">—</span>
-                    )}
-                  </div>
-
-                  {/* Tools used */}
-                  <div className="flex flex-wrap items-center gap-1 min-w-0">
-                    {tc.tools_used.length === 0 ? (
-                      <span className="text-content-placeholder">—</span>
-                    ) : (
-                      tc.tools_used.map((tool) => (
-                        <Badge
-                          key={tool}
-                          variant="default"
-                          badgeStyle="outline"
-                          className="font-mono text-2xs"
+                    {/* Status */}
+                    <div className="flex items-center">
+                      {tc.status === 'pending' ? (
+                        <span
+                          className={cn(
+                            'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+                            'bg-purple-10 text-purple-60',
+                          )}
                         >
-                          {tool.split('@')[0]}
-                        </Badge>
-                      ))
-                    )}
+                          Pending
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1">
+                          {StatusIcon && (
+                            <StatusIcon
+                              className={cn(
+                                'w-3.5 h-3.5',
+                                tc.status === 'running' && 'animate-spin text-blue-60',
+                                tc.status === 'pass' && 'text-green-50',
+                                tc.status === 'fail' && 'text-red-50',
+                                tc.status === 'error' && 'text-yellow-30',
+                              )}
+                            />
+                          )}
+                          <Badge variant={config.badgeVariant}>{config.label}</Badge>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Score */}
+                    <div>
+                      {tc.score != null ? (
+                        <span className="font-mono text-xs text-content-primary">
+                          {tc.score.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className="text-content-placeholder">—</span>
+                      )}
+                    </div>
+
+                    {/* Duration */}
+                    <div>
+                      {tc.duration_ms != null ? (
+                        <span className="font-mono text-xs text-content-primary">
+                          {tc.duration_ms < 1000
+                            ? `${tc.duration_ms}ms`
+                            : `${(tc.duration_ms / 1000).toFixed(1)}s`}
+                        </span>
+                      ) : (
+                        <span className="text-content-placeholder">—</span>
+                      )}
+                    </div>
+
+                    {/* Tools used */}
+                    <div className="flex flex-wrap items-center gap-1 min-w-0">
+                      {tc.tools_used.length === 0 ? (
+                        <span className="text-content-placeholder">—</span>
+                      ) : (
+                        tc.tools_used.map((tool) => (
+                          <Badge
+                            key={tool}
+                            variant="default"
+                            badgeStyle="outline"
+                            className="font-mono text-2xs"
+                          >
+                            {tool.split('@')[0]}
+                          </Badge>
+                        ))
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
       </div>
