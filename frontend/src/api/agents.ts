@@ -25,8 +25,6 @@ export interface AgentVersion {
   published_at?: string;
 }
 
-// AgentSpec must match the backend agent.AgentSpec struct exactly — strictUnmarshalAgentSpec
-// rejects unknown fields. Do NOT add extra fields (e.g. model, llm_weight, reliability).
 export interface AgentSpec {
   api_version: 'airaie.agentspec/v1';
   kind: 'AgentSpec';
@@ -53,6 +51,11 @@ export interface AgentSpec {
     auto_approve_threshold?: number;
     require_approval_for?: string[];
     escalation_rules?: { condition: string; action: string }[];
+  };
+  llm?: {
+    provider: string;
+    model: string;
+    weight?: number;
   };
 }
 

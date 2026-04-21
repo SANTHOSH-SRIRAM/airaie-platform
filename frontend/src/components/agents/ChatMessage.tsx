@@ -1,7 +1,7 @@
+import { Brain } from 'lucide-react';
 import type { ChatMessage as ChatMessageType } from '@/types/agentPlayground';
-import Avatar from '@components/ui/Avatar';
 import ToolCallProposalCard from '@components/agents/ToolCallProposalCard';
-// cn import removed (unused)
+import InlineToolCallCard from '@components/agents/InlineToolCallCard';
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -19,18 +19,20 @@ function formatRelativeTime(timestamp: string): string {
   return `${days}d ago`;
 }
 
+const AGENT_NAME = 'FEA Optimizer';
+
 export default function ChatMessage({ message }: ChatMessageProps) {
-  const { role, content, timestamp, toolCallProposal } = message;
+  const { role, content, timestamp, toolCallProposal, runId } = message;
 
   if (role === 'user') {
     return (
-      <div data-testid="chat-message" className="flex justify-end mb-4">
+      <div data-testid="chat-message" className="flex justify-end mb-5">
         <div data-testid="chat-message-user" className="max-w-[75%]">
-          <div className="bg-gray-80 text-white rounded-2xl rounded-br-sm px-4 py-2.5 text-sm leading-relaxed">
+          <div className="bg-[#1f1f1f] text-white rounded-[16px] rounded-br-[6px] px-5 py-3 text-[14px] leading-relaxed shadow-sm">
             {content}
           </div>
-          <p className="mt-1 text-right text-xs text-cds-text-secondary">
-            {formatRelativeTime(timestamp)}
+          <p className="mt-1.5 text-right text-[11px] text-[#9b978f]">
+            You · {formatRelativeTime(timestamp)}
           </p>
         </div>
       </div>
@@ -39,25 +41,34 @@ export default function ChatMessage({ message }: ChatMessageProps) {
 
   if (role === 'agent') {
     return (
-      <div data-testid="chat-message" className="flex gap-2 mb-4">
-        <Avatar name="AI" size="sm" className="rounded-full mt-0.5" />
-        <div data-testid="chat-message-agent" className="max-w-[75%]">
+      <div data-testid="chat-message" className="flex gap-3 mb-5">
+        {/* Purple brain avatar to match the mockup */}
+        <div className="mt-0.5 w-7 h-7 rounded-full bg-[#f3e8ff] flex items-center justify-center shrink-0">
+          <Brain className="w-3.5 h-3.5 text-[#a855f7]" strokeWidth={2.2} />
+        </div>
+        <div data-testid="chat-message-agent" className="max-w-[75%] flex-1 min-w-0">
           {content && (
-            <div className="bg-gray-20 text-cds-text-primary rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm leading-relaxed">
+            <div className="bg-white border border-[#ece9e3] text-[#1f1f1f] rounded-[16px] rounded-bl-[6px] px-5 py-3 text-[14px] leading-relaxed shadow-sm">
               {content}
             </div>
           )}
           {toolCallProposal && (
-            <ToolCallProposalCard proposal={toolCallProposal} />
+            <div className="mt-3">
+              <ToolCallProposalCard proposal={toolCallProposal} />
+            </div>
           )}
-          <p className="mt-1 text-xs text-cds-text-secondary">
-            {formatRelativeTime(timestamp)}
+          {runId && (
+            <div className="mt-3">
+              <InlineToolCallCard runId={runId} />
+            </div>
+          )}
+          <p className="mt-1.5 text-[11px] text-[#9b978f]">
+            {AGENT_NAME} · {formatRelativeTime(timestamp)}
           </p>
         </div>
       </div>
     );
   }
 
-  // system message — not in current types but handled gracefully
   return null;
 }

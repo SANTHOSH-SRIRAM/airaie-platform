@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ChevronDown, ChevronRight, Plus, X, Trash2,
   Shield, Compass, BookOpen, Package,
-  Wrench, FlaskConical, Search,
+  Wrench, FlaskConical,
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import { useUiStore } from '@store/uiStore';

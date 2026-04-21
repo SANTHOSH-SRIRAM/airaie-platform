@@ -9,15 +9,7 @@ import BottomBar from './BottomBar';
 import { useUiStore } from '@store/uiStore';
 import { ROUTE_SIDEBAR_MAP } from '@constants/routes';
 
-// Routes that hide the main shell chrome (header, sidebar, toolbar).
-// Inside these work areas, only the section's own context bar is shown —
-// no global AIRAIE nav, no Workspace sidebar, no vertical toolbar.
-const STUDIO_ROUTES = [
-  '/agent-studio',
-  '/agent-playground',
-  '/workflow-studio',
-  '/workflow-runs',
-];
+const STUDIO_ROUTES = ['/agent-studio', '/workflow-studio', '/workflow-runs', '/agent-playground'];
 
 export default function AppShell() {
   const { pathname } = useLocation();

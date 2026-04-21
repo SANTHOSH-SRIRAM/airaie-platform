@@ -336,6 +336,11 @@ export default function AgentStudioPage() {
         auto_approve_threshold: 0.35,
         require_approval_for: ['write', 'execute'],
       },
+      llm: {
+        provider: selectedProvider,
+        model: selectedModel,
+        weight: llmWeight,
+      },
     };
     try {
       await createVersion.mutateAsync(spec);

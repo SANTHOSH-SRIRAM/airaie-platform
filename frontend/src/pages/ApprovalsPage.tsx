@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Search, ChevronDown, ChevronRight, Shield, ShieldCheck, ShieldAlert,
-  Brain, CheckCircle2, XCircle, Circle, Clock, AlertTriangle,
+  Brain, CheckCircle2, Circle, Clock, AlertTriangle,
   Check, X, MessageSquare,
 } from 'lucide-react';
 import { cn } from '@utils/cn';
