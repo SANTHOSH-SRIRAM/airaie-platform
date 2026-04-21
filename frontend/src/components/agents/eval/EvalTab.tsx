@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
-import { Play, Loader2, CheckCircle, XCircle, AlertTriangle, RotateCcw, FlaskConical, Filter, Download } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, AlertTriangle, RotateCcw, FlaskConical, Filter, Download } from 'lucide-react';
 import Badge from '@components/ui/Badge';
 import Button from '@components/ui/Button';
+import { useSessionList } from '@hooks/useAgentPlayground';
 import { cn } from '@utils/cn';
 
 /* ---------- Types ---------- */
@@ -18,6 +19,7 @@ interface EvalTestCase {
 
 interface EvalTabProps {
   agentId: string;
+  sessionId: string | null;
 }
 
 /* ---------- Mock Data ---------- */
@@ -121,7 +123,10 @@ const statusConfig = {
 
 /* ---------- Component ---------- */
 
-export default function EvalTab({ agentId: _agentId }: EvalTabProps) {
+export default function EvalTab({ agentId, sessionId }: EvalTabProps) {
+  const { data: sessionList = [] } = useSessionList(agentId);
+  const shortSessionId = sessionId ? sessionId.slice(-8) : null;
+
   const [testCases, setTestCases] = useState<EvalTestCase[]>(MOCK_TEST_CASES);
   const [isRunning, setIsRunning] = useState(false);
   const [hasRun, setHasRun] = useState(false);
@@ -182,7 +187,8 @@ export default function EvalTab({ agentId: _agentId }: EvalTabProps) {
           <div className="min-w-0">
             <h1 className="text-3xl font-semibold text-content-primary">Agent Evaluation</h1>
             <p className="text-sm text-content-secondary mt-1">
-              Run test cases to evaluate agent performance ({testCases.length} cases)
+              Run test cases to evaluate agent performance · {testCases.length} cases
+              {sessionList.length > 0 && ` · ${sessionList.length} active session${sessionList.length === 1 ? '' : 's'}`}
             </p>
           </div>
 
@@ -191,7 +197,7 @@ export default function EvalTab({ agentId: _agentId }: EvalTabProps) {
             <span
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs',
-                'bg-brand-primary-muted text-content-secondary',
+                'bg-purple-10 text-purple-60 font-medium',
               )}
             >
               <span aria-hidden="true">•</span>
@@ -218,16 +224,25 @@ export default function EvalTab({ agentId: _agentId }: EvalTabProps) {
                 Reset
               </Button>
             )}
-            <Button
+            <button
               data-testid="eval-run-btn"
-              variant="primary"
-              size="sm"
-              icon={isRunning ? <Loader2 className="animate-spin" /> : <FlaskConical />}
+              type="button"
               onClick={runEvaluation}
               disabled={isRunning}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium shrink-0',
+                'bg-purple-50 text-white hover:bg-purple-60 transition-colors',
+                'disabled:opacity-60 disabled:cursor-not-allowed',
+                'shadow-[0px_2px_8px_0px_rgba(156,39,176,0.25)]',
+              )}
             >
+              {isRunning ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <FlaskConical className="w-3.5 h-3.5" />
+              )}
               {isRunning ? 'Running...' : 'Run Evaluation'}
-            </Button>
+            </button>
           </div>
         </div>
 
@@ -240,7 +255,15 @@ export default function EvalTab({ agentId: _agentId }: EvalTabProps) {
             <div className="min-w-0">
               <h2 className="text-base font-semibold text-content-primary">Evaluation Cases</h2>
               <p className="text-xs text-content-secondary mt-0.5">
-                Core evaluation matrix for this session
+                Core evaluation matrix
+                {shortSessionId ? (
+                  <>
+                    {' for session '}
+                    <span className="font-mono text-content-primary">{shortSessionId}</span>
+                  </>
+                ) : (
+                  ' for this session'
+                )}
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -319,8 +342,8 @@ export default function EvalTab({ agentId: _agentId }: EvalTabProps) {
                     {tc.status === 'pending' ? (
                       <span
                         className={cn(
-                          'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs',
-                          'bg-brand-primary-muted text-content-primary',
+                          'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+                          'bg-purple-10 text-purple-60',
                         )}
                       >
                         Pending

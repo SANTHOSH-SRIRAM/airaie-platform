@@ -238,7 +238,7 @@ export default function AgentPlaygroundPage() {
           />
           <div className="flex flex-1 flex-col min-h-0 overflow-hidden rounded-[20px] border border-[#ece9e3] bg-white shadow-[0px_1px_10px_0px_rgba(0,0,0,0.05)]">
             <div className="flex-1 min-h-0 overflow-hidden">
-              <EvalTab agentId={resolvedAgentId} />
+              <EvalTab agentId={resolvedAgentId} sessionId={sessionId} />
             </div>
             <PlaygroundActionBar />
           </div>
