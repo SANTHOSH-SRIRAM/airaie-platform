@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { cn } from '@utils/cn';
 import { FileText, Plus, Loader2, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
-// TODO: Import from @hooks/useBoards once the parallel agent adds these hooks:
-// import { useRecords, useCreateRecord } from '@hooks/useBoards';
 import type { BoardRecord } from '@/types/board';
 
 // ---------------------------------------------------------------------------
@@ -160,7 +158,7 @@ function RecordRow({ record }: RecordRowProps) {
     text: 'text-[#6b6b6b]',
   };
 
-  const contentText = record.content ?? '';
+  const contentText = (record.content?.text as string | undefined) ?? '';
 
   const isLong = contentText.length > 200;
   const displayText = isLong && !expanded ? contentText.slice(0, 200) + '…' : contentText;

@@ -156,6 +156,7 @@ export async function downloadReleasePacket(_id: string): Promise<Blob> {
 // ---------------------------------------------------------------------------
 
 import type { Card } from '@/types/card';
+import type { BoardRecord } from '@/types/board';
 
 export async function listCards(boardId: string): Promise<Card[]> {
   const res = await apiClient.get<{ cards: Card[] | null }>(`/v0/boards/${boardId}/cards`);
@@ -170,25 +171,22 @@ export async function createCard(boardId: string, data: { title: string; card_ty
 // Records
 // ---------------------------------------------------------------------------
 
-export interface BoardRecord {
-  id: string;
-  board_id: string;
-  record_type: string;
-  title?: string;
-  content: string;
-  actor?: string;
-  run_id?: string;
-  tags?: string[];
-  created_at: string;
-}
+export type { BoardRecord };
 
 export async function listRecords(boardId: string): Promise<BoardRecord[]> {
   const res = await apiClient.get<{ records: BoardRecord[] | null }>(`/v0/boards/${boardId}/records`);
   return (res as any).records ?? res ?? [];
 }
 
-export async function createRecord(boardId: string, data: { record_type: string; content: string; title?: string; tags?: string[] }): Promise<BoardRecord> {
-  return apiClient.post(`/v0/boards/${boardId}/records`, data);
+export async function createRecord(
+  boardId: string,
+  data: { record_type: string; content: string; title?: string },
+): Promise<BoardRecord> {
+  return apiClient.post(`/v0/boards/${boardId}/records`, {
+    record_type: data.record_type,
+    title: data.title ?? '',
+    content: { text: data.content },
+  });
 }
 
 // ---------------------------------------------------------------------------

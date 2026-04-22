@@ -55,11 +55,11 @@ export interface BoardRecord {
   id: string;
   board_id: string;
   record_type: string;
-  title: string;
-  content_json?: Record<string, unknown>;
+  title?: string;
+  content?: Record<string, unknown>;
   run_id?: string;
   artifact_id?: string;
-  actor: string;
+  actor?: string;
   created_at: string;
 }
 
