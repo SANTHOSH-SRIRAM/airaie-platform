@@ -90,7 +90,10 @@ const MOCK_MODE_CONFIG: BoardModeConfig = {
 // ---------------------------------------------------------------------------
 
 export async function listBoards(): Promise<Board[]> {
-  return apiOrMock('/v0/boards', { method: 'GET' }, MOCK_BOARDS);
+  const res = await apiOrMock<{ boards: Board[] | null } | Board[]>(
+    '/v0/boards', { method: 'GET' }, MOCK_BOARDS,
+  );
+  return (res as any).boards ?? (Array.isArray(res) ? res : []);
 }
 
 export async function getBoard(id: string): Promise<Board> {
