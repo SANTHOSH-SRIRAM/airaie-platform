@@ -7,6 +7,10 @@ import {
   updateBoard,
   deleteBoard,
   escalateBoardMode,
+  listCards,
+  createCard,
+  listRecords,
+  createRecord,
 } from '@api/boards';
 
 // ---------------------------------------------------------------------------
@@ -18,6 +22,8 @@ export const boardKeys = {
   list: () => [...boardKeys.all, 'list'] as const,
   detail: (id: string) => [...boardKeys.all, 'detail', id] as const,
   summary: (id: string) => [...boardKeys.all, 'summary', id] as const,
+  cards: (id: string) => [...boardKeys.all, 'cards', id] as const,
+  records: (id: string) => [...boardKeys.all, 'records', id] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -94,6 +100,52 @@ export function useEscalateMode(id: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: boardKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: boardKeys.summary(id) });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Cards
+// ---------------------------------------------------------------------------
+
+export function useCards(boardId: string) {
+  return useQuery({
+    queryKey: boardKeys.cards(boardId),
+    queryFn: () => listCards(boardId),
+    enabled: !!boardId,
+    refetchInterval: 5_000,
+  });
+}
+
+export function useCreateCard(boardId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Parameters<typeof createCard>[1]) => createCard(boardId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: boardKeys.cards(boardId) });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Records
+// ---------------------------------------------------------------------------
+
+export function useRecords(boardId: string) {
+  return useQuery({
+    queryKey: boardKeys.records(boardId),
+    queryFn: () => listRecords(boardId),
+    enabled: !!boardId,
+    staleTime: 30_000,
+  });
+}
+
+export function useCreateRecord(boardId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Parameters<typeof createRecord>[1]) => createRecord(boardId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: boardKeys.records(boardId) });
     },
   });
 }

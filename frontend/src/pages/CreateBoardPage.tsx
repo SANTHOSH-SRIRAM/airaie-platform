@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import {
   ChevronDown, ChevronRight, Plus, X, Trash2,
   Shield, Compass, BookOpen, Package,
-  Wrench, FlaskConical,
+  Wrench, FlaskConical, Loader2,
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import { useUiStore } from '@store/uiStore';
+import { useCreateBoard } from '@hooks/useBoards';
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -681,6 +682,7 @@ export default function CreateBoardPage() {
   const navigate = useNavigate();
   const setSidebarContentType = useUiStore((s) => s.setSidebarContentType);
   const hideBottomBar = useUiStore((s) => s.hideBottomBar);
+  const createBoard = useCreateBoard();
 
   useEffect(() => {
     setSidebarContentType('navigation');
@@ -694,6 +696,7 @@ export default function CreateBoardPage() {
   const [vertical, setVertical] = useState('Structural Engineering');
   const [verticalOpen, setVerticalOpen] = useState(false);
   const [mode, setMode] = useState<GovernanceMode>('explore');
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [cards, setCards] = useState<ValidationCard[]>([
     { id: '1', name: 'FEA Stress Test', category: 'Simulation', status: 'Pending' },
@@ -807,6 +810,22 @@ export default function CreateBoardPage() {
     if (tagInput.trim() && !selectedTags.includes(tagInput.trim())) {
       setSelectedTags((prev) => [...prev, tagInput.trim()]);
       setTagInput('');
+    }
+  };
+
+  const handleCreateBoard = async () => {
+    if (!boardName.trim()) return;
+    setSubmitError(null);
+    try {
+      const newBoard = await createBoard.mutateAsync({
+        name: boardName.trim(),
+        description: description.trim(),
+        type: boardType,
+        mode,
+      });
+      navigate(`/boards/${newBoard.id}`);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Failed to create board. Please try again.');
     }
   };
 
@@ -1189,7 +1208,10 @@ export default function CreateBoardPage() {
       </div>
 
       {/* ── Fixed Bottom Bar ────────────────────── */}
-      <div className="shrink-0 flex justify-center py-[8px]">
+      <div className="shrink-0 flex flex-col items-center py-[8px] gap-[6px]">
+        {submitError && (
+          <p className="text-[11px] text-[#e74c3c] font-medium">{submitError}</p>
+        )}
         <div className="bg-white rounded-[16px] shadow-[0px_-2px_12px_0px_rgba(0,0,0,0.06),0px_2px_12px_0px_rgba(0,0,0,0.04)] px-[24px] flex items-center gap-[16px] h-[52px]">
           {/* Left: tools info */}
           <div className="flex items-center gap-[8px]">
@@ -1205,22 +1227,35 @@ export default function CreateBoardPage() {
             <button
               type="button"
               onClick={() => navigate('/boards')}
-              className="h-[38px] px-[10px] rounded-[8px] text-[13px] text-[#6b6b6b] hover:bg-[#f5f5f0] transition-colors"
+              disabled={createBoard.isPending}
+              className="h-[38px] px-[10px] rounded-[8px] text-[13px] text-[#6b6b6b] hover:bg-[#f5f5f0] transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="button"
-              className="h-[38px] px-[17px] rounded-[8px] border border-[#2d2d2d] text-[13px] text-[#6b6b6b] hover:bg-[#f5f5f0] transition-colors"
+              disabled={createBoard.isPending}
+              className="h-[38px] px-[17px] rounded-[8px] border border-[#2d2d2d] text-[13px] text-[#6b6b6b] hover:bg-[#f5f5f0] transition-colors disabled:opacity-50"
             >
               Save Draft
             </button>
             <button
               type="button"
-              className="h-[38px] px-[24px] rounded-[8px] bg-[#9c27b0] text-[13px] text-white font-medium hover:bg-[#7b1fa2] transition-colors flex items-center gap-[8px]"
+              onClick={handleCreateBoard}
+              disabled={!boardName.trim() || createBoard.isPending}
+              className="h-[38px] px-[24px] rounded-[8px] bg-[#9c27b0] text-[13px] text-white font-medium hover:bg-[#7b1fa2] transition-colors flex items-center gap-[8px] disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              Create Board
-              <Shield size={14} className="text-white" />
+              {createBoard.isPending ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  Creating…
+                </>
+              ) : (
+                <>
+                  Create Board
+                  <Shield size={14} className="text-white" />
+                </>
+              )}
             </button>
           </div>
         </div>

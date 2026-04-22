@@ -1,107 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Search, ChevronDown, Plus, MoreHorizontal, AlertTriangle,
-  Shield, Link2, CheckCircle2, Circle, XCircle, Sparkles, Rocket,
+  Search, ChevronDown, Plus, MoreHorizontal,
+  Shield, Sparkles, Rocket, Loader2,
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import { useUiStore } from '@store/uiStore';
 import CreateFromIntentModal from '@components/boards/CreateFromIntentModal';
+import { useBoardList } from '@hooks/useBoards';
+import type { Board } from '@/types/board';
 
 // ── Types ────────────────────────────────────────────────────
 
-type BoardType = 'study' | 'explore' | 'release';
-type GateStatus = 'passed' | 'pending' | 'blocked';
-type CardStatus = 'complete' | 'running' | 'pending';
-type TypeFilter = 'all' | BoardType;
-
-interface GateItem {
-  name: string;
-  fulfilled: number;
-  total: number;
-  status: GateStatus;
-}
-
-interface CardItem {
-  name: string;
-  status: CardStatus;
-}
-
-interface BoardData {
-  id: string;
-  name: string;
-  type: BoardType;
-  tags: string[];
-  cards: CardItem[];
-  gates: GateItem[];
-  readiness: number;
-  evidence: { records: number; artifacts: string; approvals: string };
-  created: string;
-  linkedResources?: string[];
-}
-
-// ── Mock Data ────────────────────────────────────────────────
-
-const BOARDS: BoardData[] = [
-  {
-    id: 'board_structural',
-    name: 'Structural Validation Study',
-    type: 'study',
-    tags: ['Engineering', 'Structural'],
-    cards: [
-      { name: 'FEA Stress Test', status: 'complete' },
-      { name: 'CFD Flow Analysis', status: 'running' },
-      { name: 'Fatigue Analysis', status: 'complete' },
-      { name: 'DFM Check', status: 'pending' },
-    ],
-    gates: [
-      { name: 'Structural Evidence', fulfilled: 3, total: 3, status: 'passed' },
-      { name: 'Thermal Evidence', fulfilled: 1, total: 3, status: 'pending' },
-      { name: 'Fatigue Validation', fulfilled: 2, total: 2, status: 'passed' },
-      { name: 'Release Approval', fulfilled: 0, total: 0, status: 'blocked' },
-    ],
-    readiness: 65,
-    evidence: { records: 6, artifacts: '3 · 12.4 MB', approvals: '1 pending' },
-    created: 'Mar 25',
-  },
-  {
-    id: 'board_thermal',
-    name: 'Thermal Analysis Board',
-    type: 'explore',
-    tags: ['Engineering', 'Thermal'],
-    cards: [
-      { name: 'Heat Transfer Study', status: 'pending' },
-      { name: 'Thermal Cycling Test', status: 'pending' },
-    ],
-    gates: [
-      { name: 'Thermal Evidence', fulfilled: 0, total: 2, status: 'pending' },
-      { name: 'Review Gate', fulfilled: 0, total: 1, status: 'pending' },
-    ],
-    readiness: 0,
-    evidence: { records: 1, artifacts: '0', approvals: 'None pending' },
-    created: 'Mar 29',
-    linkedResources: ['CFD Analysis Flow'],
-  },
-];
+type BoardMode = 'explore' | 'study' | 'release';
+type TypeFilter = 'all' | BoardMode;
 
 // ── Config ───────────────────────────────────────────────────
 
-const TYPE_COLORS: Record<BoardType, { bg: string; text: string; border: string }> = {
+const MODE_COLORS: Record<BoardMode, { bg: string; text: string; border: string }> = {
   study:   { bg: 'bg-[#fff3e0]', text: 'text-[#ff9800]', border: 'border-l-[#ff9800]' },
   explore: { bg: 'bg-[#e3f2fd]', text: 'text-[#2196f3]', border: 'border-l-[#2196f3]' },
   release: { bg: 'bg-[#e8f5e9]', text: 'text-[#4caf50]', border: 'border-l-[#4caf50]' },
-};
-
-const CARD_STATUS_CONFIG: Record<CardStatus, { text: string; color: string; dot: string }> = {
-  complete: { text: 'Complete', color: 'text-[#4caf50]', dot: 'bg-[#4caf50]' },
-  running:  { text: 'Running',  color: 'text-[#2196f3]', dot: 'bg-[#2196f3]' },
-  pending:  { text: 'Pending',  color: 'text-[#acacac]', dot: 'bg-[#d0d0d0]' },
-};
-
-const GATE_STATUS_ICON: Record<GateStatus, { icon: typeof CheckCircle2; color: string }> = {
-  passed:  { icon: CheckCircle2, color: 'text-[#4caf50]' },
-  pending: { icon: Circle,       color: 'text-[#ff9800]' },
-  blocked: { icon: XCircle,      color: 'text-[#e74c3c]' },
 };
 
 const FILTER_TABS: { value: TypeFilter; label: string; color?: string }[] = [
@@ -130,19 +49,20 @@ function GovernanceIcon({ size = 22 }: { size?: number }) {
 
 // ── Board Card Component ─────────────────────────────────────
 
-function BoardCard({ board }: { board: BoardData }) {
+function BoardCard({ board }: { board: Board }) {
   const navigate = useNavigate();
-  const typeStyle = TYPE_COLORS[board.type];
-  const passedGates = board.gates.filter((g) => g.status === 'passed').length;
+  const mode = (board.mode ?? 'explore') as BoardMode;
+  const modeStyle = MODE_COLORS[mode] ?? MODE_COLORS.explore;
+  const created = new Date(board.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   return (
     <div
       onClick={() => navigate(`/boards/${board.id}`)}
       className={cn(
         'bg-white rounded-[12px] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)] overflow-hidden border-l-[4px] cursor-pointer hover:shadow-[0px_3px_16px_0px_rgba(0,0,0,0.12)] transition-shadow',
-        typeStyle.border
+        modeStyle.border
       )}>
-      <div className="grid grid-cols-[1fr_1fr_1fr] min-h-[200px]">
+      <div className="grid grid-cols-[1fr_1fr_1fr] min-h-[160px]">
         {/* ── Left: Info ─────────────────────────── */}
         <div className="p-[20px] flex flex-col">
           {/* Title row */}
@@ -152,10 +72,10 @@ function BoardCard({ board }: { board: BoardData }) {
               <h3 className="text-[15px] font-semibold text-[#1a1a1a] tracking-tight">{board.name}</h3>
             </div>
             <div className="flex items-center gap-[6px] shrink-0 ml-[8px]">
-              <span className={cn('h-[22px] px-[10px] rounded-[6px] text-[11px] font-medium flex items-center capitalize', typeStyle.bg, typeStyle.text)}>
-                {board.type}
+              <span className={cn('h-[22px] px-[10px] rounded-[6px] text-[11px] font-medium flex items-center capitalize', modeStyle.bg, modeStyle.text)}>
+                {mode}
               </span>
-              <button 
+              <button
                 onClick={(e) => {
                   e.stopPropagation();
                   navigate(`/boards/${board.id}/release`);
@@ -165,126 +85,64 @@ function BoardCard({ board }: { board: BoardData }) {
               >
                 <Rocket size={14} />
               </button>
-              <button className="w-[24px] h-[24px] flex items-center justify-center rounded-[6px] text-[#acacac] hover:text-[#6b6b6b] hover:bg-[#f5f5f0] transition-colors">
+              <button
+                onClick={(e) => e.stopPropagation()}
+                className="w-[24px] h-[24px] flex items-center justify-center rounded-[6px] text-[#acacac] hover:text-[#6b6b6b] hover:bg-[#f5f5f0] transition-colors"
+              >
                 <MoreHorizontal size={14} />
               </button>
             </div>
           </div>
 
-          {/* Tags */}
+          {/* Type tag */}
           <div className="flex items-center gap-[6px] mb-[16px]">
-            {board.tags.map((tag) => (
-              <span key={tag} className={cn(
-                'h-[22px] px-[8px] rounded-[4px] text-[10px] font-medium flex items-center border',
-                tag === 'Engineering' ? 'border-[#ff9800] text-[#ff9800] bg-white' : 'border-[#e8e8e8] text-[#6b6b6b] bg-white'
-              )}>
-                {tag}
+            <span className="h-[22px] px-[8px] rounded-[4px] text-[10px] font-medium flex items-center border border-[#e8e8e8] text-[#6b6b6b] bg-white">
+              {board.type}
+            </span>
+            {board.status && (
+              <span className="h-[22px] px-[8px] rounded-[4px] text-[10px] font-medium flex items-center border border-[#e8e8e8] text-[#6b6b6b] bg-white capitalize">
+                {board.status.toLowerCase()}
               </span>
-            ))}
+            )}
           </div>
 
-          {/* Cards */}
-          <div className="mb-[12px]">
-            <span className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] mb-[8px] block">Cards</span>
-            <div className="flex flex-col gap-[8px]">
-              {board.cards.map((card) => {
-                const cfg = CARD_STATUS_CONFIG[card.status];
-                return (
-                  <div key={card.name} className="flex items-center justify-between">
-                    <div className="flex items-center gap-[8px]">
-                      <span className={cn('w-[6px] h-[6px] rounded-full shrink-0', cfg.dot)} />
-                      <span className="text-[12px] text-[#1a1a1a]">{card.name}</span>
-                    </div>
-                    <span className={cn('text-[11px] font-medium', cfg.color)}>{cfg.text}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          {/* Description */}
+          {board.description && (
+            <p className="text-[11px] text-[#6b6b6b] leading-[15px] line-clamp-2">{board.description}</p>
+          )}
+        </div>
 
-          {/* Linked Resources */}
-          {board.linkedResources && board.linkedResources.length > 0 && (
-            <div className="mt-auto pt-[8px]">
-              <span className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] mb-[6px] block">Linked Resources</span>
-              {board.linkedResources.map((res) => (
-                <div key={res} className="flex items-center gap-[6px]">
-                  <Link2 size={11} className="text-[#acacac]" />
-                  <span className="text-[11px] text-[#6b6b6b]">{res}</span>
-                </div>
-              ))}
+        {/* ── Middle: Details ─────────────────────── */}
+        <div className="p-[20px] border-l border-[#f0f0ec] flex flex-col gap-[8px]">
+          <span className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] mb-[4px] block">Details</span>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-[#6b6b6b]">Owner</span>
+            <span className="text-[11px] text-[#1a1a1a] font-medium">{board.owner}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-[#6b6b6b]">Mode</span>
+            <span className={cn('text-[11px] font-medium capitalize', modeStyle.text)}>{mode}</span>
+          </div>
+          {board.project_id && (
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-[#6b6b6b]">Project</span>
+              <span className="text-[11px] text-[#1a1a1a] font-medium">{board.project_id}</span>
             </div>
           )}
         </div>
 
-        {/* ── Middle: Gate Status ─────────────────── */}
-        <div className="p-[20px] border-l border-[#f0f0ec]">
-          <span className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] mb-[12px] block">Gate Status</span>
-          <div className="flex flex-col gap-[10px]">
-            {board.gates.map((gate) => {
-              const cfg = GATE_STATUS_ICON[gate.status];
-              const GateIcon = cfg.icon;
-              const reqText = gate.status === 'blocked'
-                ? 'Blocked'
-                : `${gate.fulfilled}/${gate.total} requirements`;
-              const reqColor = gate.status === 'passed'
-                ? 'text-[#4caf50]'
-                : gate.status === 'blocked'
-                  ? 'text-[#e74c3c]'
-                  : 'text-[#ff9800]';
-              return (
-                <div key={gate.name} className={cn(
-                  'flex items-start gap-[8px] p-[10px] rounded-[8px] border-l-[3px]',
-                  gate.status === 'passed' && 'bg-[#f8fdf8] border-l-[#4caf50]',
-                  gate.status === 'pending' && 'bg-[#fffdf5] border-l-[#ff9800]',
-                  gate.status === 'blocked' && 'bg-[#fef8f7] border-l-[#e74c3c]',
-                )}>
-                  <GateIcon size={14} className={cn('shrink-0 mt-[1px]', cfg.color)} />
-                  <div>
-                    <span className="text-[12px] font-medium text-[#1a1a1a] block">{gate.name}</span>
-                    <span className={cn('text-[10px]', reqColor)}>{reqText}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ── Right: Readiness ───────────────────── */}
-        <div className="p-[20px] border-l border-[#f0f0ec]">
-          <span className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] mb-[8px] block">Readiness</span>
-
-          {/* Big percentage */}
-          <div className="text-center mb-[4px]">
-            <span className="text-[28px] font-bold text-[#1a1a1a]">{board.readiness}%</span>
-          </div>
-          <div className="text-center mb-[16px]">
-            <span className="text-[11px] text-[#acacac]">{passedGates} of {board.gates.length} gates</span>
-          </div>
-
-          {/* Evidence */}
-          <span className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] mb-[6px] block">Evidence</span>
-          <div className="flex flex-col gap-[4px] mb-[12px]">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-[#6b6b6b]">Records</span>
-              <span className="text-[11px] text-[#1a1a1a] font-medium">{board.evidence.records}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-[#6b6b6b]">Artifacts</span>
-              <span className="text-[11px] text-[#1a1a1a] font-medium">{board.evidence.artifacts}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-[#6b6b6b]">Approvals</span>
-              <span className={cn('text-[11px] font-medium', board.evidence.approvals.includes('pending') ? 'text-[#ff9800]' : 'text-[#1a1a1a]')}>
-                {board.evidence.approvals}
-              </span>
-            </div>
-          </div>
-
-          {/* Metadata */}
-          <span className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] mb-[6px] block">Metadata</span>
+        {/* ── Right: Metadata ───────────────────── */}
+        <div className="p-[20px] border-l border-[#f0f0ec] flex flex-col gap-[8px]">
+          <span className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] mb-[4px] block">Metadata</span>
           <div className="flex items-center justify-between">
             <span className="text-[11px] text-[#6b6b6b]">Created</span>
-            <span className="text-[11px] text-[#1a1a1a] font-medium">{board.created}</span>
+            <span className="text-[11px] text-[#1a1a1a] font-medium">{created}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-[#6b6b6b]">Updated</span>
+            <span className="text-[11px] text-[#1a1a1a] font-medium">
+              {new Date(board.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </span>
           </div>
         </div>
       </div>
@@ -294,31 +152,27 @@ function BoardCard({ board }: { board: BoardData }) {
 
 // ── Stats Row ────────────────────────────────────────────────
 
-function StatsRow() {
-  const totalGates = BOARDS.reduce((sum, b) => sum + b.gates.length, 0);
-  const passed = BOARDS.reduce((sum, b) => sum + b.gates.filter((g) => g.status === 'passed').length, 0);
-  const pending = BOARDS.reduce((sum, b) => sum + b.gates.filter((g) => g.status === 'pending').length, 0);
-  const blocked = BOARDS.reduce((sum, b) => sum + b.gates.filter((g) => g.status === 'blocked').length, 0);
-  const totalEvidence = BOARDS.reduce((sum, b) => sum + b.evidence.records, 0);
-  const requiresAction = BOARDS.reduce((sum, b) => sum + (b.evidence.approvals.includes('pending') ? 1 : 0), 0);
-  const atRelease = BOARDS.filter((b) => b.type === 'release').length;
+function StatsRow({ boards }: { boards: Board[] }) {
+  const exploreCount = boards.filter((b) => b.mode === 'explore').length;
+  const studyCount   = boards.filter((b) => b.mode === 'study').length;
+  const releaseCount = boards.filter((b) => b.mode === 'release').length;
 
   const stats = [
-    { value: String(BOARDS.length), label: 'total boards' },
-    { value: String(totalGates), label: `${passed} passed · ${pending} pending · ${blocked} blocked` },
-    { value: String(totalEvidence), label: 'evidence records across all boards' },
-    { value: String(requiresAction), label: 'requires action', highlight: requiresAction > 0 },
-    { value: String(atRelease), label: 'no boards at release' },
+    { value: String(boards.length), label: 'total boards' },
+    { value: String(exploreCount),  label: 'explore mode' },
+    { value: String(studyCount),    label: 'study mode' },
+    { value: String(releaseCount),  label: 'release mode' },
+    { value: '—',                   label: 'gates summary (load board)' },
   ];
 
   return (
     <div className="grid grid-cols-5 gap-[16px] bg-white rounded-[12px] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)] px-[24px] py-[16px]">
       {stats.map((stat) => (
         <div key={stat.label}>
-          <div className={cn('text-[22px] font-bold tracking-tight', stat.highlight ? 'text-[#ff9800]' : 'text-[#1a1a1a]')}>
+          <div className="text-[22px] font-bold tracking-tight text-[#1a1a1a]">
             {stat.value}
           </div>
-          <div className={cn('text-[10px] mt-[2px]', stat.highlight ? 'text-[#ff9800]' : 'text-[#6b6b6b]')}>
+          <div className="text-[10px] mt-[2px] text-[#6b6b6b]">
             {stat.label}
           </div>
         </div>
@@ -329,9 +183,9 @@ function StatsRow() {
 
 // ── Status Bar ───────────────────────────────────────────────
 
-function StatusBar() {
-  const studyCount = BOARDS.filter((b) => b.type === 'study').length;
-  const exploreCount = BOARDS.filter((b) => b.type === 'explore').length;
+function StatusBar({ boards }: { boards: Board[] }) {
+  const studyCount   = boards.filter((b) => b.mode === 'study').length;
+  const exploreCount = boards.filter((b) => b.mode === 'explore').length;
 
   return (
     <div className="flex justify-center mt-[12px]">
@@ -339,11 +193,9 @@ function StatusBar() {
         <span className="w-[6px] h-[6px] rounded-full bg-[#4caf50]" />
         <span className="text-[#4caf50]">System Operational</span>
         <span className="text-[#d0d0d0]">·</span>
-        <span>{BOARDS.length} boards</span>
+        <span>{boards.length} boards</span>
         <span className="text-[#d0d0d0]">·</span>
         <span>{studyCount} study · {exploreCount} explore</span>
-        <span className="text-[#d0d0d0]">·</span>
-        <span className="text-[#ff9800] font-semibold">1 approval pending</span>
       </div>
     </div>
   );
@@ -365,17 +217,19 @@ export default function BoardsPage() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [showIntentModal, setShowIntentModal] = useState(false);
 
+  const { data: boards, isLoading, isError } = useBoardList();
+
   const filtered = useMemo(() => {
-    let result = BOARDS;
+    let result = boards ?? [];
     if (search) {
       const q = search.toLowerCase();
       result = result.filter((b) => b.name.toLowerCase().includes(q));
     }
     if (typeFilter !== 'all') {
-      result = result.filter((b) => b.type === typeFilter);
+      result = result.filter((b) => b.mode === typeFilter);
     }
     return result;
-  }, [search, typeFilter]);
+  }, [boards, search, typeFilter]);
 
   return (
     <div className="mx-auto w-full max-w-[1116px] px-4 pb-12 pt-0 flex flex-col gap-[12px]">
@@ -386,7 +240,7 @@ export default function BoardsPage() {
           <GovernanceIcon size={22} />
           <h1 className="text-[18px] font-bold tracking-tight text-[#1a1a1a]">Governance Boards</h1>
           <span className="h-[22px] px-[10px] rounded-[8px] bg-[#f0f0ec] text-[11px] font-medium text-[#acacac] flex items-center">
-            {BOARDS.length} boards
+            {isLoading ? '…' : `${boards?.length ?? 0} boards`}
           </span>
         </div>
 
@@ -448,41 +302,57 @@ export default function BoardsPage() {
         </button>
       </section>
 
-      {/* ── Alert Banner ────────────────────────── */}
-      <div className="flex items-center justify-between h-[44px] px-[20px] bg-[#fff8e1] rounded-[10px] border border-[#ffe0b2]">
-        <div className="flex items-center gap-[8px]">
-          <AlertTriangle size={14} className="text-[#ff9800]" />
-          <span className="text-[12px] font-medium text-[#ff9800]">1 gate requires your approval</span>
-          <span className="text-[12px] text-[#6b6b6b] ml-[4px]">
-            Structural Validation Study → Thermal Evidence Gate
-          </span>
-        </div>
-        <button className="h-[28px] px-[14px] rounded-[6px] bg-[#ff9800] text-white text-[11px] font-semibold hover:bg-[#f57c00] transition-colors">
-          Review Now
-        </button>
-      </div>
-
-      {/* ── Board Cards ─────────────────────────── */}
-      <div className="flex flex-col gap-[12px]">
-        {filtered.map((board) => (
-          <BoardCard key={board.id} board={board} />
-        ))}
-      </div>
-
-      {/* Empty State */}
-      {filtered.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-[60px] bg-white rounded-[12px] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)]">
-          <Shield size={36} strokeWidth={1} className="text-[#d0d0d0] mb-[8px]" />
-          <p className="text-[14px] font-medium text-[#1a1a1a]">No boards found</p>
-          <p className="text-[12px] text-[#6b6b6b] mt-[4px]">Try adjusting your search or filters</p>
+      {/* ── Loading State ─────────────────────── */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-[60px] bg-white rounded-[12px] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)]">
+          <Loader2 size={28} className="text-[#ff9800] animate-spin" />
+          <span className="ml-[10px] text-[13px] text-[#6b6b6b]">Loading boards…</span>
         </div>
       )}
 
+      {/* ── Error State ───────────────────────── */}
+      {isError && (
+        <div className="flex flex-col items-center justify-center py-[60px] bg-white rounded-[12px] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)]">
+          <Shield size={36} strokeWidth={1} className="text-[#e74c3c] mb-[8px]" />
+          <p className="text-[14px] font-medium text-[#1a1a1a]">Failed to load boards</p>
+          <p className="text-[12px] text-[#6b6b6b] mt-[4px]">Check your connection and try again</p>
+        </div>
+      )}
+
+      {/* ── Board Cards ─────────────────────────── */}
+      {!isLoading && !isError && (
+        <>
+          <div className="flex flex-col gap-[12px]">
+            {filtered.map((board) => (
+              <BoardCard key={board.id} board={board} />
+            ))}
+          </div>
+
+          {/* Empty State */}
+          {filtered.length === 0 && boards && boards.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-[60px] bg-white rounded-[12px] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)]">
+              <Shield size={36} strokeWidth={1} className="text-[#d0d0d0] mb-[8px]" />
+              <p className="text-[14px] font-medium text-[#1a1a1a]">No boards yet — create one</p>
+              <p className="text-[12px] text-[#6b6b6b] mt-[4px]">Click "New Board" to get started</p>
+            </div>
+          )}
+
+          {/* Filtered empty state */}
+          {filtered.length === 0 && boards && boards.length > 0 && (
+            <div className="flex flex-col items-center justify-center py-[60px] bg-white rounded-[12px] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)]">
+              <Shield size={36} strokeWidth={1} className="text-[#d0d0d0] mb-[8px]" />
+              <p className="text-[14px] font-medium text-[#1a1a1a]">No boards found</p>
+              <p className="text-[12px] text-[#6b6b6b] mt-[4px]">Try adjusting your search or filters</p>
+            </div>
+          )}
+        </>
+      )}
+
       {/* ── Stats Row ───────────────────────────── */}
-      <StatsRow />
+      <StatsRow boards={boards ?? []} />
 
       {/* ── Status Bar ──────────────────────────── */}
-      <StatusBar />
+      <StatusBar boards={boards ?? []} />
 
       <CreateFromIntentModal
         isOpen={showIntentModal}

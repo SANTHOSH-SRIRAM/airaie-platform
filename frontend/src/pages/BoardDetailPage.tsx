@@ -30,6 +30,8 @@ import GatePanel from '@components/boards/gates/GatePanel';
 import EvidencePanel from '@components/boards/evidence/EvidencePanel';
 import PlanViewer from '@components/boards/plans/PlanViewer';
 import ExecutePlanButton from '@components/boards/plans/ExecutePlanButton';
+import RecordsTab from '@components/boards/RecordsTab';
+import BoardAssistPanel from '@components/boards/BoardAssistPanel';
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -95,13 +97,15 @@ function ProgressBar({ label, current, total, color }: { label: string; current:
 // Tab type
 // ---------------------------------------------------------------------------
 
-type Tab = 'overview' | 'cards' | 'gates' | 'evidence';
+type Tab = 'overview' | 'cards' | 'gates' | 'evidence' | 'records' | 'ai-assist';
 
 const TABS: { value: Tab; label: string }[] = [
   { value: 'overview', label: 'Overview' },
   { value: 'cards', label: 'Cards' },
   { value: 'gates', label: 'Gates' },
   { value: 'evidence', label: 'Evidence' },
+  { value: 'records', label: 'Records' },
+  { value: 'ai-assist', label: 'AI Assist' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -383,6 +387,14 @@ export default function BoardDetailPage() {
             {activeTab === 'gates' && boardId && <GatePanel boardId={boardId} />}
 
             {activeTab === 'evidence' && <EvidenceTabContent />}
+
+            {activeTab === 'records' && boardId && <RecordsTab boardId={boardId} />}
+
+            {activeTab === 'ai-assist' && boardId && (
+              <div className="max-w-[720px]">
+                <BoardAssistPanel boardId={boardId} />
+              </div>
+            )}
           </div>
         </div>
 

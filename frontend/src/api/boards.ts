@@ -143,18 +143,67 @@ export async function listChildBoards(id: string): Promise<Board[]> {
   return apiOrMock(`/v0/boards/${id}/children`, { method: 'GET' }, []);
 }
 
-export async function downloadReleasePacket(id: string): Promise<Blob> {
-  const url = `/v0/boards/${id}/release-packet`;
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'X-Project-Id': 'prj_default',
-    },
-  });
+// downloadReleasePacket — endpoint not yet implemented in backend
+export async function downloadReleasePacket(_id: string): Promise<Blob> {
+  throw new Error('Export not yet available');
+}
 
-  if (!res.ok) {
-    throw new Error(`Failed to download release packet: ${res.status}`);
-  }
+// ---------------------------------------------------------------------------
+// Cards
+// ---------------------------------------------------------------------------
 
-  return res.blob();
+import type { Card } from '@/types/card';
+
+export async function listCards(boardId: string): Promise<Card[]> {
+  const res = await apiClient.get<{ cards: Card[] | null }>(`/v0/boards/${boardId}/cards`);
+  return (res as any).cards ?? res ?? [];
+}
+
+export async function createCard(boardId: string, data: { title: string; card_type: string; description?: string }): Promise<Card> {
+  return apiClient.post(`/v0/boards/${boardId}/cards`, data);
+}
+
+// ---------------------------------------------------------------------------
+// Records
+// ---------------------------------------------------------------------------
+
+export interface BoardRecord {
+  id: string;
+  board_id: string;
+  record_type: string;
+  title?: string;
+  content: string;
+  actor?: string;
+  run_id?: string;
+  tags?: string[];
+  created_at: string;
+}
+
+export async function listRecords(boardId: string): Promise<BoardRecord[]> {
+  const res = await apiClient.get<{ records: BoardRecord[] | null }>(`/v0/boards/${boardId}/records`);
+  return (res as any).records ?? res ?? [];
+}
+
+export async function createRecord(boardId: string, data: { record_type: string; content: string; title?: string; tags?: string[] }): Promise<BoardRecord> {
+  return apiClient.post(`/v0/boards/${boardId}/records`, data);
+}
+
+// ---------------------------------------------------------------------------
+// Board Assist (AI co-pilot)
+// ---------------------------------------------------------------------------
+
+export async function draftIntent(boardId: string, description: string): Promise<{ intent: unknown; rationale: string }> {
+  return apiClient.post(`/v0/boards/${boardId}/assist/draft-intent`, { description });
+}
+
+export async function recommendTools(boardId: string): Promise<Array<{ tool_id: string; name: string; score: number; reason: string }>> {
+  return apiClient.get(`/v0/boards/${boardId}/assist/recommend-tools`);
+}
+
+export async function analyzeFailure(boardId: string, runId: string): Promise<{ root_cause: string; suggestions: string[]; severity?: string }> {
+  return apiClient.get(`/v0/boards/${boardId}/runs/${runId}/assist/analyze-failure`);
+}
+
+export async function summarizeApprovals(boardId: string): Promise<{ summary: string; pending_count: number; items: unknown[] }> {
+  return apiClient.get(`/v0/boards/${boardId}/assist/summarize-approvals`);
 }
