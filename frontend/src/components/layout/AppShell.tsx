@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import ModalStack from './ModalStack';
 import RightPanel from './RightPanel';
+import StatusBar from './StatusBar';
 import VerticalToolbar from './VerticalToolbar';
 import BottomBar from './BottomBar';
 import { useUiStore } from '@store/uiStore';
@@ -128,6 +129,7 @@ export default function AppShell() {
       </div>
 
       <ModalStack />
+      {!hideChrome && <StatusBar />}
     </div>
   );
 }
