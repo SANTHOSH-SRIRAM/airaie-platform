@@ -5,9 +5,10 @@ import ChatMessage from '@components/agents/ChatMessage';
 interface ChatInterfaceProps {
   agentId?: string;
   sessionId?: string | null;
+  agentName?: string;
 }
 
-export default function ChatInterface({ agentId, sessionId = null }: ChatInterfaceProps) {
+export default function ChatInterface({ agentId, sessionId = null, agentName = 'Agent' }: ChatInterfaceProps) {
   const { data: messages } = useSessionMessages(agentId, sessionId);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -49,7 +50,7 @@ export default function ChatInterface({ agentId, sessionId = null }: ChatInterfa
         className="flex-1 overflow-y-auto px-8 py-6"
       >
         {messages.map((msg) => (
-          <ChatMessage key={msg.id} message={msg} />
+          <ChatMessage key={msg.id} message={msg} agentName={agentName} />
         ))}
       </div>
     </div>

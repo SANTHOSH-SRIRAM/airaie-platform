@@ -5,6 +5,7 @@ import InlineToolCallCard from '@components/agents/InlineToolCallCard';
 
 interface ChatMessageProps {
   message: ChatMessageType;
+  agentName?: string;
 }
 
 function formatRelativeTime(timestamp: string): string {
@@ -19,9 +20,7 @@ function formatRelativeTime(timestamp: string): string {
   return `${days}d ago`;
 }
 
-const AGENT_NAME = 'FEA Optimizer';
-
-export default function ChatMessage({ message }: ChatMessageProps) {
+export default function ChatMessage({ message, agentName = 'Agent' }: ChatMessageProps) {
   const { role, content, timestamp, toolCallProposal, runId } = message;
 
   if (role === 'user') {
@@ -63,7 +62,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
             </div>
           )}
           <p className="mt-1.5 text-[11px] text-[#9b978f]">
-            {AGENT_NAME} · {formatRelativeTime(timestamp)}
+            {agentName} · {formatRelativeTime(timestamp)}
           </p>
         </div>
       </div>

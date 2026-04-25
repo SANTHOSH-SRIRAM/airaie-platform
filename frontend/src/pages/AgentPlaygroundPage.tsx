@@ -60,7 +60,7 @@ export default function AgentPlaygroundPage() {
   const [showProposal, setShowProposal] = useState(false);
 
   const createSessionMutation = useCreateSession(resolvedAgentId);
-  const { data: existingSessions = [] } = useSessionList(resolvedAgentId);
+  const { data: existingSessions = [], isLoading: sessionListIsLoading } = useSessionList(resolvedAgentId);
 
   // Drop stale session id when it no longer appears in the active list.
   useEffect(() => {
@@ -75,6 +75,7 @@ export default function AgentPlaygroundPage() {
   useEffect(() => {
     if (!resolvedAgentId || !user?.id) return;
     if (sessionId) return;
+    if (sessionListIsLoading) return;
     const owned = (existingSessions ?? []).filter(
       (s) => s.user_id === user.id || s.user_id == null,
     );
@@ -94,7 +95,7 @@ export default function AgentPlaygroundPage() {
       });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedAgentId, user?.id, existingSessions.length]);
+  }, [resolvedAgentId, user?.id, existingSessions.length, sessionListIsLoading]);
 
   // Sync session selected from the sidebar list.
   const activeSessionFromStore = useAgentPlaygroundStore((s) => s.activeSessionId);
@@ -297,6 +298,7 @@ export default function AgentPlaygroundPage() {
               <ChatInterface
                 agentId={resolvedAgentId}
                 sessionId={sessionId}
+                agentName={agentDisplayName}
               />
               <PlaygroundActionBar />
             </div>

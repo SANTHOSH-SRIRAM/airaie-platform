@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useAgentPlaygroundStore } from '@store/agentPlaygroundStore';
 import { useSession, useSessionTrace, useSessionMetrics } from '@hooks/useAgentPlayground';
 import { useAgentVersions } from '@hooks/useAgents';
+import { extractMessages } from '@api/agentPlayground';
 import DecisionTraceTimeline from '@components/agents/DecisionTraceTimeline';
 import LiveMetrics from '@components/agents/LiveMetrics';
 import PolicyStatusCard from '@components/agents/PolicyStatusCard';
@@ -93,7 +94,9 @@ export default function InspectorPanel() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-cds-text-secondary">Messages</span>
-                <span className="text-cds-text-primary">{activeSession.history?.length ?? 0}</span>
+                <span className="text-cds-text-primary">
+                  {activeSession ? extractMessages(activeSession).length : 0}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-cds-text-secondary">Expires</span>
