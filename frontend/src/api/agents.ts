@@ -19,10 +19,70 @@ export interface AgentVersion {
   id: string;
   agent_id: string;
   version: number;
-  spec_json: AgentSpec;
+  spec_json?: AgentSpec;
   status: 'draft' | 'validated' | 'published';
   created_at: string;
   published_at?: string;
+}
+
+/**
+ * Wire shape returned by the kernel — `spec` is a base64-encoded JSON string
+ * of an AgentSpec. We decode it to `spec_json` at the API-client boundary so
+ * consumers always work with the parsed `AgentSpec` object (or `undefined`
+ * when decoding fails / the field is empty).
+ */
+export interface WireAgentVersion {
+  id: string;
+  agent_id: string;
+  version: number;
+  spec: string;
+  status: 'draft' | 'validated' | 'published';
+  created_at: string;
+  published_at?: string;
+}
+
+/**
+ * Decode a kernel-wire AgentVersion to the in-app shape.
+ * Tolerates: already-object spec, empty string, non-base64 string, malformed JSON.
+ * On any decode failure, returns `spec_json: undefined` so optional-chaining
+ * call sites fall through to their existing empty-state branches.
+ *
+ * Pure function. Exported so tests / future call sites can reuse it.
+ */
+export function mapWireAgentVersion(wire: WireAgentVersion | AgentVersion): AgentVersion {
+  // Defensive: if it's already in app shape (e.g. test fixture, double-mapped), pass through.
+  if (typeof (wire as WireAgentVersion).spec !== 'string') {
+    const w = wire as AgentVersion;
+    return {
+      id: w.id,
+      agent_id: w.agent_id,
+      version: w.version,
+      spec_json: w.spec_json,
+      status: w.status,
+      created_at: w.created_at,
+      published_at: w.published_at,
+    };
+  }
+
+  const w = wire as WireAgentVersion;
+  let spec_json: AgentSpec | undefined;
+  if (w.spec && w.spec.length > 0) {
+    try {
+      spec_json = JSON.parse(atob(w.spec)) as AgentSpec;
+    } catch {
+      spec_json = undefined;
+    }
+  }
+
+  return {
+    id: w.id,
+    agent_id: w.agent_id,
+    version: w.version,
+    spec_json,
+    status: w.status,
+    created_at: w.created_at,
+    published_at: w.published_at,
+  };
 }
 
 export interface AgentSpec {
@@ -96,7 +156,7 @@ export interface RunAgentResult {
 
 interface AgentVersionsResponse {
   agent_id: string;
-  versions: AgentVersion[];
+  versions: WireAgentVersion[];
   count: number;
 }
 
@@ -114,12 +174,12 @@ export function getAgent(id: string): Promise<AgentDetail> {
 
 export function listAgentVersions(agentId: string): Promise<AgentVersion[]> {
   return apiClient.get<AgentVersionsResponse>(`/v0/agents/${agentId}/versions`)
-    .then((resp) => resp.versions ?? []);
+    .then((resp) => (resp.versions ?? []).map(mapWireAgentVersion));
 }
 
 export function getAgentVersion(agentId: string, version: number): Promise<AgentVersion> {
-  return apiClient.get<{ version: AgentVersion }>(`/v0/agents/${agentId}/versions/${version}`)
-    .then((resp) => resp.version);
+  return apiClient.get<{ version: WireAgentVersion }>(`/v0/agents/${agentId}/versions/${version}`)
+    .then((resp) => mapWireAgentVersion(resp.version));
 }
 
 /* ---------- Mutation Endpoints ---------- */
@@ -134,7 +194,12 @@ export async function deleteAgent(id: string): Promise<void> {
 }
 
 export async function createAgentVersion(agentId: string, specJson: AgentSpec): Promise<AgentVersion> {
-  return apiClient.post(`/v0/agents/${agentId}/versions`, { spec_json: specJson });
+  const resp = await apiClient.post<WireAgentVersion | { version: WireAgentVersion }>(
+    `/v0/agents/${agentId}/versions`,
+    { spec_json: specJson }
+  );
+  const wire = (resp as { version?: WireAgentVersion }).version ?? (resp as WireAgentVersion);
+  return mapWireAgentVersion(wire);
 }
 
 export async function validateAgentVersion(agentId: string, version: number): Promise<{ valid: boolean; errors?: string[] }> {
@@ -142,7 +207,11 @@ export async function validateAgentVersion(agentId: string, version: number): Pr
 }
 
 export async function publishAgentVersion(agentId: string, version: number): Promise<AgentVersion> {
-  return apiClient.post(`/v0/agents/${agentId}/versions/${version}/publish`);
+  const resp = await apiClient.post<WireAgentVersion | { version: WireAgentVersion }>(
+    `/v0/agents/${agentId}/versions/${version}/publish`
+  );
+  const wire = (resp as { version?: WireAgentVersion }).version ?? (resp as WireAgentVersion);
+  return mapWireAgentVersion(wire);
 }
 
 export async function runAgent(
