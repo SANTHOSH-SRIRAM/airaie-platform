@@ -577,14 +577,7 @@ export default function WorkflowDetailPage() {
             <button className="text-[10px] text-[#2196f3] mt-[6px] hover:underline">+ Link Board</button>
           </div>
           {/* Agents Used */}
-          <div>
-            <span className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] block mb-[8px]">Agents Used</span>
-            <div className="flex items-center gap-[8px] h-[36px] px-[12px] rounded-[8px] bg-[#f5f5f0]">
-              <Zap size={12} className="text-[#9c27b0]" />
-              <span className="text-[11px] text-[#1a1a1a]">FEA Optimizer Agent</span>
-              <ChevronRight size={12} className="text-[#acacac] ml-auto" />
-            </div>
-          </div>
+          {/* TODO(backend): list real agents bound to this workflow via /v0/workflows/{id}/agents (or wherever the binding lives). Hidden until then to avoid fake data. */}
           {/* Tools Used */}
           <div>
             <span className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] block mb-[8px]">Tools Used</span>

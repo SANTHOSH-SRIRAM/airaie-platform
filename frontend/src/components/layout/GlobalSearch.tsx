@@ -40,28 +40,10 @@ const CATEGORY_CONFIG: Record<
 // Mock search data (client-side search across cached entities)
 // ---------------------------------------------------------------------------
 
-const SEARCHABLE_ITEMS: SearchResult[] = [
-  // Workflows
-  { id: 'wf_fea_validation', type: 'workflow', name: 'FEA Validation Pipeline', description: 'End-to-end FEA stress validation', route: '/workflows/wf_fea_validation' },
-  { id: 'wf_cfd_analysis', type: 'workflow', name: 'CFD Analysis Flow', description: 'Computational fluid dynamics pipeline', route: '/workflows/wf_cfd_analysis' },
-  { id: 'wf_material_testing', type: 'workflow', name: 'Material Testing Pipeline', description: 'Automated material property testing', route: '/workflows/wf_material_testing' },
-  { id: 'wf_topology_opt', type: 'workflow', name: 'Topology Optimization', description: 'Generative topology optimization', route: '/workflows/wf_topology_opt' },
-  { id: 'wf_mesh_quality', type: 'workflow', name: 'Mesh Quality Check', description: 'Quick mesh quality validation', route: '/workflows/wf_mesh_quality' },
-  // Agents
-  { id: 'fea-optimizer', type: 'agent', name: 'FEA Optimizer Agent', description: 'Determines optimal mesh density parameters', route: '/agent-studio/fea-optimizer' },
-  { id: 'design-advisor', type: 'agent', name: 'Design Advisor Agent', description: 'Recommends design optimizations', route: '/agent-studio/design-advisor' },
-  { id: 'thermal-analyst', type: 'agent', name: 'Thermal Analyst Agent', description: 'Evaluates thermal performance', route: '/agent-studio/thermal-analyst' },
-  // Tools
-  { id: 'tool_fea', type: 'tool', name: 'FEA Solver', description: 'Finite element analysis solver', route: '/tools' },
-  { id: 'tool_cfd', type: 'tool', name: 'CFD Solver', description: 'Computational fluid dynamics solver', route: '/tools' },
-  { id: 'tool_mesher', type: 'tool', name: 'Auto Mesher', description: 'Automatic mesh generation', route: '/tools' },
-  // Boards
-  { id: 'board_structural_001', type: 'board', name: 'Structural Validation Study', description: 'FEA validation for bracket design', route: '/boards/board_structural_001' },
-  { id: 'board_thermal_002', type: 'board', name: 'Thermal Analysis Exploration', description: 'Exploring thermal behavior', route: '/boards/board_thermal_002' },
-  // Runs
-  { id: 'run_001', type: 'run', name: 'Run #run_001', description: 'FEA Validation Pipeline - Running', route: '/workflow-runs/run_001' },
-  { id: 'run_002', type: 'run', name: 'Run #run_002', description: 'CFD Analysis Flow - Completed', route: '/workflow-runs/run_002' },
-];
+// TODO(backend): replace with live cross-entity search hitting /v0/workflows,
+// /v0/agents, /v0/tools, /v0/boards, /v0/runs. Empty until then so the
+// dropdown shows "no results" instead of fake matches.
+const SEARCHABLE_ITEMS: SearchResult[] = [];
 
 // ---------------------------------------------------------------------------
 // Component

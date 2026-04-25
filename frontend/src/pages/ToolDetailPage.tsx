@@ -582,16 +582,7 @@ export default function ToolDetailPage() {
                        <span className="text-[11px] text-[#949494] mt-1 ml-2 font-mono">View 2 more disconnected flows</span>
                     </div>
                   </div>
-                  <div>
-                    <h4 className="text-[10px] uppercase font-bold text-[#acacac] tracking-widest mb-4">AGENTS</h4>
-                    <div className="flex flex-col gap-3">
-                       <div className="flex justify-between items-center p-3 border border-[#ece9e3] rounded-[8px] hover:border-[#d0d0d0] cursor-pointer">
-                          <span className="flex items-center gap-2 text-[13px] font-bold text-[#1a1a1a]"><Combine size={14} className="text-[#9c27b0]"/> FEA Optimizer Agent</span>
-                          <span className="text-[10px] font-bold text-[#4caf50] px-2 bg-[#e8f5e9] rounded-full">Active</span>
-                       </div>
-                       <span className="text-[11px] text-[#949494] mt-1 ml-2 font-mono">Available inside prompt tool lists automatically</span>
-                    </div>
-                  </div>
+                  {/* TODO(backend): list real agents that grant this tool via their published spec. Hidden until /v0/tools/{id}/agents (or equivalent reverse-lookup) exists. */}
                </div>
             </section>
 

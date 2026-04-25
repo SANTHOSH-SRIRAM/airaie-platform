@@ -78,11 +78,8 @@ const AVAILABLE_WORKFLOWS: LinkedWorkflow[] = [
   { id: 'w6', name: 'Fatigue Life Estimation' },
 ];
 
-const AVAILABLE_AGENTS: LinkedAgent[] = [
-  { id: 'a1', name: 'FEA Optimizer Ag...' },
-  { id: 'a2', name: 'Design Advisor Agent' },
-  { id: 'a3', name: 'Thermal Analyst Agent' },
-];
+// TODO(backend): wire to /v0/agents — empty until then so the picker shows no fake options.
+const AVAILABLE_AGENTS: LinkedAgent[] = [];
 
 // ── Section Label ──────────────────────────────────────────
 
@@ -750,14 +747,9 @@ export default function CreateBoardPage() {
     { id: 'w6', name: 'Fatigue Life Estimation' },
   ]);
 
-  const [linkedAgents, setLinkedAgents] = useState<LinkedAgent[]>([
-    { id: 'a1', name: 'FEA Optimizer Ag...', primary: true },
-  ]);
-
-  const [nonPrimaryAgents, setNonPrimaryAgents] = useState<LinkedAgent[]>([
-    { id: 'a2', name: 'Design Advisor Agent' },
-    { id: 'a3', name: 'Thermal Analyst Agent' },
-  ]);
+  // TODO(backend): seed from /v0/agents linked to this board.
+  const [linkedAgents, setLinkedAgents] = useState<LinkedAgent[]>([]);
+  const [nonPrimaryAgents, setNonPrimaryAgents] = useState<LinkedAgent[]>([]);
 
   const [selectedTags, setSelectedTags] = useState<string[]>(['structure', 'validation']);
   const [tagInput, setTagInput] = useState('');

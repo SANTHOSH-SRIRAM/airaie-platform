@@ -403,7 +403,7 @@ export default function CreateAgentModal({ open, onClose, onSubmit }: CreateAgen
               type="text"
               value={form.name}
               onChange={(e) => update('name', e.target.value)}
-              placeholder="e.g. FEA Optimizer Agent"
+              placeholder="e.g. My Engineering Agent"
               className="mt-[8px] w-full h-[44px] px-[17px] rounded-[8px] border border-[#e8e8e8] bg-white text-[14px] text-[#1a1a1a] placeholder:text-[#acacac] focus:border-[#9c27b0] focus:outline-none focus:ring-[3px] focus:ring-[#9c27b0]/8 transition-all"
             />
             <HintText className="mt-[6px] block">Give your agent a descriptive name</HintText>
