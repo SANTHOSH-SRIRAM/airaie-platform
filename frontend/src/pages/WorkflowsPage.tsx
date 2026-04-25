@@ -36,9 +36,11 @@ interface WorkflowCard {
   pinned?: boolean;
 }
 
+// TODO(backend): wire to /v0/workflows for the real list. WORKFLOWS is
+// the page's only data source today (filtering, StatusBar, list cards).
 const WORKFLOWS: WorkflowCard[] = [
   {
-    id: 'wf_fea_validation',
+    id: 'wf_demo_fea',
     name: 'FEA Validation Pipeline',
     description: 'End-to-end FEA stress validation with mesh generation and evidence gating',
     status: 'published',

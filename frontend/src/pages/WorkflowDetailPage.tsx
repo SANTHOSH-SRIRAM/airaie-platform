@@ -49,8 +49,10 @@ interface VersionItem {
 
 // ── Mock Data ────────────────────────────────────────────────
 
+// TODO(backend): replace this WORKFLOW mock with useWorkflow(workflowId) data.
+// Page UI is currently driven by this object literal across ~400 lines.
 const WORKFLOW = {
-  id: 'wf_fea_validation',
+  id: 'wf_demo',
   name: 'FEA Validation Pipeline',
   description: 'End-to-end finite-element analysis stress validation pipeline with automated mesh generation, FEA simulation, and evidence gating for structural compliance under ISO 13849.',
   version: 'v3',
@@ -200,7 +202,8 @@ export default function WorkflowDetailPage() {
   const setSidebarContentType = useUiStore((s) => s.setSidebarContentType);
   const hideBottomBar = useUiStore((s) => s.hideBottomBar);
 
-  const workflowId = id ?? 'wf_fea_validation';
+  // useTriggers/useCreateTrigger... all internally enabled-guard on truthy id.
+  const workflowId = id ?? '';
   const { data: triggerEntries } = useTriggers(workflowId);
   const createTriggerMutation = useCreateTrigger(workflowId);
   const updateTriggerMutation = useUpdateTrigger(workflowId);

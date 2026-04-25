@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useWorkflowStore } from '@store/workflowStore';
@@ -13,12 +13,13 @@ import WorkflowEditorBottomBar from '@components/workflows/WorkflowEditorBottomB
 import NodePalette from '@components/workflows/NodePalette';
 import NodePropertiesPanel from '@components/workflows/NodePropertiesPanel';
 
-const DEFAULT_WORKFLOW_ID = 'wf_fea_validation';
-
 export default function WorkflowEditorPage() {
   const navigate = useNavigate();
   const { workflowId: routeWorkflowId } = useParams<{ workflowId: string }>();
-  const workflowId = routeWorkflowId ?? DEFAULT_WORKFLOW_ID;
+  // No hardcoded fallback. useWorkflow's enabled guard skips the call for
+  // empty ids; an empty id means "no workflow chosen yet" — the empty graph
+  // store + canvas already handle that path.
+  const workflowId = routeWorkflowId ?? '';
   const { data: workflow } = useWorkflow(workflowId);
   const { isSaving, lastSavedAt, saveNow } = useAutoSave(workflowId);
   const { isStarting, isRunning, isCompleted, error: runError, start, cancel } = useRunWorkflow(workflowId);
@@ -37,9 +38,9 @@ export default function WorkflowEditorPage() {
     }
   }, [workflow, loadWorkflow, selectNode]);
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     void saveNow();
-  };
+  }, [saveNow]);
 
   const handleRun = () => {
     start();
@@ -55,6 +56,24 @@ export default function WorkflowEditorPage() {
       navigate('/workflow-runs');
     }
   };
+
+  // Cmd+S / Ctrl+S → save (don't fall through to browser's "save page")
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+        // Only intercept when the editor is the active context, not while
+        // the user is typing in an input/textarea.
+        const target = e.target as HTMLElement | null;
+        const tag = target?.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) return;
+
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handleSave]);
 
   return (
     <ReactFlowProvider>
