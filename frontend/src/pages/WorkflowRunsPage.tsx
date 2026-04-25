@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { ArrowLeft, ScanSearch, Settings2, Wifi, WifiOff, ZoomIn, ZoomOut } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@api/client';
 import { useRunStore } from '@store/runStore';
 import { useWorkflowStore } from '@store/workflowStore';
 import { useExecutionStore } from '@store/executionStore';
@@ -15,8 +17,6 @@ import RunDAGViewer from '@components/workflows/runs/RunDAGViewer';
 import LogViewer from '@components/workflows/runs/LogViewer';
 import RunNodeDetailPanel from '@components/workflows/runs/RunNodeDetailPanel';
 import RunActionBar from '@components/workflows/runs/RunActionBar';
-
-const DEFAULT_WORKFLOW_ID = 'wf_fea_validation';
 
 const RUN_TABS = [
   { id: 'editor', label: 'Editor' },
@@ -45,11 +45,33 @@ function formatStartedAgo(iso?: string): string {
 export default function WorkflowRunsPage() {
   const navigate = useNavigate();
   const { runId: routeRunId } = useParams<{ runId?: string }>();
-  const { data: workflow } = useWorkflow(DEFAULT_WORKFLOW_ID);
-  const { data: runs } = useRunList(DEFAULT_WORKFLOW_ID);
+
+  // Resolve workflow id from ?workflow=<id> query param; fall back to first
+  // workflow returned by /v0/workflows when no param is supplied.
+  const [searchParams] = useSearchParams();
+  const queryWorkflowId = searchParams.get('workflow');
+
+  const { data: workflowsList } = useQuery({
+    queryKey: ['workflows', 'list-fallback'],
+    queryFn: async () => {
+      const res = await api<unknown>('/v0/workflows', { method: 'GET' });
+      if (Array.isArray(res)) return res as Array<{ id: string }>;
+      if (res && typeof res === 'object' && 'workflows' in res) {
+        return (res as { workflows?: Array<{ id: string }> }).workflows ?? [];
+      }
+      return [];
+    },
+    enabled: !queryWorkflowId,
+    staleTime: 60_000,
+  });
+
+  const resolvedWorkflowId = queryWorkflowId ?? workflowsList?.[0]?.id ?? '';
+
+  const { data: workflow } = useWorkflow(resolvedWorkflowId);
+  const { data: runs } = useRunList(resolvedWorkflowId);
 
   // SSE-powered execution flow
-  const { connected: sseConnected } = useRunWorkflow(DEFAULT_WORKFLOW_ID);
+  const { connected: sseConnected } = useRunWorkflow(resolvedWorkflowId);
   useExecutionStore((s) => s.activeRunId);
   const executionSseConnected = useExecutionStore((s) => s.sseConnected);
 
@@ -87,8 +109,11 @@ export default function WorkflowRunsPage() {
 
   useEffect(() => {
     if (!selectedRunId) return;
-    navigate(`/workflow-runs/${selectedRunId}`, { replace: true });
-  }, [selectedRunId, navigate]);
+    const search = queryWorkflowId
+      ? `?workflow=${encodeURIComponent(queryWorkflowId)}`
+      : '';
+    navigate(`/workflow-runs/${selectedRunId}${search}`, { replace: true });
+  }, [selectedRunId, navigate, queryWorkflowId]);
 
   useEffect(() => {
     if (!runDetail || selectedRunNodeId) return;
@@ -102,9 +127,41 @@ export default function WorkflowRunsPage() {
   const title = metadata?.name ?? workflow?.name ?? 'FEA Validation Pipeline';
   const versionChip = metadata ? `${metadata.version} published` : 'v3 published';
 
+  // Guard: when no workflow can be resolved (no ?workflow query and no workflows
+  // exist in the system yet), render an empty state. Hooks above run
+  // unconditionally so rules-of-hooks ordering is preserved.
+  if (!resolvedWorkflowId) {
+    return (
+      <div className="flex h-full items-center justify-center bg-[#f5f5f0]">
+        <div className="rounded-[16px] border border-[#ece9e3] bg-white px-6 py-8 text-center shadow-[0px_1px_10px_0px_rgba(0,0,0,0.05)]">
+          <p className="text-[14px] font-semibold text-[#1a1a1a]">No workflow selected</p>
+          <p className="mt-1 text-[12px] text-[#8f8a83]">
+            Open a workflow from the Workflows page to see its run history.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/workflows')}
+            className="mt-4 inline-flex h-[36px] items-center gap-2 rounded-[10px] bg-[#2d2d2d] px-4 text-[12px] font-medium text-white"
+          >
+            Go to Workflows
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const handleTabChange = (tab: string) => {
     if (tab === 'editor') navigate('/workflow-studio');
-    if (tab === 'runs') navigate(selectedRunId ? `/workflow-runs/${selectedRunId}` : '/workflow-runs');
+    if (tab === 'runs') {
+      const search = queryWorkflowId
+        ? `?workflow=${encodeURIComponent(queryWorkflowId)}`
+        : '';
+      navigate(
+        selectedRunId
+          ? `/workflow-runs/${selectedRunId}${search}`
+          : `/workflow-runs${search}`
+      );
+    }
   };
 
   return (
@@ -160,7 +217,7 @@ export default function WorkflowRunsPage() {
 
           <div className="flex min-h-0 flex-1 gap-[12px]">
             <aside className="w-[300px] shrink-0 overflow-hidden rounded-[20px] border border-[#ece9e3] bg-white shadow-[0px_1px_10px_0px_rgba(0,0,0,0.05)]">
-              <ExecutionList workflowId={DEFAULT_WORKFLOW_ID} />
+              <ExecutionList workflowId={resolvedWorkflowId} />
             </aside>
 
             <section className="min-w-0 flex-1">
@@ -236,7 +293,7 @@ export default function WorkflowRunsPage() {
 
                 {/* Run Action Bar */}
                 <div className="flex justify-center py-1">
-                  <RunActionBar workflowId={DEFAULT_WORKFLOW_ID} />
+                  <RunActionBar workflowId={resolvedWorkflowId} />
                 </div>
               </div>
             </section>
