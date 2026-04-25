@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchRunList, fetchRunDetail, fetchRunLogs, cancelRun, retryRun, fetchRunArtifacts } from '@api/runs';
+import { fetchRunList, fetchRunDetail, fetchRunLogs, cancelRun, fetchRunArtifacts } from '@api/runs';
 
 export const runKeys = {
   all: ['runs'] as const,
@@ -35,16 +35,6 @@ export function useCancelRun() {
     mutationFn: (runId: string) => cancelRun(runId),
     onSuccess: (_, runId) => {
       qc.invalidateQueries({ queryKey: runKeys.detail(runId) });
-    },
-  });
-}
-
-export function useRetryRun() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (runId: string) => retryRun(runId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: runKeys.all });
     },
   });
 }

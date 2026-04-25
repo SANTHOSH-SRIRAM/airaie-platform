@@ -1,69 +1,268 @@
-import type { RunEntry, RunDetail, RunLogLine } from '@/types/run';
-import { apiOrMock } from '@api/client';
+import type {
+  RunEntry,
+  RunDetail,
+  RunLogLine,
+  RunNodeDetail,
+  RunNodeMetrics,
+  RunStatus,
+  RunNodeStatus,
+} from '@/types/run';
+import { api } from '@api/client';
 
-const MOCK_RUNS: RunEntry[] = [
-  { id: 'run_a1b2c3', workflowId: 'wf_fea', workflowName: 'FEA Validation Pipeline', status: 'running', startedAt: new Date(Date.now() - 120_000).toISOString(), duration: 120, nodesCompleted: 3, nodesTotal: 5, costUsd: 1.24, triggeredBy: 'Webhook' },
-  { id: 'run_a1b1d4', workflowId: 'wf_fea', workflowName: 'FEA Validation Pipeline', status: 'succeeded', startedAt: new Date(Date.now() - 900_000).toISOString(), completedAt: new Date(Date.now() - 858_000).toISOString(), duration: 42, nodesCompleted: 5, nodesTotal: 5, costUsd: 2.30, triggeredBy: 'Manual' },
-  { id: 'run_a1b0e5', workflowId: 'wf_fea', workflowName: 'FEA Validation Pipeline', status: 'failed', startedAt: new Date(Date.now() - 3_600_000).toISOString(), completedAt: new Date(Date.now() - 3_540_000).toISOString(), duration: 60, nodesCompleted: 2, nodesTotal: 5, costUsd: 0.85, triggeredBy: 'Schedule' },
-  { id: 'run_a0f9f6', workflowId: 'wf_fea', workflowName: 'FEA Validation Pipeline', status: 'succeeded', startedAt: new Date(Date.now() - 10_800_000).toISOString(), duration: 38, nodesCompleted: 5, nodesTotal: 5, costUsd: 1.95, triggeredBy: 'Webhook' },
-  { id: 'run_a0f8g7', workflowId: 'wf_fea', workflowName: 'FEA Validation Pipeline', status: 'succeeded', startedAt: new Date(Date.now() - 18_000_000).toISOString(), duration: 72, nodesCompleted: 5, nodesTotal: 5, costUsd: 3.20, triggeredBy: 'Manual' },
-];
+/* ---------- Status mapping helpers ---------- */
+// Kernel returns UPPERCASE enum values, frontend types use lowercase.
 
-const MOCK_DETAIL: RunDetail = {
-  id: 'run_a1b2c3', workflowId: 'wf_fea', workflowName: 'FEA Validation Pipeline', status: 'running',
-  startedAt: new Date(Date.now() - 120_000).toISOString(), duration: 120, costUsd: 1.24, nodesCompleted: 3, nodesTotal: 5, triggeredBy: 'Webhook',
-  nodes: [
-    { nodeId: 'trig_webhook', nodeName: 'Webhook', nodeType: 'trigger', status: 'completed', startedAt: new Date(Date.now() - 120_000).toISOString(), duration: 0.1, inputs: { endpoint: '/validate' }, outputs: { body: '1 item' }, metrics: { cpuPercent: 2, memoryMb: 64, costUsd: 0.01, attempt: 1 }, attempts: [{ attempt: 1, status: 'completed', startedAt: new Date(Date.now() - 120_000).toISOString(), duration: 0.1 }] },
-    { nodeId: 'step_mesh', nodeName: 'Mesh Generator', nodeType: 'tool', status: 'completed', startedAt: new Date(Date.now() - 119_000).toISOString(), duration: 7, inputs: { geometry: 'art_cad_001' }, outputs: { mesh: '45,000 elements' }, metrics: { cpuPercent: 85, memoryMb: 512, costUsd: 0.30, attempt: 1 }, attempts: [{ attempt: 1, status: 'completed', startedAt: new Date(Date.now() - 119_000).toISOString(), duration: 7 }] },
-    { nodeId: 'step_fea', nodeName: 'FEA Solver', nodeType: 'tool', status: 'running', startedAt: new Date(Date.now() - 112_000).toISOString(), duration: 9, inputs: { mesh_file: 'art_def456', threshold: 128 }, outputs: null, metrics: { cpuPercent: 92, memoryMb: 1400, costUsd: 0.44, attempt: 1 }, attempts: [{ attempt: 1, status: 'running', startedAt: new Date(Date.now() - 112_000).toISOString() }] },
-    { nodeId: 'step_opt', nodeName: 'AI Optimizer', nodeType: 'agent', status: 'pending', inputs: { goal: 'Minimize weight' }, outputs: null, metrics: null, attempts: [] },
-    { nodeId: 'step_evidence', nodeName: 'Evidence Gate', nodeType: 'governance', status: 'pending', inputs: { criteria: 'ISO 12345' }, outputs: null, metrics: null, attempts: [] },
-  ],
+const RUN_STATUS_MAP: Record<string, RunStatus> = {
+  QUEUED: 'waiting',
+  BLOCKED: 'waiting',
+  RUNNING: 'running',
+  RETRYING: 'running',
+  SUCCEEDED: 'succeeded',
+  SKIPPED: 'succeeded',
+  FAILED: 'failed',
+  CANCELED: 'cancelled',
 };
 
-const MOCK_LOGS: RunLogLine[] = [
-  { timestamp: '10:42:01', nodeId: 'trig_webhook', nodeName: 'Webhook', level: 'info', message: 'Received POST /validate — 1 item' },
-  { timestamp: '10:42:01', nodeId: 'step_mesh', nodeName: 'Mesh Generator', level: 'info', message: 'Starting container mesh-gen:1.0...' },
-  { timestamp: '10:42:03', nodeId: 'step_mesh', nodeName: 'Mesh Generator', level: 'info', message: 'Downloading artifact art_cad_001 from S3...' },
-  { timestamp: '10:42:08', nodeId: 'step_mesh', nodeName: 'Mesh Generator', level: 'info', message: 'Mesh generated: 45,000 elements, quality 0.95' },
-  { timestamp: '10:42:08', nodeId: 'step_mesh', nodeName: 'Mesh Generator', level: 'info', message: 'SUCCEEDED — duration 7s, cost $0.30' },
-  { timestamp: '10:42:09', nodeId: 'step_fea', nodeName: 'FEA Solver', level: 'info', message: 'Starting container fea-solver:2.1...' },
-  { timestamp: '10:42:12', nodeId: 'step_fea', nodeName: 'FEA Solver', level: 'info', message: 'Loading mesh art_def456...' },
-  { timestamp: '10:42:15', nodeId: 'step_fea', nodeName: 'FEA Solver', level: 'info', message: 'Running analysis... iteration 3/10' },
-  { timestamp: '10:42:15', nodeId: 'step_fea', nodeName: 'FEA Solver', level: 'info', message: 'Solving stiffness matrix....' },
-];
+const NODE_STATUS_MAP: Record<string, RunNodeStatus> = {
+  QUEUED: 'pending',
+  BLOCKED: 'pending',
+  RUNNING: 'running',
+  RETRYING: 'running',
+  SUCCEEDED: 'completed',
+  SKIPPED: 'skipped',
+  FAILED: 'failed',
+  CANCELED: 'failed',
+};
 
-export const fetchRunList = (workflowId: string): Promise<RunEntry[]> =>
-  apiOrMock(`/v0/workflows/${workflowId}/runs`, { method: 'GET' }, MOCK_RUNS);
+function toRunStatus(s: string | undefined): RunStatus {
+  if (!s) return 'waiting';
+  return RUN_STATUS_MAP[s.toUpperCase()] ?? 'waiting';
+}
 
-export const fetchRunDetail = (runId: string): Promise<RunDetail> =>
-  apiOrMock(`/v0/runs/${runId}`, { method: 'GET' }, MOCK_DETAIL);
+function toNodeStatus(s: string | undefined): RunNodeStatus {
+  if (!s) return 'pending';
+  return NODE_STATUS_MAP[s.toUpperCase()] ?? 'pending';
+}
 
-export const fetchRunLogs = (runId: string): Promise<RunLogLine[]> =>
-  apiOrMock(`/v0/runs/${runId}/logs`, { method: 'GET' }, MOCK_LOGS);
+function durationSeconds(startedAt?: string, completedAt?: string): number {
+  if (!startedAt) return 0;
+  const start = new Date(startedAt).getTime();
+  const end = completedAt ? new Date(completedAt).getTime() : Date.now();
+  return Math.max(0, Math.round((end - start) / 1000));
+}
 
-export const cancelRun = (runId: string): Promise<void> =>
-  apiOrMock(`/v0/runs/${runId}/cancel`, { method: 'POST' }, undefined);
+function safeDecodeBase64Json<T>(input: unknown): T | null {
+  if (typeof input !== 'string' || !input) return null;
+  try {
+    const decoded = atob(input);
+    return JSON.parse(decoded) as T;
+  } catch {
+    return null;
+  }
+}
 
-export const retryRun = (runId: string): Promise<{ runId: string }> =>
-  apiOrMock(`/v0/runs/${runId}/retry`, { method: 'POST' }, { runId: `run_${Date.now()}` });
+/* ---------- Run list ---------- */
+
+interface RawRunListResponse {
+  runs?: RawRun[];
+}
+
+export async function fetchRunList(workflowId: string): Promise<RunEntry[]> {
+  const url = `/v0/runs?workflow_id=${encodeURIComponent(workflowId)}&run_type=workflow`;
+  const res = await api<RawRunListResponse | RawRun[]>(url, { method: 'GET' });
+  const list = Array.isArray(res) ? res : res?.runs ?? [];
+  return list.map((raw) => mapRawRunToRunEntry(raw, workflowId));
+}
+
+export function mapRawRunToRunEntry(
+  raw: RawRun & {
+    workflow_id?: string;
+    cost_actual?: number;
+    actor?: string;
+    completed_at?: string;
+  },
+  fallbackWorkflowId: string
+): RunEntry {
+  return {
+    id: raw.id,
+    workflowId: (raw as { workflow_id?: string }).workflow_id ?? fallbackWorkflowId,
+    workflowName: '',
+    status: toRunStatus(raw.status),
+    startedAt: raw.started_at ?? new Date().toISOString(),
+    completedAt: raw.completed_at,
+    duration: durationSeconds(raw.started_at, raw.completed_at),
+    // run-list shape doesn't include node_runs; ExecutionListItem tolerates 0
+    nodesCompleted: 0,
+    nodesTotal: 0,
+    costUsd: raw.cost_actual ?? 0,
+    triggeredBy: (raw as { actor?: string }).actor ?? 'system',
+  };
+}
+
+/* ---------- Run detail ---------- */
+
+interface RunEnvelope {
+  run: RawRun & {
+    workflow_id?: string;
+    actor?: string;
+    cost_actual?: number;
+    completed_at?: string;
+  };
+  node_runs?: RawNodeRun[];
+  artifacts?: unknown[]; // unused here; kept for shape parity
+}
+
+export async function fetchRunDetail(runId: string): Promise<RunDetail> {
+  const envelope = await api<RunEnvelope>(`/v0/runs/${runId}`, { method: 'GET' });
+  return mapRunEnvelopeToRunDetail(envelope);
+}
+
+export function mapRunEnvelopeToRunDetail(envelope: RunEnvelope): RunDetail {
+  const run = envelope.run;
+  const nodeRuns = envelope.node_runs ?? [];
+  const nodes = nodeRuns.map(mapRawNodeRunToRunNodeDetail);
+
+  return {
+    id: run.id,
+    workflowId: run.workflow_id ?? '',
+    workflowName: '', // page overlays this from useWorkflow
+    status: toRunStatus(run.status),
+    startedAt: run.started_at ?? new Date().toISOString(),
+    completedAt: run.completed_at,
+    duration: durationSeconds(run.started_at, run.completed_at),
+    costUsd: run.cost_actual ?? 0,
+    nodesCompleted: nodes.filter((n) => n.status === 'completed').length,
+    nodesTotal: nodes.length,
+    triggeredBy: run.actor ?? 'system',
+    nodes,
+  };
+}
+
+export function mapRawNodeRunToRunNodeDetail(
+  raw: RawNodeRun & { cost_actual?: number; cost_estimate?: number }
+): RunNodeDetail {
+  const decodedOutputs = safeDecodeBase64Json<RawNodeRunPort[]>(raw.outputs);
+  const outputsRecord: Record<string, unknown> | null = Array.isArray(decodedOutputs)
+    ? Object.fromEntries(
+        decodedOutputs.map((p) => [p.name, p.value ?? p.artifact_id ?? null])
+      )
+    : null;
+
+  const durationSec =
+    raw.duration_ms != null
+      ? Math.round(raw.duration_ms / 1000)
+      : durationSeconds(raw.started_at, raw.completed_at);
+
+  const metrics: RunNodeMetrics | null =
+    raw.attempt > 0 || raw.cost_actual != null
+      ? {
+          cpuPercent: 0, // not exposed on the wire today
+          memoryMb: 0, // not exposed on the wire today
+          costUsd: raw.cost_actual ?? 0,
+          attempt: raw.attempt ?? 1,
+        }
+      : null;
+
+  return {
+    nodeId: raw.node_id,
+    nodeName: raw.node_id, // human name not on the wire; fall back to id
+    nodeType: raw.tool_ref ?? 'tool',
+    status: toNodeStatus(raw.status),
+    startedAt: raw.started_at,
+    completedAt: raw.completed_at,
+    duration: durationSec,
+    inputs: {}, // run.inputs is encoded at run-level not node-level; leave empty
+    outputs: outputsRecord,
+    metrics,
+    attempts: [], // attempt-history endpoint not yet implemented in kernel
+  };
+}
+
+/* ---------- Logs ---------- */
+
+interface RawLogEvent {
+  actor?: string;
+  event_type?: string;
+  payload?: unknown;
+  timestamp?: string;
+}
+
+interface RawLogsResponse {
+  logs?: RawLogEvent[];
+  run_id?: string;
+  status?: string;
+}
+
+export async function fetchRunLogs(runId: string): Promise<RunLogLine[]> {
+  const res = await api<RawLogsResponse | RawLogEvent[]>(
+    `/v0/runs/${runId}/logs`,
+    { method: 'GET' }
+  );
+  const events = Array.isArray(res) ? res : res?.logs ?? [];
+  return events.map(mapRawLogToRunLogLine);
+}
+
+export function mapRawLogToRunLogLine(ev: RawLogEvent): RunLogLine {
+  const eventType = (ev.event_type ?? '').toLowerCase();
+  const isFailure = eventType.includes('fail') || eventType.includes('error');
+  let message = '';
+  if (typeof ev.payload === 'string') {
+    message = ev.payload;
+  } else if (ev.payload != null) {
+    try {
+      message = JSON.stringify(ev.payload);
+    } catch {
+      message = String(ev.payload);
+    }
+  }
+  if (!message && ev.event_type) message = ev.event_type;
+
+  return {
+    timestamp: ev.timestamp ?? new Date().toISOString(),
+    nodeId: '',
+    nodeName: ev.actor ?? 'system',
+    level: isFailure ? 'error' : 'info',
+    message,
+  };
+}
+
+/* ---------- Artifacts ---------- */
 
 export interface RunArtifact {
   id: string;
-  type: string;
+  project_id?: string;
   name?: string;
-  size?: number;
-  node_id?: string;
+  type: string;
+  content_hash?: string;
+  size_bytes?: number;
+  storage_uri?: string;
+  created_by?: string;
   created_at: string;
-  download_url?: string;
 }
 
-const MOCK_ARTIFACTS: RunArtifact[] = [];
+interface RawArtifactsResponse {
+  artifacts?: RunArtifact[];
+}
 
-export const fetchRunArtifacts = (runId: string): Promise<RunArtifact[]> =>
-  apiOrMock(`/v0/runs/${runId}/artifacts`, { method: 'GET' }, MOCK_ARTIFACTS);
+export async function fetchRunArtifacts(runId: string): Promise<RunArtifact[]> {
+  const res = await api<RawArtifactsResponse | RunArtifact[]>(
+    `/v0/runs/${runId}/artifacts`,
+    { method: 'GET' }
+  );
+  return Array.isArray(res) ? res : res?.artifacts ?? [];
+}
+
+/* ---------- Cancel ---------- */
+
+export const cancelRun = (runId: string): Promise<void> =>
+  api(`/v0/runs/${runId}/cancel`, { method: 'POST' });
+
+// retryRun is intentionally NOT exported. Kernel /v0/runs/{id}/retry is not registered (404).
+// Restart-style retry is handled by RunActionBar via useRunWorkflow.start (POST /v0/workflows/{id}/run).
 
 /* ---------- Real backend run detail (used by playground outputs panel) ---------- */
+// PRESERVED for src/components/agents/InlineToolCallCard.tsx and
+// src/components/agents/execution/RunOutputsPanel.tsx — do not remove.
 
 export interface RawNodeRunPort {
   name: string;

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useCallback, useMemo } from 'react';
-import { Copy, Download, RotateCcw, Square } from 'lucide-react';
+import { Copy, Download, Square } from 'lucide-react';
 import { useRunStore } from '@store/runStore';
 import { useExecutionStore } from '@store/executionStore';
-import { useCancelRun, useRetryRun, useRunLogs } from '@hooks/useRuns';
+import { useCancelRun, useRunLogs } from '@hooks/useRuns';
 import type { RunDetail, RunLogLine } from '@/types/run';
 import LogLine from './LogLine';
 import ArtifactsTab from './ArtifactsTab';
@@ -57,7 +57,6 @@ export default function LogViewer({ runId, runDetail }: LogViewerProps) {
   }, [isSSEActive, sseLogs, polledLogs]);
 
   const cancelMutation = useCancelRun();
-  const retryMutation = useRetryRun();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -91,7 +90,6 @@ export default function LogViewer({ runId, runDetail }: LogViewerProps) {
   }
 
   const isRunning = runDetail?.status === 'running';
-  const isTerminal = runDetail?.status === 'succeeded' || runDetail?.status === 'failed' || runDetail?.status === 'cancelled';
 
   return (
     <div className="flex h-full flex-col bg-white">
@@ -167,15 +165,6 @@ export default function LogViewer({ runId, runDetail }: LogViewerProps) {
                   >
                     <Square size={12} />
                     Cancel Run
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!isTerminal || retryMutation.isPending}
-                    onClick={() => retryMutation.mutate(runId)}
-                    className="inline-flex h-[36px] items-center gap-2 rounded-[10px] border border-[#bdb7b0] px-4 text-[12px] font-medium text-[#6b6b6b] disabled:opacity-50"
-                  >
-                    <RotateCcw size={12} />
-                    Retry
                   </button>
                   <div className="inline-flex items-center gap-2 px-2 text-[12px] text-[#8f8a83]">
                     <span className={`h-[6px] w-[6px] rounded-full ${isSSEActive ? 'bg-green-500' : 'bg-[#2f8cff]'}`} />
