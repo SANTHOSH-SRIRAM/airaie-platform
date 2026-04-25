@@ -207,3 +207,27 @@ Verified after edits:
 - Both commits exist in `airaie_platform/frontend/` git log: `400ecf7`, `37cdfa9`.
 - `npx tsc --noEmit` exit 0.
 - Agent-consumer imports of `fetchRunWithNodes` / `decodeNodeOutputs` / `RawNodeRun` still resolve.
+
+## Post-Execution Patch — `e2a-03` (commit `72e52f1`)
+
+Live test of `/workflow-runs` after `e2a-01/02` landed surfaced two regressions that the original plan didn't anticipate. Patched in the same task:
+
+1. **`fetchWorkflow` envelope unwrap.** Kernel returns `{workflow: {...}, versions: [...]}` (verified live), but `useWorkflow` was returning that envelope as-is, so `workflowToGraph(workflow)` crashed on `.steps.map` (no `steps` field on the envelope). Updated `src/api/workflows.ts::fetchWorkflow` to unwrap to a flat `Workflow` with `steps: []` / `triggers: []` (full DSL parsing is a separate task — tracked in follow-ups). Page header now shows the real workflow name (`plan_plan_0a06aeb4_5236649a`) instead of falling through to the hardcoded "FEA Validation Pipeline" label.
+
+2. **`enabled` guards on workflow hooks.** The summary's own follow-up #5 recommended this; the live test made it mandatory. `useWorkflow`, `useWorkflowVersions`, `useRunList` all fired with empty id on first render (before the `/v0/workflows` fallback resolved), hitting `GET /v0/workflows/` → 404. Added `enabled: !!id` to all three hooks.
+
+`api/workflows.ts` also picks up the prior session's mock-removal (`apiOrMock` → `api`, `MOCK_VERSIONS` / `MOCK_COMPILE_RESULT` / `MOCK_VALIDATE_RESULT` / `MOCK_WORKFLOW` deletions) — same scope pattern the executor used in `e2a-01` for `api/runs.ts`.
+
+**Live verification (after `e2a-03`):**
+- Page renders against `wf_737cd510` with no query param (fallback path).
+- Executions sidebar shows 37 real runs.
+- Run detail panel shows real artifacts (`art_dd591596`, `art_9e0d355e`) and metrics for `run_887baddc`.
+- Console: 0 errors.
+- `tsc --noEmit`: exit 0.
+
+**Files modified by `e2a-03`:**
+- `src/api/workflows.ts` (envelope unwrap + carry-over mock removal)
+- `src/hooks/useWorkflow.ts` (`enabled` on `useWorkflow` + `useWorkflowVersions`)
+- `src/hooks/useRuns.ts` (`enabled` on `useRunList`)
+
+**Remaining cosmetic gap (out of e2a scope):** DAG canvas is empty because the workflow DSL is base64-encoded in `versions[0].dsl` and not yet parsed into `steps[]`. Tracked as follow-up "DSL → steps parser" — Phase 4 verification doesn't require it (the runs list, run detail, and node detail panel all populate correctly without it).
