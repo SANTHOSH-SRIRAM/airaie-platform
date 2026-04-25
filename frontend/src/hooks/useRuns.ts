@@ -9,7 +9,13 @@ export const runKeys = {
 };
 
 export function useRunList(workflowId: string) {
-  return useQuery({ queryKey: runKeys.list(workflowId), queryFn: () => fetchRunList(workflowId), refetchInterval: 15_000, staleTime: 15_000 });
+  return useQuery({
+    queryKey: runKeys.list(workflowId),
+    queryFn: () => fetchRunList(workflowId),
+    enabled: !!workflowId,
+    refetchInterval: 15_000,
+    staleTime: 15_000,
+  });
 }
 
 export function useRunDetail(runId: string | null) {

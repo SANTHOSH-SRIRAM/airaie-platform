@@ -23,6 +23,7 @@ export function useWorkflow(id: string) {
   return useQuery({
     queryKey: workflowKeys.detail(id),
     queryFn: () => fetchWorkflow(id),
+    enabled: !!id,
     staleTime: 60_000,
   });
 }
@@ -47,6 +48,7 @@ export function useWorkflowVersions(workflowId: string) {
   return useQuery({
     queryKey: [...workflowKeys.all, workflowId, 'versions'] as const,
     queryFn: () => listWorkflowVersions(workflowId),
+    enabled: !!workflowId,
     staleTime: 30_000,
   });
 }
