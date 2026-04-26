@@ -1,45 +1,104 @@
-// Migration notes: Phase 8 (Card-as-page) Wave 1 replaces the side-sheet
-// at frontend/src/components/boards/cards/CardDetail.tsx (302 LOC) — formerly
-// mounted inside BoardDetailPage → CardsTab when `selectedCardId` was set —
-// with this full-page route at `/cards/:cardId`.
+// Migration notes: Phase 8 (Card-as-page) Wave 2 fills the empty body slot
+// from Wave 1 with a configuration-first layout: Hero → AvailableInputsTable
+// → AvailableMethodsTable → AddCustomKpiForm → CardExecutionSequence (left)
+// + CardStatusPanel (right) → CardActionBar (floating bottom). Lifecycle
+// stage detection collapses sections during running/completed states, and
+// `useCardModeRules` centralizes Mode-driven affordances.
 //
 // PRESERVED behaviors (must continue to work):
 // 1. The same `useCard(card.id)` React Query cache is the source of truth
 //    for card mutations. Title edits via `useUpdateCard` still invalidate
 //    `cardKeys.detail(id)` so other surfaces (BoardDetailPage Cards-tab
 //    list, dependency graph) stay in sync without polling.
-// 2. IntentSpec linkage UI (D7's `<LinkedIntentSection>`) is the canonical
-//    surface for card→intent binding — Wave 2 will inline it inside the
-//    Hero / Inputs body section.
-// 3. Plan generation (`useGeneratePlan`) is still invoked from the same
-//    cache key (`planKeys.detail(cardId)`); Wave 1 promotes Run from a
-//    separate `<ExecutePlanButton>` in the PlanViewer panel to a
-//    first-class `[▶ Run Card]` action in `CardTopBar`.
-// 4. The KPIs + Evidence inline tables — deferred to Wave 2 body sections
-//    (`AvailableMethodsTable`, `CardStatusPanel`).
+// 2. The Run state machine is now in the SHARED `useCardRunState` hook;
+//    CardTopBar (top) and CardActionBar (bottom) consume the same hook so
+//    a Run started from either flips both within one render cycle.
+// 3. IntentSpec linkage UI stays canonical; AvailableInputsTable handles
+//    pinning via useUpdateIntent (replacing D7's LinkedIntentSection).
+// 4. Plan generation (`useGeneratePlan`) is invoked from the same cache
+//    key (`planKeys.detail(cardId)`); the Run actions on every surface
+//    pick up the new plan via the shared cache automatically.
 //
-// INTENTIONALLY DROPPED in Wave 1:
+// INTENTIONALLY DROPPED in Wave 1 (still dropped in Wave 2):
 // - The side-sheet's two-button row (Generate Plan / View Plan) is folded
-//   into the new `CardTopBar` Run state machine on the page.
+//   into the new state machine.
 // - The "Close" affordance on the side-sheet → replaced by `← back to Board`
 //   navigation in the top bar.
 // - The side-sheet remains accessible behind `?legacy=1` on the Board route
 //   (BoardDetailPage falls back to the side-sheet when the flag is set) for
-//   one release window.
-//
-// No focus-trap, no keyboard shortcuts, no portal — the side-sheet was a
-// regular flex panel. Closing had no side effects beyond clearing
-// `selectedCardId`/`showPlanViewer` in BoardDetailPage's local state.
+//   one release window. Non-`analysis` card types continue to show the
+//   side-sheet via `UnsupportedCardTypeFallback`.
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCard } from '@hooks/useCards';
 import { useBoard } from '@hooks/useBoards';
+import { useIntent } from '@hooks/useIntents';
+import { usePlan } from '@hooks/usePlans';
+import { useCardModeRules } from '@hooks/useCardModeRules';
 import { useUiStore } from '@store/uiStore';
+import { useQuery } from '@tanstack/react-query';
+import { useRunDetail } from '@hooks/useRuns';
+import { listCardRuns } from '@api/cards';
+import { cardKeys } from '@hooks/useCards';
 import PageSkeleton from '@components/ui/PageSkeleton';
 import ErrorState from '@components/ui/ErrorState';
 import CardDetailLayout from '@components/cards/CardDetailLayout';
 import CardTopBar from '@components/cards/CardTopBar';
+import CardHero from '@components/cards/CardHero';
+import AvailableInputsTable from '@components/cards/AvailableInputsTable';
+import AvailableMethodsTable from '@components/cards/AvailableMethodsTable';
+import AddCustomKpiForm from '@components/cards/AddCustomKpiForm';
+import CardExecutionSequence from '@components/cards/CardExecutionSequence';
+import CardStatusPanel from '@components/cards/CardStatusPanel';
+import CardActionBar from '@components/cards/CardActionBar';
+import EmptyDraftIntent from '@components/cards/EmptyDraftIntent';
+import UnsupportedCardTypeFallback from '@components/cards/UnsupportedCardTypeFallback';
+import type { Card } from '@/types/card';
+import type { IntentSpec } from '@/types/intent';
+import type { RunDetail } from '@/types/run';
+
+// ---------------------------------------------------------------------------
+// computeLifecycleStage — pure helper. Determines which sections to render
+// expanded vs collapsed.
+//
+// Stages:
+//   draft       → no IntentSpec yet. Hero + EmptyDraftIntent visible;
+//                 configuration tables hidden; sequence/status visible but
+//                 mostly empty.
+//   configured  → IntentSpec exists, no run in flight, no completed run.
+//                 Hero + tables + sequence + status all visible.
+//   running     → a run is in flight. Configuration tables collapse into a
+//                 disclosure ("Configuration locked during run"); sequence
+//                 shows live progress; status panel shows status + Cancel.
+//   completed   → a run has terminal status (completed or failed). Tables
+//                 collapse with an "Edit configuration" disclosure;
+//                 status panel expands with Results + Evidence detail.
+//
+// Exported for unit testing.
+// ---------------------------------------------------------------------------
+
+export type LifecycleStage = 'draft' | 'configured' | 'running' | 'completed';
+
+export function computeLifecycleStage(
+  intent: IntentSpec | undefined,
+  cardStatus: Card['status'],
+  runDetail: RunDetail | undefined,
+): LifecycleStage {
+  if (!intent) return 'draft';
+  // Card status running/queued is the strongest signal for an in-flight run
+  // (set the moment the kernel accepts the run start, before runDetail
+  // even has rows). Use it as the primary "running" indicator.
+  if (cardStatus === 'running' || cardStatus === 'queued') return 'running';
+  // Run-status fallback: if the run-detail polling has caught the running
+  // state but card status hasn't flipped yet, still treat as running.
+  if (runDetail?.status === 'running' || runDetail?.status === 'waiting') return 'running';
+  // Terminal run states.
+  if (runDetail?.status === 'succeeded' || runDetail?.status === 'failed') return 'completed';
+  // Card status completed/failed without runDetail still surfaces completed.
+  if (cardStatus === 'completed' || cardStatus === 'failed') return 'completed';
+  return 'configured';
+}
 
 export default function CardDetailPage() {
   const { cardId } = useParams<{ cardId: string }>();
@@ -48,14 +107,38 @@ export default function CardDetailPage() {
   const hideBottomBar = useUiStore((s) => s.hideBottomBar);
 
   const { data: card, isLoading: cardLoading, error: cardError, refetch: refetchCard } = useCard(cardId);
-  // Board fetch is non-fatal — the breadcrumb / Mode badge in CardTopBar
-  // tolerates board=undefined while loading or on error.
   const { data: board, isLoading: boardLoading } = useBoard(card?.board_id);
+  const { data: intent } = useIntent(card?.intent_spec_id);
+  const { data: plan } = usePlan(card?.id);
 
-  // While on /cards/:id the sidebar swaps to the Card-detail context —
-  // see SidebarContentRouter, which mounts <CardDetailSidebar> for this
-  // content type. CardDetailSidebar reads useParams to scope ThisBoardNav
-  // and ThisCardStatusPill to the current card.
+  // Latest run id is the same query CardActionBar / CardTopBar use; React
+  // Query dedupes so we only hit /v0/cards/{id}/runs once per cycle.
+  const { data: runs } = useQuery({
+    queryKey: cardId ? [...cardKeys.detail(cardId), 'runs'] as const : ['cards', 'runs', '__missing__'] as const,
+    queryFn: () => listCardRuns(cardId!),
+    enabled: !!cardId,
+    staleTime: 5_000,
+    refetchInterval: 5_000,
+  });
+  const latestRunId = useMemo(() => {
+    if (!runs || runs.length === 0) return null;
+    const sorted = [...runs].sort(
+      (a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime(),
+    );
+    return sorted[0]?.id ?? null;
+  }, [runs]);
+  const { data: runDetail } = useRunDetail(latestRunId);
+
+  // Mode-driven rules — computed once at the page level and threaded down.
+  const rules = useCardModeRules(card, board);
+
+  // Lifecycle stage — computed once per render.
+  const stage = useMemo(
+    () => computeLifecycleStage(intent, card?.status ?? 'draft', runDetail),
+    [intent, card?.status, runDetail],
+  );
+
+  // While on /cards/:id the sidebar swaps to the Card-detail context.
   useEffect(() => {
     setSidebarContentType('card-detail');
     hideBottomBar();
@@ -109,12 +192,83 @@ export default function CardDetailPage() {
     );
   }
 
+  // ── Non-`analysis` card type: short-circuit to legacy fallback ──
+  if (card.card_type !== 'analysis') {
+    return <UnsupportedCardTypeFallback card={card} />;
+  }
+
+  // Configuration sections collapse during running / completed stages so
+  // the user's eyes go to Sequence + Status. We use a <details> element so
+  // the disclosure is keyboard-accessible without bespoke JS.
+  const configurationLocked = stage === 'running' || stage === 'completed';
+
   return (
-    <CardDetailLayout>
-      <CardTopBar card={card} board={board} boardLoading={boardLoading} />
-      <div className="text-center text-sm text-[#9b978f] py-32">
-        Card body — coming in 08-02
-      </div>
-    </CardDetailLayout>
+    <>
+      <CardDetailLayout>
+        <CardTopBar card={card} board={board} boardLoading={boardLoading} />
+
+        {/* Hero — always visible, click-to-edit IntentSpec goal */}
+        <CardHero card={card} intent={intent} rules={rules} />
+
+        {/* Draft state: prompt for IntentSpec creation */}
+        {stage === 'draft' && (
+          <EmptyDraftIntent boardId={card.board_id} cardId={card.id} />
+        )}
+
+        {/* Configuration tables — collapse during running/completed */}
+        {stage !== 'draft' && intent && !configurationLocked && (
+          <>
+            <AvailableInputsTable card={card} intent={intent} rules={rules} />
+            <AvailableMethodsTable card={card} intent={intent} rules={rules} />
+            <AddCustomKpiForm intent={intent} rules={rules} boardId={card.board_id} />
+          </>
+        )}
+
+        {stage !== 'draft' && intent && configurationLocked && (
+          <details
+            className="bg-white rounded-[12px] border border-[#f0f0ec] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.04)] p-[16px]"
+          >
+            <summary className="cursor-pointer text-[12px] font-medium text-[#6b6b6b] hover:text-[#1a1a1a] flex items-center gap-[6px]">
+              <span aria-hidden="true">🔒</span>
+              {stage === 'running'
+                ? 'Configuration locked during run'
+                : 'Edit configuration'}
+              <span className="ml-auto text-[10px] text-[#acacac]">
+                Inputs · Methods · KPIs
+              </span>
+            </summary>
+            <div className="mt-[12px] flex flex-col gap-[16px]">
+              <AvailableInputsTable card={card} intent={intent} rules={rules} />
+              <AvailableMethodsTable card={card} intent={intent} rules={rules} />
+              <AddCustomKpiForm intent={intent} rules={rules} boardId={card.board_id} />
+            </div>
+          </details>
+        )}
+
+        {/* Sequence + Status — two-column on wide viewports */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-[16px]">
+          <CardExecutionSequence
+            card={card}
+            plan={plan}
+            latestRunId={latestRunId}
+            rules={rules}
+          />
+          <CardStatusPanel
+            card={card}
+            intent={intent}
+            rules={rules}
+            latestRunId={latestRunId}
+          />
+        </div>
+
+        {/* Bottom padding so floating action bar doesn't cover content */}
+        <div aria-hidden="true" className="h-[80px]" />
+      </CardDetailLayout>
+
+      {/* CardActionBar floats fixed-bottom; rendered OUTSIDE the layout so its
+          centered positioning works against the viewport, not the layout's
+          max-width column. */}
+      <CardActionBar card={card} intent={intent} plan={plan} rules={rules} />
+    </>
   );
 }
