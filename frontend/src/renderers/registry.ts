@@ -1,3 +1,4 @@
+import { lazy } from 'react';
 import type { RunArtifact } from '@api/runs';
 import type { IntentSpec } from '@/types/intent';
 import type { Renderer, RendererCtx } from './types';
@@ -6,40 +7,36 @@ import type { Renderer, RendererCtx } from './types';
 // Renderer registry — frontend table mapping (intent_type, artifact_kind) to
 // React components. See doc/concepts/04-RENDERER-REGISTRY.md.
 //
-// Entries are appended by their owning module via `registerRenderer()` calls
-// at module load. Order matters: the first entry whose `match()` predicate
-// returns true wins. The `fallback` entry MUST be the last entry, with
-// `match: () => true`, so `pickRenderer()` always finds something.
+// Order in the array matters. The first entry whose `match()` predicate
+// returns true for the (artifact_kind, intent_type) pair wins. The `fallback`
+// entry MUST be last with `match: () => true`, so `pickRenderer()` always
+// finds something.
 //
-// Tasks 3–7 (image, json-metrics, csv-chart, csv-table, fallback) each
-// register their entry from their own module. The registry array starts
-// empty here — the lookup function still works (returns null if nothing
-// matches).
+// Phase 2a final priority order (after Tasks 3–7 land):
+//   1. image          — png/jpg/jpeg/svg/webp/gif
+//   2. json-metrics   — kind === 'json'
+//   3. csv-chart      — kind === 'csv' AND chart-friendly intent_type
+//   4. csv-table      — kind === 'csv' (kind-only fallback for csv)
+//   5. fallback       — always-true (GenericArtifactRenderer)
+//
+// Each component is loaded via `lazy()` so the chunk only ships when a Card
+// actually mounts that renderer. Vite's manualChunks (vite.config.ts) groups
+// papaparse into its own chunk; recharts already ships in the `ui` chunk.
+//
+// Tasks 3–7 each append one entry below. The IIFE-built array means Tasks
+// can land their entries individually without colliding on the export shape.
 // ---------------------------------------------------------------------------
 
-export const registry: Renderer[] = [];
+const IMAGE_KINDS = new Set(['png', 'jpg', 'jpeg', 'svg', 'webp', 'gif']);
 
-/**
- * Append a renderer to the registry. Idempotent on `id` (re-registering an
- * existing id replaces the entry in place — useful for tests that swap a
- * renderer for a stub).
- */
-export function registerRenderer(renderer: Renderer): void {
-  const existing = registry.findIndex((r) => r.id === renderer.id);
-  if (existing >= 0) {
-    registry[existing] = renderer;
-  } else {
-    registry.push(renderer);
-  }
-}
-
-/**
- * For tests only — empty the registry between cases. Production code should
- * never call this.
- */
-export function _resetRegistry(): void {
-  registry.length = 0;
-}
+export const registry: Renderer[] = [
+  // Task 3 — image renderer (no library)
+  {
+    id: 'image',
+    match: (c) => IMAGE_KINDS.has(c.artifact_kind.toLowerCase()),
+    component: lazy(() => import('./ImageRenderer')),
+  },
+];
 
 /**
  * Pick the right renderer for `(artifact, intent)`. Lookup priority:
@@ -47,15 +44,16 @@ export function _resetRegistry(): void {
  *   1. `artifact.metadata.renderer_hint` (when set by the producing Tool's
  *      ATP manifest) — exact match against `Renderer.id`.
  *   2. exact `(intent_type, artifact_kind)` match — the first registry entry
- *      whose `match()` returns true for the full context wins.
- *   3. kind-only match — same walk, but with `intent_type: ''` so renderers
- *      that match purely on `artifact_kind` (e.g. `image`) still win.
- *   4. fallback — registry entries with `match: () => true` (the GenericArtifactRenderer
- *      lands here in Task 7).
+ *      whose `match()` returns true for the full context AND fails for the
+ *      kind-only context (i.e. the predicate cares about intent_type).
+ *   3. kind-only match — same walk again, returning the first entry that
+ *      matches with intent_type cleared.
+ *   4. fallback — registry entries with `match: () => true` (GenericArtifactRenderer
+ *      for Phase 2a).
  *
- * Returns `null` if no entry matches AND no fallback is registered (only
- * possible during development before Task 7 lands; in production the
- * fallback entry guarantees a non-null return).
+ * Returns the always-last `fallback` entry when nothing else matches; never
+ * null in production once the fallback registers (Task 7). Returns null in
+ * tests after `_resetRegistry()`.
  */
 export function pickRenderer(
   artifact: RunArtifact,
@@ -65,16 +63,11 @@ export function pickRenderer(
   const intentType = intent?.intent_type ?? '';
   const vertical = intent?.context?.vertical_slug;
 
-  // 1. Manifest hint — if the kernel has propagated a renderer_hint into the
-  //    artifact's metadata, honor it directly. The Tool author knows their
-  //    output kind better than a heuristic.
+  // 1. Manifest hint
   const hint = readRendererHint(artifact);
   if (hint) {
     const byHint = registry.find((r) => r.id === hint);
     if (byHint) return byHint;
-    // Hint set but no matching renderer — fall through to predicate walk
-    // rather than failing; the tool author may have hinted at a future
-    // renderer not yet shipped.
   }
 
   const fullCtx: RendererCtx = {
@@ -83,31 +76,23 @@ export function pickRenderer(
     vertical,
   };
 
-  // 2. Exact (intent_type, kind) match — walk the registry in order, return
-  //    the first non-fallback entry whose predicate matches the full context.
-  //    "Non-fallback" means the entry actually inspects intent_type or kind;
-  //    we detect this by matching with intent_type cleared and seeing if the
-  //    predicate still matches. If yes, the entry doesn't depend on intent_type
-  //    (it's a kind-only entry); we want exact-intent entries to win first.
+  // 2. Exact (intent_type, kind) match — entry's predicate must change its
+  //    answer when intent_type is cleared (i.e. it cares about the intent).
   for (const entry of registry) {
     if (!entry.match(fullCtx)) continue;
     const kindOnlyCtx: RendererCtx = { artifact_kind: kind, intent_type: '', vertical };
-    const isKindOnly = entry.match(kindOnlyCtx);
-    if (!isKindOnly) {
-      // Entry's predicate cares about intent_type — this is the exact match.
+    if (!entry.match(kindOnlyCtx)) {
       return entry;
     }
   }
 
-  // 3. Kind-only match — walk again, return the first entry that matches with
-  //    intent_type cleared. This catches `image`, `csv-table`, `json-metrics`
-  //    and similar entries that don't filter on intent_type.
+  // 3. Kind-only / always-true match — first entry whose predicate matches.
   for (const entry of registry) {
     if (entry.match(fullCtx)) return entry;
   }
 
-  // 4. No match. (Fallback registers `match: () => true`, so this branch is
-  //    only reachable before Task 7 lands.)
+  // 4. Theoretically unreachable in production (fallback is always-true), but
+  //    `_resetRegistry` in tests can leave the array empty.
   return null;
 }
 
@@ -121,11 +106,26 @@ export function pickRenderer(
  * through if the hint references an unregistered id.
  */
 function readRendererHint(artifact: RunArtifact): string | null {
-  // RunArtifact doesn't yet declare a metadata field; use a structural
-  // narrowing read to avoid coupling to a future schema. The hint flows from
-  // (Tool manifest output port).renderer_hint → kernel → artifact metadata.
-  const meta = (artifact as { metadata?: Record<string, unknown> }).metadata;
+  const meta = artifact.metadata;
   if (!meta) return null;
   const hint = meta.renderer_hint;
   return typeof hint === 'string' && hint.length > 0 ? hint : null;
+}
+
+// ---------------------------------------------------------------------------
+// Test-only helpers — let `registry.test.ts` reset and patch the array.
+// Production code should never call these.
+// ---------------------------------------------------------------------------
+
+export function _resetRegistry(): void {
+  registry.length = 0;
+}
+
+export function registerRenderer(renderer: Renderer): void {
+  const existing = registry.findIndex((r) => r.id === renderer.id);
+  if (existing >= 0) {
+    registry[existing] = renderer;
+  } else {
+    registry.push(renderer);
+  }
 }

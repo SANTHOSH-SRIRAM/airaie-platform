@@ -238,6 +238,13 @@ export interface RunArtifact {
   storage_uri?: string;
   created_by?: string;
   created_at: string;
+  /**
+   * Free-form metadata propagated from the producing Tool's ATP manifest
+   * output port. The renderer registry reads `metadata.renderer_hint` to let
+   * Tool authors override the heuristic renderer pick. Absent until the
+   * kernel ships the propagation work (concepts/04 Phase 2d).
+   */
+  metadata?: Record<string, unknown>;
 }
 
 interface RawArtifactsResponse {
