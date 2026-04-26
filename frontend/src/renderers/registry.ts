@@ -64,6 +64,13 @@ export const registry: Renderer[] = [
     match: (c) => c.artifact_kind.toLowerCase() === 'csv',
     component: lazy(() => import('./CsvTableRenderer')),
   },
+  // Task 7 — always-last fallback (download link + metadata). MUST be last
+  // and `match: () => true` so the lookup never returns null.
+  {
+    id: 'fallback',
+    match: () => true,
+    component: lazy(() => import('./GenericArtifactRenderer')),
+  },
 ];
 
 /**
