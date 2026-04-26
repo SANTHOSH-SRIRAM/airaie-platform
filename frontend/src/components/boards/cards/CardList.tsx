@@ -1,11 +1,13 @@
+import { useNavigate } from 'react-router-dom';
 import { cn } from '@utils/cn';
 import { useCardList } from '@hooks/useCards';
 // D7: intent linkage tooltip
 import { useIntentList } from '@hooks/useIntents';
 import { intentDisplayName } from '@utils/intentLink';
+import { cardDetailPath } from '@constants/routes';
 import type { Card, CardStatus } from '@/types/card';
 import type { IntentSpec } from '@/types/intent';
-import { AlertCircle, Link2, Link2Off, Loader2 } from 'lucide-react';
+import { AlertCircle, ArrowUpRight, Link2, Link2Off, Loader2 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Status config
@@ -112,6 +114,7 @@ function CardRow({
   linkedIntent?: IntentSpec;
   onClick: () => void;
 }) {
+  const navigate = useNavigate();
   const status = STATUS_CONFIG[card.status] ?? STATUS_CONFIG.draft;
   const typeStyle = TYPE_COLORS[card.card_type] ?? { bg: 'bg-[#f0f0ec]', text: 'text-[#6b6b6b]' };
 
@@ -126,10 +129,22 @@ function CardRow({
       : 'Linked to an intent'
     : 'No intent linked';
 
+  // Phase 8 (08-01) Card-as-page: clicking the row dispatches to the legacy
+  // side-sheet OR to the per-card page based on the parent's `?legacy=1`
+  // wiring. This always-visible "Open page →" affordance gives users in
+  // legacy mode an escape hatch to the new full-page view.
+  const handleOpenPage = (e: React.MouseEvent | React.KeyboardEvent) => {
+    e.stopPropagation();
+    navigate(cardDetailPath(card.id));
+  };
+
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+      aria-label={`Open ${card.title}`}
       className="w-full text-left flex items-center gap-[10px] p-[12px] rounded-[10px] border border-[#e8e8e8] hover:border-[#d0d0d0] hover:bg-[#fafafa] transition-colors cursor-pointer"
     >
       {/* Status dot */}
@@ -174,6 +189,18 @@ function CardRow({
       <span className={cn('text-[10px] font-medium shrink-0', status.text)}>
         {status.label}
       </span>
-    </button>
+
+      {/* "Open page →" — always-visible escape hatch to the per-card page. */}
+      <button
+        type="button"
+        onClick={handleOpenPage}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleOpenPage(e); }}
+        aria-label={`Open ${card.title} page`}
+        title="Open card page"
+        className="shrink-0 inline-flex items-center gap-[3px] px-[6px] h-[20px] rounded-[4px] text-[10px] font-medium text-[#6b6b6b] hover:text-[#ff9800] hover:bg-[#fff3e0] transition-colors"
+      >
+        Open page <ArrowUpRight size={10} />
+      </button>
+    </div>
   );
 }
