@@ -35,3 +35,28 @@ export async function listBoardArtifacts(boardId: string): Promise<BoardArtifact
   const raw = await api<unknown>(`/v0/boards/${boardId}/artifacts`, { method: 'GET' });
   return unwrapList<BoardArtifact>(raw, 'artifacts');
 }
+
+// ---------------------------------------------------------------------------
+// Presigned download URL — `GET /v0/artifacts/{id}/download-url` returns
+// `{ download_url, expires_at }` (kernel default expiry is 1h, max 24h).
+// Renderers fetch the artifact bytes directly from MinIO via this URL — the
+// kernel never proxies the bytes.
+// ---------------------------------------------------------------------------
+
+interface DownloadUrlResponse {
+  download_url: string;
+  expires_at: string;
+}
+
+/**
+ * Request a presigned MinIO GET URL for an artifact's bytes. The URL embeds
+ * an expiry timestamp; callers should re-request after ~5 minutes (the
+ * useArtifactDownloadUrl hook handles staleTime accordingly).
+ */
+export async function getArtifactDownloadUrl(artifactId: string): Promise<string> {
+  const res = await api<DownloadUrlResponse>(
+    `/v0/artifacts/${artifactId}/download-url`,
+    { method: 'GET' },
+  );
+  return res.download_url;
+}
