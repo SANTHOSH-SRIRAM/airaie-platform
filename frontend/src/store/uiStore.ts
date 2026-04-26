@@ -2,6 +2,18 @@ import { create } from 'zustand';
 
 // --- Types ---
 
+/**
+ * Sidebar contextual content types.
+ *
+ * The active route maps to a content type via `ROUTE_SIDEBAR_MAP` in
+ * `constants/routes.ts`; `SidebarContentRouter` then mounts the matching
+ * component tree (e.g. NodePalette for the workflow editor, FilterSidebar
+ * for the tool registry).
+ *
+ * - `'card-detail'` is set by `CardDetailPage.tsx` on mount and triggers
+ *   `<CardDetailSidebar>` which composes `<ThisBoardNav>` and
+ *   `<ThisCardStatusPill>` (Phase 8 Card-as-page, Wave 1).
+ */
 export type SidebarContentType =
   | 'navigation'
   | 'nodePalette'
