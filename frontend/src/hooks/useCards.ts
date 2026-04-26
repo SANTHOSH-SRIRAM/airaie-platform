@@ -4,11 +4,13 @@ import {
   getCard,
   createCard,
   updateCard,
+  updateCardBody,
   deleteCard,
   listCardEvidence,
   addCardEvidence,
   getCardGraph,
 } from '@api/cards';
+import type { CardBodyDoc } from '@/types/cardBlocks';
 
 // ---------------------------------------------------------------------------
 // Query keys
@@ -87,6 +89,31 @@ export function useUpdateCard(id: string, boardId?: string) {
       if (boardId) {
         queryClient.invalidateQueries({ queryKey: cardKeys.list(boardId) });
       }
+    },
+  });
+}
+
+/**
+ * Mutation hook for persisting the Card Canvas body (Phase 10). The mutation
+ * surface accepts `{ body, expectedVersion }` so the caller can pass the
+ * Tiptap doc plus the version it last read.
+ *
+ * Note: 409 VERSION_CONFLICT comes back as an `ApiError` with `status === 409`
+ * — callers should branch on `error.status === 409` in `onError` and
+ * trigger a card refetch + 3-way merge UI (3-way merge ships in 10e). For
+ * Wave 1 the page logs the conflict and lets the user keep editing.
+ */
+export function useUpdateCardBody(cardId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { body: CardBodyDoc; expectedVersion: number }) =>
+      updateCardBody(cardId, args.body, args.expectedVersion),
+    onSuccess: () => {
+      // Mark the card stale so a subsequent fetch picks up the new
+      // body_blocks_version. We don't optimistically patch the cache
+      // because the editor is the source of truth while open — the
+      // refetch happens lazily next time anything else reads the card.
+      queryClient.invalidateQueries({ queryKey: cardKeys.detail(cardId) });
     },
   });
 }

@@ -1,6 +1,8 @@
 export type CardType = 'analysis' | 'comparison' | 'sweep' | 'agent' | 'gate' | 'milestone';
 export type CardStatus = 'draft' | 'ready' | 'queued' | 'running' | 'completed' | 'failed' | 'blocked' | 'skipped';
 
+import type { CardBodyDoc } from './cardBlocks';
+
 export interface Card {
   id: string;
   board_id: string;
@@ -19,6 +21,15 @@ export interface Card {
   completed_at?: string;
   created_at: string;
   updated_at: string;
+  /**
+   * Tiptap document persisted by the Card Canvas (Phase 10). Nullable until
+   * the user first opens the canvas and saves; until then the frontend
+   * computes a default doc from current entity state via
+   * `editor/migration.ts:generateDefaultBody`.
+   */
+  body_blocks?: CardBodyDoc | null;
+  /** Optimistic-concurrency counter for `body_blocks`. Defaults to 1 server-side. */
+  body_blocks_version?: number;
 }
 
 export interface CardKPI {

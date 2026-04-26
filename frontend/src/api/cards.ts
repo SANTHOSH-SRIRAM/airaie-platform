@@ -1,5 +1,6 @@
 import { api, apiClient } from './client';
 import type { Card, CardEvidence, CardDependency } from '@/types/card';
+import type { CardBodyDoc } from '@/types/cardBlocks';
 import { unwrapList } from '@/utils/apiEnvelope';
 
 interface CardGraphNode {
@@ -53,6 +54,26 @@ export async function createCard(
 
 export async function updateCard(id: string, data: Partial<Card>): Promise<Card> {
   return apiClient.patch(`/v0/cards/${id}`, data);
+}
+
+/**
+ * Persist the Card Canvas body (Phase 10). Returns the new
+ * `body_blocks_version` on success.
+ *
+ * On version conflict the kernel returns 409 with body
+ * `{ error: 'VERSION_CONFLICT', current_version: <int> }`. The fetch
+ * wrapper turns this into an `ApiError` with `status === 409` and `code ===
+ * 'VERSION_CONFLICT'`; callers should refetch the card and retry.
+ */
+export async function updateCardBody(
+  cardId: string,
+  bodyBlocks: CardBodyDoc,
+  expectedVersion: number,
+): Promise<{ body_blocks_version: number }> {
+  return apiClient.patch(`/v0/cards/${cardId}/body`, {
+    body_blocks: bodyBlocks,
+    expected_version: expectedVersion,
+  });
 }
 
 export async function deleteCard(id: string): Promise<void> {
