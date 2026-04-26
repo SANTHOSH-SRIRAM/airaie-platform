@@ -42,6 +42,14 @@ export const registry: Renderer[] = [
     match: (c) => c.artifact_kind.toLowerCase() === 'json',
     component: lazy(() => import('./JsonMetricsRenderer')),
   },
+  // Task 5 — CSV-as-table (kind-only fallback for csv). Task 6 inserts the
+  // intent-specific csv-chart entry BEFORE this one so charts win for
+  // chart-friendly intent_types; csv-table catches everything else.
+  {
+    id: 'csv-table',
+    match: (c) => c.artifact_kind.toLowerCase() === 'csv',
+    component: lazy(() => import('./CsvTableRenderer')),
+  },
 ];
 
 /**
