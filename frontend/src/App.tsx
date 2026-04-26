@@ -36,6 +36,9 @@ const ArtifactsPage = lazy(() => import('@pages/ArtifactsPage'));
 const ApprovalsPage = lazy(() => import('@pages/ApprovalsPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const ReleasePacketPage = lazy(() => import('./pages/ReleasePacketPage'));
+const AdminLLMProvidersPage = lazy(() => import('@pages/AdminLLMProvidersPage'));
+const AdminAuditPage = lazy(() => import('@pages/AdminAuditPage'));
+const AdminCostPage = lazy(() => import('@pages/AdminCostPage'));
 
 function LazyPage({ children }: { children: React.ReactNode }) {
   return (
@@ -96,6 +99,11 @@ function App() {
           <Route path="/agent-playground/:agentId" element={<LazyPage><AgentPlaygroundPage /></LazyPage>} />
           <Route path="/workflow-runs" element={<LazyPage><WorkflowRunsPage /></LazyPage>} />
           <Route path="/workflow-runs/:runId" element={<LazyPage><WorkflowRunsPage /></LazyPage>} />
+
+          {/* Admin (Phase F: gate behind admin role) */}
+          <Route path={ROUTES.ADMIN_LLM_PROVIDERS} element={<LazyPage><AdminLLMProvidersPage /></LazyPage>} />
+          <Route path={ROUTES.ADMIN_AUDIT} element={<LazyPage><AdminAuditPage /></LazyPage>} />
+          <Route path={ROUTES.ADMIN_COST} element={<LazyPage><AdminCostPage /></LazyPage>} />
         </Route>
         {/* Board detail -- full-screen standalone page (protected, no AppShell) */}
         <Route path="/boards/:boardId" element={<ProtectedLazy><BoardDetailPage /></ProtectedLazy>} />

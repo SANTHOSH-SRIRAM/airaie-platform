@@ -22,6 +22,7 @@ export function mapSessionMessage(
     content: msg.content,
     timestamp: msg.timestamp,
     runId: msg.run_id,
+    approvalId: msg.approval_id,
   };
 }
 
@@ -197,14 +198,41 @@ export function extractDecisionTrace(session: AgentSession): DecisionTraceEntry[
   return trace.map(mapTraceEntry);
 }
 
-/** Derive AgentMetrics from session — only iteration count has a real source. */
+/** Map AgentMetrics from the backend's `metrics` block.
+ *
+ *  Backend shape (see internal/handler/agent_sessions.go SessionMetrics):
+ *    { iterations, total_cost_usd?, budget_remaining_usd?, duration_seconds?, timeout_seconds? }
+ *
+ *  Optional backend fields are omitted (not null) when the server can't derive
+ *  them (e.g. agent has no spec budget, no runs cost data). We surface those
+ *  as `undefined` so the UI renders "—" instead of a misleading "$0.00".
+ *
+ *  Falls back to history length for iterations when the metrics block is
+ *  missing entirely (older backends, pre-this-commit cached responses).
+ */
 export function deriveMetrics(session: AgentSession): AgentMetrics {
+  const m = session.metrics;
+  if (m && typeof m === 'object') {
+    return {
+      iterations: {
+        current: typeof m.iterations === 'number' ? m.iterations : undefined,
+        max: null,
+      },
+      totalCost: typeof m.total_cost_usd === 'number' ? m.total_cost_usd : undefined,
+      budgetRemaining: typeof m.budget_remaining_usd === 'number' ? m.budget_remaining_usd : undefined,
+      duration: typeof m.duration_seconds === 'number' ? m.duration_seconds : undefined,
+      timeout: typeof m.timeout_seconds === 'number' ? m.timeout_seconds : undefined,
+    };
+  }
+  // Fallback: backend didn't include metrics — derive iteration count locally.
+  // Empty history is treated as "absent" rather than zero so the UI shows "—".
   const history = decodeBase64Json<BackendSessionMessage[]>(session.history);
+  const len = history?.length ?? 0;
   return {
-    iterations: { current: history?.length ?? 0, max: null },
-    totalCost: null,
-    budgetRemaining: null,
-    duration: null,
-    timeout: null,
+    iterations: { current: len > 0 ? len : undefined, max: null },
+    totalCost: undefined,
+    budgetRemaining: undefined,
+    duration: undefined,
+    timeout: undefined,
   };
 }

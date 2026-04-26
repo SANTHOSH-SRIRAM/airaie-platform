@@ -1,9 +1,20 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Wrench, ArrowLeft, FileCheck, Send } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Wrench,
+  ArrowLeft,
+  Send,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Loader2,
+} from 'lucide-react';
 import { useUiStore } from '@store/uiStore';
-import { useCreateTool, useCreateToolVersion, useValidateContract } from '@hooks/useTools';
-import { createToolVersion } from '@api/tools';
+import { useCreateTool, useCreateToolVersion } from '@hooks/useTools';
+import { useDebouncedValidateContract } from '@hooks/useValidateContract';
+import { createToolVersion, manifestErrorByField } from '@api/tools';
 import Button from '@components/ui/Button';
 import Badge from '@components/ui/Badge';
 import Input from '@components/ui/Input';
@@ -12,10 +23,9 @@ import WizardStepper from '@components/tools/WizardStepper';
 import ContractPortEditor from '@components/tools/ContractPortEditor';
 import type { PortRow } from '@components/tools/ContractPortEditor';
 import ResourceSlider from '@components/tools/ResourceSlider';
-import LintResultsPanel from '@components/tools/LintResultsPanel';
 import ContractJsonPreview from '@components/tools/ContractJsonPreview';
 import { cn } from '@utils/cn';
-import type { ToolCategory, ToolAdapter, ToolContractFull, ContractValidationResult } from '@/types/tool';
+import type { ToolCategory, ToolAdapter } from '@/types/tool';
 
 /* ---------- Constants ---------- */
 
@@ -163,45 +173,6 @@ function buildBackendContract(form: FormState): Record<string, unknown> {
   };
 }
 
-// Keep old buildContract for the validate preview (used in step 3 review)
-function buildContract(form: FormState): ToolContractFull {
-  return {
-    metadata: {
-      tool_id: '',
-      name: form.name,
-      description: form.description,
-      version: '0.1.0',
-      domain_tags: form.domainTags,
-    },
-    interface: {
-      inputs: form.inputs.map((p) => ({
-        name: p.name,
-        type: p.type as ToolContractFull['interface']['inputs'][0]['type'],
-        required: p.required,
-        description: p.description || undefined,
-      })),
-      outputs: form.outputs.map((p) => ({
-        name: p.name,
-        type: p.type as ToolContractFull['interface']['outputs'][0]['type'],
-        required: p.required,
-        description: p.description || undefined,
-      })),
-    },
-    runtime: {
-      adapter: form.adapter,
-      image: form.image || undefined,
-      resources: { cpu: form.cpu, memory_mb: form.memoryMb, timeout_seconds: form.timeoutSeconds },
-    },
-    capabilities: { supported_intents: [] },
-    governance: {
-      sandbox: { network: form.sandboxNetwork, filesystem: form.sandboxFilesystem, pids_limit: form.pidsLimit },
-      owner: 'current-user',
-    },
-    testing: { test_cases: [] },
-    documentation: { description: form.description },
-  };
-}
-
 /* ---------- Component ---------- */
 
 export default function RegisterToolPage() {
@@ -213,11 +184,9 @@ export default function RegisterToolPage() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormState>({ ...INITIAL });
   const [error, setError] = useState<string | null>(null);
-  const [validationResult, setValidationResult] = useState<ContractValidationResult | null>(null);
 
   const createTool = useCreateTool();
   const createVersion = useCreateToolVersion('');
-  const validateMutation = useValidateContract();
 
   useEffect(() => {
     setSidebarContentType('navigation');
@@ -276,18 +245,20 @@ export default function RegisterToolPage() {
     return true;
   }, [step, form.name, form.description]);
 
-  const contract = useMemo(() => buildBackendContract(form) as unknown as ToolContractFull, [form]);
+  const manifest = useMemo(() => buildBackendContract(form), [form]);
 
-  const handleValidate = useCallback(async () => {
-    setError(null);
-    try {
-      const result = await validateMutation.mutateAsync({ contract });
-      setValidationResult(result);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Validation failed';
-      setError(message);
-    }
-  }, [contract, validateMutation]);
+  // Only validate once required basics are filled in — empty manifests just
+  // produce noise. Re-runs (debounced) on every form change.
+  const validationEnabled = form.name.trim().length > 0;
+  const { result: validation, isValidating, error: validationError } = useDebouncedValidateContract(
+    manifest,
+    { delayMs: 500, enabled: validationEnabled },
+  );
+
+  const errorForField = useCallback(
+    (path: string) => (validation ? manifestErrorByField(validation.errors, path) : undefined),
+    [validation],
+  );
 
   const handleRegister = useCallback(async () => {
     setError(null);
@@ -302,11 +273,14 @@ export default function RegisterToolPage() {
       const message = err instanceof Error ? err.message : 'Failed to register tool';
       setError(message);
     }
-  }, [createTool, createVersion, form, navigate]);
+  }, [createTool, form, navigate]);
 
   /* ---- Step renderers ---- */
 
-  const renderStep0 = () => (
+  const renderStep0 = () => {
+    const nameIssue = errorForField('metadata.name');
+    const descIssue = errorForField('metadata.description');
+    return (
     <div className="space-y-5">
       <Input
         id="reg-name"
@@ -314,6 +288,7 @@ export default function RegisterToolPage() {
         placeholder="e.g. FEA Solver"
         value={form.name}
         onChange={(e) => update('name', e.target.value)}
+        error={nameIssue?.message}
       />
       <div className="flex flex-col gap-1">
         <label htmlFor="reg-description" className="text-[11px] text-[#6b6b6b]">
@@ -321,11 +296,20 @@ export default function RegisterToolPage() {
         </label>
         <textarea
           id="reg-description"
-          className="w-full h-20 rounded-[8px] bg-[#f5f5f0] px-3 py-2 text-[12px] text-[#1a1a1a] placeholder:text-[#acacac] border border-[#ece9e3] focus:outline-none focus:border-[#2196f3] resize-none"
+          className={cn(
+            'w-full h-20 rounded-[8px] bg-[#f5f5f0] px-3 py-2 text-[12px] text-[#1a1a1a] placeholder:text-[#acacac] border focus:outline-none resize-none',
+            descIssue
+              ? 'border-[#e74c3c] focus:border-[#e74c3c]'
+              : 'border-[#ece9e3] focus:border-[#2196f3]',
+          )}
           placeholder="Describe what this tool does..."
           value={form.description}
           onChange={(e) => update('description', e.target.value)}
+          aria-invalid={descIssue ? 'true' : undefined}
         />
+        {descIssue && (
+          <p className="text-[10px] text-[#e74c3c]" role="alert">{descIssue.message}</p>
+        )}
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="reg-category" className="text-[11px] text-[#6b6b6b]">
@@ -394,13 +378,29 @@ export default function RegisterToolPage() {
         )}
       </div>
     </div>
-  );
+    );
+  };
 
-  const renderStep1 = () => (
+  const renderStep1 = () => {
+    const interfaceIssues = (validation?.errors ?? []).filter((e) => e.path?.startsWith('interface'));
+    return (
     <div className="space-y-6">
       <p className="text-[11px] text-[#6b6b6b]">
         Define the input and output ports for this tool's contract. These determine how the tool connects in pipelines.
       </p>
+      {interfaceIssues.length > 0 && (
+        <div className="rounded-[8px] bg-[#ffebee] px-3 py-2 space-y-1" role="alert">
+          {interfaceIssues.map((issue, i) => (
+            <div key={i} className="flex items-start gap-2 text-[10px] text-[#e74c3c]">
+              <XCircle size={12} className="shrink-0 mt-0.5" />
+              <span>
+                {issue.path && <strong className="font-mono">{issue.path}: </strong>}
+                {issue.message}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       <ContractPortEditor
         label="Input Ports"
         ports={form.inputs}
@@ -417,7 +417,8 @@ export default function RegisterToolPage() {
         onUpdate={(idx, field, value) => updatePort('outputs', idx, field, value)}
       />
     </div>
-  );
+    );
+  };
 
   const renderStep2 = () => (
     <div className="space-y-6">
@@ -516,27 +517,16 @@ export default function RegisterToolPage() {
         </div>
       </div>
 
-      {/* JSON Preview */}
+      {/* Manifest preview */}
       <div className="space-y-2">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#acacac]">Contract JSON</div>
-        <ContractJsonPreview data={contract} />
+        <div className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#acacac]">
+          Manifest preview
+        </div>
+        <p className="text-[10px] text-[#6b6b6b]">
+          Read-only — this is exactly what will be POSTed to the registry.
+        </p>
+        <ContractJsonPreview data={manifest} />
       </div>
-
-      {/* Validate */}
-      <div className="flex items-center gap-3">
-        <Button
-          variant="tertiary"
-          size="sm"
-          icon={<FileCheck size={14} />}
-          onClick={handleValidate}
-          disabled={validateMutation.isPending}
-        >
-          {validateMutation.isPending ? 'Validating...' : 'Validate Contract'}
-        </Button>
-      </div>
-
-      {/* Lint results */}
-      <LintResultsPanel result={validationResult} />
     </div>
   );
 
@@ -576,6 +566,16 @@ export default function RegisterToolPage() {
           </div>
 
           {stepRenderers[step]()}
+
+          {/* Live validation panel — visible across every step */}
+          <div className="mt-6">
+            <ValidationPanel
+              validation={validation}
+              isValidating={isValidating}
+              networkError={validationError}
+              enabled={validationEnabled}
+            />
+          </div>
 
           {error && (
             <div className="mt-4 rounded-[8px] bg-[#ffebee] px-3 py-2 text-[11px] text-[#e74c3c]" role="alert">
@@ -617,8 +617,21 @@ export default function RegisterToolPage() {
                 variant="primary"
                 size="sm"
                 icon={<Send size={14} />}
-                disabled={createTool.isPending || createVersion.isPending}
+                disabled={
+                  createTool.isPending ||
+                  createVersion.isPending ||
+                  isValidating ||
+                  !validation ||
+                  !validation.valid
+                }
                 onClick={handleRegister}
+                title={
+                  !validation
+                    ? 'Waiting for validation…'
+                    : !validation.valid
+                      ? 'Resolve validation errors before registering.'
+                      : undefined
+                }
               >
                 {createTool.isPending || createVersion.isPending ? 'Registering...' : 'Register Tool'}
               </Button>
@@ -639,6 +652,128 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
       <span className={cn('max-w-[320px] text-right text-[11px] text-[#1a1a1a]', 'truncate')}>
         {value}
       </span>
+    </div>
+  );
+}
+
+/* ---------- Validation panel ---------- */
+
+interface ValidationPanelProps {
+  validation: import('@api/tools').ContractValidation | null;
+  isValidating: boolean;
+  networkError: Error | null;
+  enabled: boolean;
+}
+
+/**
+ * Inline live-validation summary. Shown beneath the active wizard step.
+ * Color-coded: red for errors, amber for warnings, green for success,
+ * neutral while validating.
+ */
+function ValidationPanel({ validation, isValidating, networkError, enabled }: ValidationPanelProps) {
+  if (!enabled) {
+    return (
+      <div className="rounded-[8px] bg-[#f5f5f0] px-3 py-2 text-[11px] text-[#6b6b6b]">
+        Fill in a tool name to start live validation.
+      </div>
+    );
+  }
+
+  if (networkError) {
+    return (
+      <div className="flex items-start gap-2 rounded-[8px] bg-[#ffebee] px-3 py-2 text-[11px] text-[#e74c3c]" role="alert">
+        <XCircle size={14} className="shrink-0 mt-0.5" />
+        <div>
+          <div className="font-medium">Validation request failed</div>
+          <div className="text-[10px] opacity-80">{networkError.message}</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!validation) {
+    return (
+      <div className="flex items-center gap-2 rounded-[8px] bg-[#f5f5f0] px-3 py-2 text-[11px] text-[#6b6b6b]">
+        <Loader2 size={14} className="animate-spin" />
+        <span>Validating manifest…</span>
+      </div>
+    );
+  }
+
+  const { valid, errors, warnings } = validation;
+
+  return (
+    <div className="space-y-2">
+      <div
+        className={cn(
+          'flex items-center justify-between rounded-[8px] px-3 py-2',
+          valid && warnings.length === 0 && 'bg-[#e8f5e9]',
+          valid && warnings.length > 0 && 'bg-[#fff3e0]',
+          !valid && 'bg-[#ffebee]',
+        )}
+      >
+        <div className="flex items-center gap-2 text-[11px] font-medium">
+          {valid ? (
+            <CheckCircle2 size={14} className="text-[#4caf50]" />
+          ) : (
+            <XCircle size={14} className="text-[#e74c3c]" />
+          )}
+          <span
+            className={cn(
+              valid ? 'text-[#1a1a1a]' : 'text-[#e74c3c]',
+            )}
+          >
+            {valid ? 'Manifest is valid; ready to register' : 'Manifest has validation errors'}
+          </span>
+          {isValidating && <Loader2 size={12} className="animate-spin text-[#6b6b6b] ml-1" />}
+        </div>
+        <div className="flex items-center gap-3 text-[10px]">
+          {errors.length > 0 && (
+            <span className="text-[#e74c3c]">
+              {errors.length} error{errors.length !== 1 ? 's' : ''}
+            </span>
+          )}
+          {warnings.length > 0 && (
+            <span className="text-[#ff9800]">
+              {warnings.length} warning{warnings.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {errors.length > 0 && (
+        <ul className="space-y-1" aria-label="Validation errors">
+          {errors.map((err, i) => (
+            <li
+              key={`e-${i}`}
+              className="flex items-start gap-2 rounded-[6px] bg-[#ffebee] px-3 py-1.5"
+            >
+              <XCircle size={12} className="text-[#e74c3c] shrink-0 mt-0.5" />
+              <span className="text-[10px] text-[#e74c3c]">
+                {err.path && <strong className="font-mono">{err.path}: </strong>}
+                {err.message}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {warnings.length > 0 && (
+        <ul className="space-y-1" aria-label="Validation warnings">
+          {warnings.map((warn, i) => (
+            <li
+              key={`w-${i}`}
+              className="flex items-start gap-2 rounded-[6px] bg-[#fff3e0] px-3 py-1.5"
+            >
+              <AlertTriangle size={12} className="text-[#ff9800] shrink-0 mt-0.5" />
+              <span className="text-[10px] text-[#ff9800]">
+                {warn.path && <strong className="font-mono">{warn.path}: </strong>}
+                {warn.message}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

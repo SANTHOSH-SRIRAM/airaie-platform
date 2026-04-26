@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
-import type { ToolContract, ToolContractPort } from '@store/toolTypesStore';
-import { validateNodeInputs, type ValidationError } from '@utils/nodeValidation';
+import type { ToolContract } from '@store/toolTypesStore';
+import { validateNodeInputs } from '@utils/nodeValidation';
 import ParameterInput from './ParameterInput';
 import ResourceLimitsSection from './ResourceLimitsSection';
 import RetryPolicySection from './RetryPolicySection';

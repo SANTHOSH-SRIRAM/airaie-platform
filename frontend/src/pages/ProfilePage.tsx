@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useUiStore } from '@store/uiStore';
 import {
-  User, Mail, Building, Calendar, Edit2, Key,
+  Edit2, Key,
   Activity, MonitorPlay, PieChart, Bell, Settings,
-  AlertTriangle, Check, Copy, Eye, MoreHorizontal,
-  ChevronDown, ShieldAlert, Cpu, Package, Play, CheckCircle2, Shield, Brain, Plus,
-  Camera, CheckCircle, ShieldCheck
+  AlertTriangle, Copy, Eye,
+  ChevronDown, Play, CheckCircle2,
+  Camera, ShieldCheck
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 
@@ -13,13 +13,19 @@ import { cn } from '@utils/cn';
 // Mock Data
 // ---------------------------------------------------------------------------
 
-const MOCK_ACTIVITY = [
-  { id: 1, type: 'info', text: 'Run #112 triggered by System', sub: 'FEA Validation Pipeline · 4m ago', icon: Play, color: 'text-blue-500', bg: 'bg-blue-50' },
-  { id: 2, type: 'success', text: 'Run success — FEA Validation Pipeline', sub: 'Run completed. Artifacts saved.', icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50' },
-  { id: 3, type: 'warning', text: 'Approval requested — Thermal Evidence Gate', sub: 'Structural validation pending.', icon: Shield, color: 'text-orange-500', bg: 'bg-orange-50' },
-  { id: 4, type: 'escalation', text: 'Agent escalated — FEA Optimizer', sub: 'Confidence below threshold. Awaiting human input.', icon: Brain, color: 'text-purple-500', bg: 'bg-purple-50' },
-  { id: 5, type: 'success', text: 'Gate approved — Design Validation Gate', sub: 'Approved by you.', icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50' },
-];
+// TODO(backend): wire to a real `/v0/audit/user/:id` (or similar) endpoint
+// when the kernel ships per-user activity. Until then the timeline renders
+// an empty state — preferable to faking history that doesn't reflect what
+// the user actually did.
+type ActivityEntry = {
+  id: number;
+  text: string;
+  sub: string;
+  icon: typeof Play;
+  color: string;
+  bg: string;
+};
+const RECENT_ACTIVITY: ActivityEntry[] = [];
 
 // ---------------------------------------------------------------------------
 // Components
@@ -232,24 +238,36 @@ export default function ProfilePage() {
         </button>
       }>
         <div className="flex flex-col gap-0">
-          <p className="text-[11px] font-bold text-[#acacac] uppercase tracking-wider mb-4">Today</p>
-          <div className="relative pl-6 border-l-2 border-[#f0f0ec] ml-3 pb-8 space-y-6">
-            {MOCK_ACTIVITY.map((a, i) => (
-              <div key={i} className="relative">
-                <div className={cn("absolute -left-[31px] top-0.5 w-[14px] h-[14px] rounded-full border-2 border-white flex items-center justify-center", a.bg, a.color.replace('text', 'border'))}>
-                  <div className={cn("w-1.5 h-1.5 rounded-full", a.color.replace('text', 'bg'))} />
-                </div>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-[13px] font-bold text-[#1a1a1a]">{a.text}</p>
-                    <p className="text-[12px] text-[#6b6b6b] mt-0.5">{a.sub}</p>
+          {RECENT_ACTIVITY.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <Activity size={20} className="text-[#cdc8bf] mb-2" />
+              <p className="text-[12px] font-medium text-[#6b6b6b]">No recent activity</p>
+              <p className="text-[11px] text-[#acacac] mt-1 max-w-[260px]">
+                Runs you start, approvals you make, and agent escalations will appear here.
+              </p>
+            </div>
+          ) : (
+            <>
+              <p className="text-[11px] font-bold text-[#acacac] uppercase tracking-wider mb-4">Today</p>
+              <div className="relative pl-6 border-l-2 border-[#f0f0ec] ml-3 pb-8 space-y-6">
+                {RECENT_ACTIVITY.map((a, i) => (
+                  <div key={i} className="relative">
+                    <div className={cn("absolute -left-[31px] top-0.5 w-[14px] h-[14px] rounded-full border-2 border-white flex items-center justify-center", a.bg, a.color.replace('text', 'border'))}>
+                      <div className={cn("w-1.5 h-1.5 rounded-full", a.color.replace('text', 'bg'))} />
+                    </div>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-[13px] font-bold text-[#1a1a1a]">{a.text}</p>
+                        <p className="text-[12px] text-[#6b6b6b] mt-0.5">{a.sub}</p>
+                      </div>
+                      <span className="text-[11px] text-[#acacac] whitespace-nowrap">2m ago</span>
+                    </div>
                   </div>
-                  <span className="text-[11px] text-[#acacac] whitespace-nowrap">2m ago</span>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <button className="text-[13px] font-bold text-[#2196f3] hover:underline mx-auto block">View all activity →</button>
+              <button className="text-[13px] font-bold text-[#1976d2] hover:underline mx-auto block">View all activity →</button>
+            </>
+          )}
         </div>
       </SectionCard>
 

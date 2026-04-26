@@ -80,12 +80,16 @@ export default function EvalTab({ agentId, sessionId }: EvalTabProps) {
       for (const r of response.results ?? []) {
         resultMap.set(r.eval_case_id, r);
       }
-      setRowStates(initial.map((row) => {
+      setRowStates(initial.map((row): EvalRowState => {
         const result = resultMap.get(row.id);
         if (!result) return { ...row, status: 'pending' };
+        const mapped: EvalRowState['status'] =
+          result.status === 'passed' ? 'pass'
+          : result.status === 'failed' ? 'fail'
+          : (result.status as EvalRowState['status']);
         return {
           ...row,
-          status: result.status,
+          status: mapped,
           score: result.score,
           duration_ms: result.duration_ms,
         };

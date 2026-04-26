@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { Approval, ApprovalsResponse } from '@/types/approval';
+import type { ApprovalsResponse } from '@/types/approval';
 
 // ---------------------------------------------------------------------------
 // API functions

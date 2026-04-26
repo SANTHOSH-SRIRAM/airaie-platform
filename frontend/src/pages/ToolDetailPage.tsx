@@ -1,19 +1,21 @@
 import { useState, useEffect, createElement, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Wrench, Shield, Activity, BarChart3, Timer, DollarSign,
-  GitBranch, Play, CheckCircle2,
-  Code2, ExternalLink,
+  ArrowLeft, Wrench, Activity, BarChart3,
+  Play,
+  ExternalLink,
   Container, FileCode2, Binary, Globe,
   FlaskConical, Wind, Grid2X2, Database, Box, Paperclip,
   Thermometer, Calculator, Scale, BrainCircuit, Archive, Combine, ShieldCheck,
-  ChevronRight, PlayCircle, Lock, HardDrive, Edit2, Upload, AlertTriangle, FileText, Check, MemoryStick, Cpu, Clock, Link2, Download, History, X, CheckCircle, Loader2
+  PlayCircle, Lock, HardDrive, Edit2, Upload, AlertTriangle, FileText, Check, Link2, Download, History, CheckCircle, Loader2
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import { useUiStore } from '@store/uiStore';
-import { useToolDetailFull, useToolDetailVersions, useToolRuns, useUpdateTool, useDeprecateToolVersion, useCreateRun, usePublishToolVersion, useUpdateTrustLevel } from '@hooks/useTools';
-import type { ToolAdapter, ToolCategory, ToolStatus, TrustLevel, ToolContractField, ToolDetail, ToolDetailVersion, ToolRunEntry } from '@/types/tool';
+import { useToolDetailFull, useToolDetailVersions, useToolRuns, useDeprecateToolVersion, useCreateRun, usePublishToolVersion } from '@hooks/useTools';
+import type { ToolAdapter, ToolCategory, ToolStatus, TrustLevel, ToolDetailVersion } from '@/types/tool';
 import EditToolModal from '@components/tools/EditToolModal';
+import ManifestViewer from '@components/tools/ManifestViewer';
+import TrustLevelDialog from '@components/tools/TrustLevelDialog';
 
 // ── Shared Label & Icon Maps ───────────────────────────────────
 
@@ -85,14 +87,6 @@ function formatTimeAgo(isoStr: string) {
 
 // ── Subcomponents ──────────────────────────────────────────────
 
-function ProgressBar({ pct }: { pct: number }) {
-  return (
-    <div className="flex items-end gap-1 mb-2 h-10 border-b border-[#ece9e3] px-2 relative group overflow-hidden cursor-pointer hover:bg-[#fafaf8]">
-       <div className="w-[8px] bg-[#2196f3] rounded-t-sm transition-all" style={{ height: `${pct}%`, opacity: pct > 80 ? 1 : 0.6 }} />
-    </div>
-  );
-}
-
 function StatusPill({ status }: { status: string }) {
   const styles: Record<string, string> = {
     published: 'bg-[#e8f5e9] text-[#4caf50]',
@@ -118,12 +112,21 @@ export default function ToolDetailPage() {
   const setActiveToolSection = useUiStore((s) => s.setActiveToolSection);
 
   const { data: tool, isLoading, isError, refetch } = useToolDetailFull(id);
-  const { data: versions } = useToolDetailVersions(id);
-  const { data: runs } = useToolRuns(id);
+  const { data: versions, isLoading: versionsLoading, isError: versionsError } = useToolDetailVersions(id);
+  const { data: runs, isLoading: runsLoading, isError: runsError } = useToolRuns(id);
+
+  // Selected version drives the manifest viewer. Defaults to the latest
+  // (first entry) once versions arrive.
+  const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
+  useEffect(() => {
+    if (!selectedVersion && versions && versions.length > 0) {
+      setSelectedVersion(versions[0].version);
+    }
+  }, [versions, selectedVersion]);
+  const selectedVersionEntry = (versions ?? []).find((v) => v.version === selectedVersion) ?? null;
 
   // Modals + UI state
   const [showEditModal, setShowEditModal] = useState(false);
-  const [deprecateConfirm, setDeprecateConfirm] = useState(false);
   const [testInputs, setTestInputs] = useState<Record<string, unknown>>({});
   const [testRunning, setTestRunning] = useState(false);
   const [testResult, setTestResult] = useState<{ status: string; run_id: string; outputs?: unknown } | null>(null);
@@ -133,17 +136,21 @@ export default function ToolDetailPage() {
   const deprecateMutation = useDeprecateToolVersion(id);
   const createRunMutation = useCreateRun();
   const publishMutation = usePublishToolVersion(id);
-  const trustMutation = useUpdateTrustLevel();
   const [publishingVersion, setPublishingVersion] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
 
-  const handlePublishVersion = async (version: string, currentTrust?: TrustLevel) => {
+  // Trust-level dialog (Phase C3). Tracks which version is being adjusted;
+  // the actual mutation lives in TrustLevelDialog.
+  const [trustDialogVersion, setTrustDialogVersion] = useState<ToolDetailVersion | null>(null);
+
+  const handlePublishVersion = async (version: string, _currentTrust?: TrustLevel) => {
+    // Trust-level mutation is owned by C3; this page only publishes. If the
+    // version's trust is below the backend `community` threshold, the publish
+    // call will surface that error to the user, who can then advance trust
+    // through the dedicated trust UI.
     setPublishError(null);
     setPublishingVersion(version);
     try {
-      if (!currentTrust || currentTrust === 'untested') {
-        await trustMutation.mutateAsync({ toolId: id, version, trustLevel: 'verified' });
-      }
       await publishMutation.mutateAsync(version);
     } catch (err: unknown) {
       setPublishError((err as { message?: string })?.message ?? 'Publish failed');
@@ -212,8 +219,8 @@ export default function ToolDetailPage() {
          <div className="flex items-center gap-[12px]">
             <button
               onClick={() => document.getElementById('test-run')?.scrollIntoView({ behavior: 'smooth' })}
-              className="h-[32px] px-[16px] border border-[#2196f3] text-[#2196f3] rounded-[8px] text-[12px] font-bold hover:bg-[#e3f2fd] transition-colors flex items-center gap-1.5"
-            ><Play size={14}/> Test Run</button>
+              className="h-[32px] px-[16px] bg-[#4caf50] text-white rounded-[8px] text-[12px] font-bold hover:bg-[#43a047] transition-colors flex items-center gap-1.5 shadow-sm"
+            ><Play size={14} fill="white"/> Test Run</button>
             <button
               onClick={() => setShowEditModal(true)}
               className="h-[32px] px-[16px] border border-[#e8e8e8] text-[#1a1a1a] rounded-[8px] text-[12px] font-bold hover:bg-[#fafaf8] transition-colors flex items-center gap-1.5"
@@ -303,29 +310,71 @@ export default function ToolDetailPage() {
                  <span className="px-2 py-0.5 bg-[#f0f0ec] text-[#6b6b6b] text-[10px] font-bold rounded-full uppercase tracking-wider">{versions?.length || 0} versions</span>
                </div>
 
+               {versionsLoading ? (
+                  <div className="flex items-center gap-2 text-[12px] text-[#6b6b6b] py-4">
+                    <Loader2 size={14} className="animate-spin"/> Loading versions…
+                  </div>
+               ) : versionsError ? (
+                  <div className="text-[12px] text-[#e74c3c] py-4">Failed to load versions.</div>
+               ) : (versions ?? []).length === 0 ? (
+                  <div className="text-[12px] text-[#acacac] italic p-4 border border-dashed border-[#ece9e3] rounded-[8px]">
+                    No versions yet for this tool.
+                  </div>
+               ) : (
                <div className="relative pl-[24px] border-l-[2px] border-[#2196f3] ml-[8px] flex flex-col gap-[32px]">
                   {(versions || []).map((ver, idx) => {
                      const isCurrent = ver.version === tool.currentVersion;
                      const isDeprecated = ver.status === 'deprecated';
+                     const isSelected = ver.version === selectedVersion;
                      return (
-                        <div key={ver.version} className={cn("relative pb-6", idx !== versions!.length - 1 && "border-b border-[#ece9e3]")}>
-                           <div className={cn('absolute -left-[32px] top-[4px] w-[14px] h-[14px] rounded-full border-[3px]', isCurrent ? 'bg-[#2196f3] border-[#2196f3]' : isDeprecated ? 'bg-white border-[#d0d0d0]' : 'bg-white border-[#4caf50]')} />
+                        <div
+                          key={ver.version}
+                          onClick={() => setSelectedVersion(ver.version)}
+                          className={cn(
+                            "relative pb-6 cursor-pointer rounded-md transition-colors -mx-2 px-2",
+                            idx !== versions!.length - 1 && "border-b border-[#ece9e3]",
+                            isSelected ? 'bg-[#e3f2fd]/30' : 'hover:bg-[#fbfaf9]',
+                          )}
+                        >
+                           <div className={cn('absolute -left-[34px] top-[4px] w-[14px] h-[14px] rounded-full border-[3px]', isCurrent ? 'bg-[#2196f3] border-[#2196f3]' : isDeprecated ? 'bg-white border-[#d0d0d0]' : 'bg-white border-[#4caf50]')} />
                            <div className="flex justify-between items-start">
                               <div>
-                                 <div className="flex gap-2 items-center mb-2">
-                                    <span className="text-[14px] font-bold text-[#1a1a1a]">{ver.version}</span>
+                                 <div className="flex gap-2 items-center mb-2 flex-wrap">
+                                    <span className="text-[14px] font-bold text-[#1a1a1a]">v{ver.version}</span>
                                     <StatusPill status={ver.status} />
+                                    {ver.trust_level && (
+                                      <span className={cn(
+                                        "text-[10px] font-bold px-2 py-0.5 rounded-[4px] uppercase tracking-wider",
+                                        ver.trust_level === 'certified' ? 'bg-[#e8f5e9] text-[#2e7d32]' :
+                                        ver.trust_level === 'verified' ? 'bg-[#e8f5e9] text-[#4caf50]' :
+                                        ver.trust_level === 'tested' ? 'bg-[#e3f2fd] text-[#2196f3]' :
+                                        ver.trust_level === 'community' ? 'bg-[#fff3e0] text-[#ff9800]' :
+                                        'bg-[#f5f5f0] text-[#acacac]'
+                                      )}>{ver.trust_level}</span>
+                                    )}
+                                    {/* TODO(Phase F): gate this button by the user's RBAC role
+                                        (only owners/maintainers should adjust trust). */}
+                                    {ver.trust_level !== 'certified' && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); setTrustDialogVersion(ver); }}
+                                        title="Change trust level"
+                                        aria-label={`Change trust level for v${ver.version}`}
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#6b6b6b] hover:text-[#2196f3] hover:bg-[#e3f2fd]/40 rounded-[4px] transition-colors"
+                                      >
+                                        <ShieldCheck size={11} />
+                                        Change trust
+                                      </button>
+                                    )}
                                     {isCurrent && <span className="text-[9px] font-bold bg-[#e3f2fd] text-[#2196f3] px-2 py-0.5 rounded-[4px]">latest</span>}
+                                    {isSelected && <span className="text-[9px] font-bold bg-[#1a1a1a] text-white px-2 py-0.5 rounded-[4px]">viewing</span>}
                                  </div>
-                                 <p className="text-[13px] text-[#6b6b6b] mt-2 mb-3">{(ver as any).description || 'Added nonlinear analysis support and automatic convergence detection'}</p>
-                                 {isCurrent && <p className="text-[11px] text-[#949494] font-mono">Changed: inputs <span className="text-[#a855f7]">(added convergence_tol)</span>, docker image <span className="text-[#a855f7]">(fea-solver:2.1)</span></p>}
-                                 
+                                 <p className="text-[12px] text-[#6b6b6b] mt-1">{ver.run_count} run{ver.run_count === 1 ? '' : 's'}</p>
+
                                  <div className="flex gap-4 mt-3 items-center">
-                                    <button className="text-[11px] font-bold text-[#2196f3] hover:underline">Diff</button>
-                                    <button className="text-[11px] font-bold text-[#6b6b6b] hover:underline">Rollback</button>
                                     {ver.status === 'draft' && (
                                       <button
-                                        onClick={() => handlePublishVersion(ver.version, ver.trust_level)}
+                                        onClick={(e) => { e.stopPropagation(); handlePublishVersion(ver.version, ver.trust_level); }}
                                         disabled={publishingVersion === ver.version}
                                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[4px] text-[11px] font-bold bg-[#4caf50] text-white hover:bg-[#43a047] disabled:opacity-60"
                                       >
@@ -341,12 +390,15 @@ export default function ToolDetailPage() {
                                    <p className="text-[11px] text-[#e74c3c] mt-2">{publishError}</p>
                                  )}
                               </div>
-                              <span className="text-[12px] text-[#949494]">{formatDate(ver.published_at)}</span>
+                              <span className="text-[12px] text-[#949494]" title={ver.published_at ? formatDate(ver.published_at) : ''}>
+                                {ver.published_at ? formatTimeAgo(ver.published_at) : '—'}
+                              </span>
                            </div>
                         </div>
                      )
                   })}
                </div>
+               )}
             </section>
 
             {/* 3. TOOL CONTRACT */}
@@ -408,10 +460,16 @@ export default function ToolDetailPage() {
                   </div>
                </div>
 
-               <h4 className="text-[10px] uppercase font-bold text-[#acacac] tracking-widest mb-2">RAW CONTRACT (interface)</h4>
-               <div className="bg-[#1a1a1a] rounded-[8px] p-4 font-mono text-[11px] text-[#a855f7] overflow-x-auto">
-                  <pre>{JSON.stringify({ inputs: tool.contract?.inputs ?? [], outputs: tool.contract?.outputs ?? [] }, null, 2)}</pre>
-               </div>
+               <h4 className="text-[10px] uppercase font-bold text-[#acacac] tracking-widest mb-3">ATP MANIFEST</h4>
+               <ManifestViewer
+                 manifest={selectedVersionEntry?.manifest}
+                 versionLabel={selectedVersionEntry ? `v${selectedVersionEntry.version}` : undefined}
+               />
+               {versions && versions.length > 1 && (
+                 <p className="text-[11px] text-[#949494] mt-2">
+                   Viewing manifest for <span className="font-mono font-bold text-[#1a1a1a]">v{selectedVersionEntry?.version ?? '—'}</span>. Click another version above to switch.
+                 </p>
+               )}
             </section>
 
             {/* 4. EXECUTION CONFIGURATION */}
@@ -535,25 +593,45 @@ export default function ToolDetailPage() {
                     <Activity size={16} className="text-[#6b6b6b]" />
                     <h3 className="text-[14px] font-bold text-[#1a1a1a]">Recent Runs</h3>
                  </div>
-                 <button className="text-[12px] font-bold text-[#2196f3] hover:underline">View All 47 &rarr;</button>
+                 <button
+                   onClick={() => navigate(`/workflow-runs?tool_id=${id}`)}
+                   className="text-[12px] font-bold text-[#2196f3] hover:underline"
+                 >View all &rarr;</button>
                </div>
 
-               <div className="flex flex-col">
-                  {runs?.slice(0,4)?.map((run) => {
-                     const cfg = RUN_STATUS[run.status?.toLowerCase()] ?? RUN_STATUS_DEFAULT;
-                     return (
-                        <div key={run.run_id} className="flex justify-between items-center py-4 border-b border-[#fafaf8] last:border-0 group cursor-pointer hover:bg-[#fbfaf9] -mx-4 px-4 rounded-md transition-colors">
-                           <div className="flex items-center gap-4">
-                              <span className="text-[13px] font-mono font-bold text-[#1a1a1a] w-[140px]">{run.run_id}</span>
-                              <span className={cn('h-[22px] px-[8px] rounded-[6px] text-[10px] font-bold flex items-center', cfg.bg, cfg.text)}>{cfg.label}</span>
-                              <span className="text-[12px] text-[#6b6b6b] ml-4 font-mono w-[80px]">{(run.duration > 0 || run.status==='failed') ? `${run.duration || 12}s` : '...'}</span>
-                              <span className="text-[12px] text-[#acacac]">v{run.version} — invoked by Test Runner</span>
-                           </div>
-                           <span className="text-[12px] text-[#949494]">{formatTimeAgo(run.created_at)}</span>
-                        </div>
-                     )
-                  })}
-               </div>
+               {runsLoading ? (
+                 <div className="flex items-center gap-2 text-[12px] text-[#6b6b6b] py-4">
+                   <Loader2 size={14} className="animate-spin"/> Loading runs…
+                 </div>
+               ) : runsError ? (
+                 <div className="text-[12px] text-[#e74c3c] py-4">Failed to load runs.</div>
+               ) : (runs ?? []).length === 0 ? (
+                 <div className="text-[12px] text-[#acacac] italic p-4 border border-dashed border-[#ece9e3] rounded-[8px]">
+                   No runs yet. Trigger a Test Run to get started.
+                 </div>
+               ) : (
+                 <div className="flex flex-col">
+                    {(runs ?? []).slice(0,10).map((run) => {
+                       const cfg = RUN_STATUS[run.status?.toLowerCase()] ?? RUN_STATUS_DEFAULT;
+                       return (
+                          <div
+                            key={run.run_id}
+                            onClick={() => navigate(`/workflow-runs/${run.run_id}`)}
+                            className="flex justify-between items-center py-4 border-b border-[#fafaf8] last:border-0 group cursor-pointer hover:bg-[#fbfaf9] -mx-4 px-4 rounded-md transition-colors"
+                          >
+                             <div className="flex items-center gap-4 min-w-0">
+                                <span className="text-[13px] font-mono font-bold text-[#1a1a1a] w-[160px] truncate">{run.run_id}</span>
+                                <span className={cn('h-[22px] px-[8px] rounded-[6px] text-[10px] font-bold flex items-center', cfg.bg, cfg.text)}>{cfg.label}</span>
+                                <span className="text-[12px] text-[#6b6b6b] font-mono w-[60px]">{run.duration > 0 ? formatDuration(run.duration) : '—'}</span>
+                                <span className="text-[12px] text-[#6b6b6b] font-mono w-[64px]">{run.cost > 0 ? `$${run.cost.toFixed(2)}` : '—'}</span>
+                                {run.version && <span className="text-[12px] text-[#acacac] truncate">v{run.version}</span>}
+                             </div>
+                             <span className="text-[12px] text-[#949494] shrink-0">{formatTimeAgo(run.created_at)}</span>
+                          </div>
+                       )
+                    })}
+                 </div>
+               )}
             </section>
 
             {/* 7. USED IN */}
@@ -651,38 +729,25 @@ export default function ToolDetailPage() {
                          type="button"
                          disabled={testRunning}
                          onClick={async () => {
-                           if (!tool.id || !tool.currentVersion) return;
+                           const versionRef = selectedVersion ?? tool.currentVersion;
+                           if (!tool.id || !versionRef) return;
                            setTestRunning(true);
                            setTestResult(null);
                            setTestError(null);
                            try {
                              const run = await createRunMutation.mutateAsync({
                                toolId: tool.id,
-                               version: tool.currentVersion,
+                               version: versionRef,
                                inputs: testInputs,
                              });
                              const runId = run.run_id ?? '';
                              setTestResult({ status: run.status ?? 'running', run_id: runId, outputs: run });
-                             // Poll for completion
+                             // Navigate to the run detail page so users can watch
+                             // it execute (per spec). Keep state set so the
+                             // inline panel still shows the kicked-off run if
+                             // they navigate back.
                              if (runId) {
-                               const poll = setInterval(async () => {
-                                 try {
-                                   const res = await fetch(`/v0/runs/${runId}`, { headers: { 'X-Project-Id': 'prj_default' } });
-                                   if (!res.ok) return;
-                                   const data = await res.json();
-                                   const r = data.run ?? data;
-                                   const status = (r.status ?? '').toLowerCase();
-                                   if (status === 'failed' || status === 'succeeded' || status === 'completed' || status === 'cancelled') {
-                                     clearInterval(poll);
-                                     setTestResult({ status, run_id: runId, outputs: r });
-                                     if (status === 'failed') setTestError(r.error ?? r.error_message ?? 'Run failed');
-                                   } else {
-                                     setTestResult({ status, run_id: runId, outputs: r });
-                                   }
-                                 } catch { /* ignore poll errors */ }
-                               }, 3000);
-                               // Stop polling after 5 minutes
-                               setTimeout(() => clearInterval(poll), 300000);
+                               navigate(`/workflow-runs/${runId}`);
                              }
                            } catch (e: any) {
                              setTestError(e?.message ?? 'Failed to start run');
@@ -690,9 +755,9 @@ export default function ToolDetailPage() {
                              setTestRunning(false);
                            }
                          }}
-                         className="h-10 mt-2 bg-[#2196f3] text-white rounded-[8px] text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-[#1976d2] shadow-sm disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                         className="h-10 mt-2 bg-[#4caf50] text-white rounded-[8px] text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-[#43a047] shadow-sm disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                        >
-                         {testRunning ? <><Loader2 size={14} className="animate-spin"/> Running...</> : <><Play size={14} fill="white"/> Run Tool</>}
+                         {testRunning ? <><Loader2 size={14} className="animate-spin"/> Starting…</> : <><Play size={14} fill="white"/> Run Tool</>}
                        </button>
                      </div>
                   </div>
@@ -724,13 +789,10 @@ export default function ToolDetailPage() {
                          <div className="flex items-center gap-3">
                            {testResult.run_id && (
                              <button
-                               onClick={() => {
-                                 const el = document.getElementById('runs');
-                                 if (el) el.scrollIntoView({ behavior: 'smooth' });
-                               }}
+                               onClick={() => navigate(`/workflow-runs/${testResult.run_id}`)}
                                className="text-[12px] text-[#2196f3] hover:underline font-bold flex items-center gap-1"
                              >
-                               <ExternalLink size={12}/> View in Recent Runs
+                               <ExternalLink size={12}/> Open run detail
                              </button>
                            )}
                            <button
@@ -814,6 +876,16 @@ export default function ToolDetailPage() {
           tool={tool}
           onClose={() => setShowEditModal(false)}
           onSave={() => { refetch(); setShowEditModal(false); }}
+        />
+      )}
+
+      {trustDialogVersion && id && (
+        <TrustLevelDialog
+          open={!!trustDialogVersion}
+          onClose={() => setTrustDialogVersion(null)}
+          toolId={id}
+          version={trustDialogVersion.version}
+          currentLevel={trustDialogVersion.trust_level}
         />
       )}
 

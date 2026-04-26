@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { ArrowLeft, AlertTriangle, Loader2, Check, Code2 } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Loader2, Check, Code2, Tag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useWorkflowStore } from '@store/workflowStore';
+import { useWorkflowStore, type NodeDiagnostic } from '@store/workflowStore';
 import { useValidateWorkflow, useCompileWorkflow } from '@hooks/useWorkflow';
 import { canvasToYamlDsl } from '@utils/canvasToYaml';
-import type { ValidateResult, CompileResult } from '@api/workflows';
+import type { ValidateResult, CompileResult, Diagnostic } from '@api/workflows';
 import { cn } from '@utils/cn';
 import VersionList from './VersionList';
 import PublishModal from './PublishModal';
@@ -22,6 +22,24 @@ interface WorkflowEditorTopBarProps {
   isSaving?: boolean;
   lastSavedAt?: Date | null;
   onSave?: () => void;
+  /** When set, overrides the metadata version for compile (used by version selector). */
+  selectedVersion?: number | null;
+  onToggleVersions?: () => void;
+  versionsOpen?: boolean;
+  /** When false, the top bar disables the editor-only actions. */
+  hasWorkflow?: boolean;
+}
+
+/** Convert wire-shape Diagnostic[] -> store-shape errorsByNode map. */
+function diagnosticsToErrorsByNode(items: Diagnostic[]): Record<string, NodeDiagnostic[]> {
+  const out: Record<string, NodeDiagnostic[]> = {};
+  for (const d of items) {
+    const key = d.node_id ?? '';
+    const arr = out[key] ?? [];
+    arr.push({ message: d.message, severity: d.severity, field_path: d.field_path });
+    out[key] = arr;
+  }
+  return out;
 }
 
 export default function WorkflowEditorTopBar({
@@ -30,21 +48,30 @@ export default function WorkflowEditorTopBar({
   isSaving = false,
   lastSavedAt,
   onSave,
+  selectedVersion,
+  onToggleVersions,
+  versionsOpen = false,
+  hasWorkflow = true,
 }: WorkflowEditorTopBarProps) {
   const navigate = useNavigate();
   const metadata = useWorkflowStore((s) => s.metadata);
   const isDirty = useWorkflowStore((s) => s.isDirty);
   const nodes = useWorkflowStore((s) => s.nodes);
   const edges = useWorkflowStore((s) => s.edges);
+  const setErrorsByNode = useWorkflowStore((s) => s.setErrorsByNode);
+  const clearErrors = useWorkflowStore((s) => s.clearErrors);
 
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidateResult | null>(null);
   const [compileResult, setCompileResult] = useState<CompileResult | null>(null);
+  const [compileFlash, setCompileFlash] = useState<'success' | null>(null);
 
   const validateMutation = useValidateWorkflow();
   const compileMutation = useCompileWorkflow();
 
-  const versionNumber = parseInt(metadata?.version.replace(/^v/, '') ?? '3', 10);
+  const versionNumber = selectedVersion
+    ?? parseInt(metadata?.version.replace(/^v/, '') ?? '1', 10);
+  const canPublish = hasWorkflow && Boolean(metadata?.id);
 
   const handleValidate = async () => {
     const yaml = canvasToYamlDsl(
@@ -66,12 +93,26 @@ export default function WorkflowEditorTopBar({
       });
       setCompileResult(result);
       setValidationResult(null);
-    } catch {
+      // Surface diagnostics on the canvas: per-node + top-level banner.
+      const all: Diagnostic[] = [
+        ...(result.errors ?? []),
+        ...((result.warnings ?? []) as Diagnostic[]),
+      ];
+      if (result.success && all.length === 0) {
+        clearErrors();
+        setCompileFlash('success');
+        window.setTimeout(() => setCompileFlash(null), 2000);
+      } else {
+        setErrorsByNode(diagnosticsToErrorsByNode(all));
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Compilation request failed. Check your network connection.';
       setCompileResult({
         success: false,
-        errors: [{ message: 'Compilation request failed. Check your network connection.', severity: 'error' }],
+        errors: [{ message, severity: 'error' }],
       });
       setValidationResult(null);
+      setErrorsByNode({ '': [{ message, severity: 'error' }] });
     }
   };
 
@@ -135,6 +176,17 @@ export default function WorkflowEditorTopBar({
           </nav>
 
           <div className="ml-auto flex items-center gap-3">
+            {/* Compile success flash */}
+            {compileFlash === 'success' && (
+              <span
+                role="status"
+                className="flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700"
+              >
+                <Check size={13} />
+                Compiled
+              </span>
+            )}
+
             {/* Validation warnings indicator */}
             {warningCount > 0 && (
               <button
@@ -159,10 +211,29 @@ export default function WorkflowEditorTopBar({
               </button>
             )}
 
+            {/* Versions toggle */}
+            {onToggleVersions && (
+              <button
+                onClick={onToggleVersions}
+                className={cn(
+                  'flex h-[38px] items-center gap-1.5 rounded-[10px] border px-3 text-[13px] font-medium transition-colors',
+                  versionsOpen
+                    ? 'border-[#2196f3] bg-[#e3f2fd] text-[#1976d2]'
+                    : 'border-[#e0e0e0] text-[#6b6b6b] hover:bg-[#f8f8f7] hover:text-[#1a1a1a]',
+                )}
+                aria-pressed={versionsOpen}
+                aria-label="Toggle version history"
+                disabled={!hasWorkflow}
+              >
+                <Tag size={14} />
+                Versions
+              </button>
+            )}
+
             {/* Validate button */}
             <button
               onClick={handleValidate}
-              disabled={validateMutation.isPending}
+              disabled={validateMutation.isPending || !hasWorkflow}
               className="h-[38px] rounded-[10px] border border-[#e0e0e0] px-3 text-[13px] font-medium text-[#6b6b6b] transition-colors hover:bg-[#f8f8f7] hover:text-[#1a1a1a] disabled:opacity-50"
             >
               {validateMutation.isPending ? 'Validating...' : 'Validate'}
@@ -216,7 +287,8 @@ export default function WorkflowEditorTopBar({
             {/* Publish button */}
             <button
               onClick={() => setShowPublishModal(true)}
-              className="h-[38px] rounded-[10px] bg-[#242424] px-4 text-[13px] font-medium text-white transition-colors hover:bg-[#1a1a1a]"
+              disabled={!canPublish}
+              className="h-[38px] rounded-[10px] bg-[#242424] px-4 text-[13px] font-medium text-white transition-colors hover:bg-[#1a1a1a] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Publish
             </button>

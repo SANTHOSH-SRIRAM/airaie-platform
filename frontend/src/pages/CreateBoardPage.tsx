@@ -3,11 +3,22 @@ import { useNavigate } from 'react-router-dom';
 import {
   ChevronDown, ChevronRight, Plus, X, Trash2,
   Shield, Compass, BookOpen, Package,
-  Wrench, FlaskConical, Loader2,
+  Wrench, FlaskConical, Loader2, Bot,
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import { useUiStore } from '@store/uiStore';
 import { useCreateBoard } from '@hooks/useBoards';
+import { useAgentList } from '@hooks/useAgents';
+import { useIntentTypes } from '@hooks/useIntents';
+import { createIntent } from '@api/intents';
+import IntentSpecForm, { buildIntentSpecPayload } from '@components/boards/IntentSpecForm';
+import type { AgentListItem } from '@api/agents';
+import {
+  validateIntentDraft,
+  type IntentCriterionDraft,
+  type IntentInputDraft,
+  type IntentDraft,
+} from '@utils/intentValidation';
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -68,18 +79,6 @@ const VERTICAL_TAGS: Record<string, string[]> = {
   'Thermal Engineering': ['Heat Transfer', 'Thermal Cycling', 'Insulation', 'Cooling'],
   'Fluid Dynamics': ['CFD', 'Turbulence', 'Flow', 'Pressure'],
 };
-
-const AVAILABLE_WORKFLOWS: LinkedWorkflow[] = [
-  { id: 'w1', name: 'FEA Validation Pipeline' },
-  { id: 'w2', name: 'CFD Analysis Flow' },
-  { id: 'w3', name: 'Material Testing Pipeline' },
-  { id: 'w4', name: 'Topology Optimization' },
-  { id: 'w5', name: 'Mesh Quality Check' },
-  { id: 'w6', name: 'Fatigue Life Estimation' },
-];
-
-// TODO(backend): wire to /v0/agents — empty until then so the picker shows no fake options.
-const AVAILABLE_AGENTS: LinkedAgent[] = [];
 
 // ── Section Label ──────────────────────────────────────────
 
@@ -286,7 +285,7 @@ function SelectPill({
 function GateSection({
   gate,
   onUpdate,
-  onRemove,
+  onRemove: _onRemove,
 }: {
   gate: Gate;
   onUpdate: (g: Gate) => void;
@@ -747,13 +746,63 @@ export default function CreateBoardPage() {
     { id: 'w6', name: 'Fatigue Life Estimation' },
   ]);
 
-  // TODO(backend): seed from /v0/agents linked to this board.
-  const [linkedAgents, setLinkedAgents] = useState<LinkedAgent[]>([]);
-  const [nonPrimaryAgents, setNonPrimaryAgents] = useState<LinkedAgent[]>([]);
+  // Agent picker — sourced from /v0/agents. Multi-select; first selected
+  // is treated as the primary agent (so the existing preview/summary chips
+  // continue to render with the same primary/non-primary split).
+  const { data: agentsData = [], isLoading: agentsLoading, error: agentsError } = useAgentList();
+  const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([]);
+  const [primaryAgentId, setPrimaryAgentId] = useState<string | null>(null);
+
+  const linkedAgents: LinkedAgent[] = useMemo(
+    () =>
+      selectedAgentIds
+        .filter((id) => id === primaryAgentId)
+        .map((id) => {
+          const a = agentsData.find((x) => x.id === id);
+          return { id, name: a?.name ?? id, primary: true };
+        }),
+    [selectedAgentIds, primaryAgentId, agentsData],
+  );
+
+  const nonPrimaryAgents: LinkedAgent[] = useMemo(
+    () =>
+      selectedAgentIds
+        .filter((id) => id !== primaryAgentId)
+        .map((id) => {
+          const a = agentsData.find((x) => x.id === id);
+          return { id, name: a?.name ?? id };
+        }),
+    [selectedAgentIds, primaryAgentId, agentsData],
+  );
+
+  // ── IntentSpec State ──────────────────────────
+  // Captured here, POSTed to /v0/boards/{id}/intents after the board is
+  // created. If the IntentSpec call fails we surface the error but leave
+  // the board in place — the user can add an IntentSpec later from
+  // BoardDetailPage.
+  const verticalSlug = useMemo(() => {
+    // VERTICAL_DOMAINS values are display strings; the kernel keys
+    // intent types by vertical slug (e.g. "engineering"). For the v1
+    // form we map the broad board type to a slug and let the user
+    // pick the specific intent type below.
+    return boardType === 'engineering' ? 'engineering' : 'science';
+  }, [boardType]);
+  const { data: intentTypes = [], isLoading: intentTypesLoading } = useIntentTypes(verticalSlug);
+
+  const [intentName, setIntentName] = useState('');
+  const [intentDescription, setIntentDescription] = useState('');
+  const [intentTypeSlug, setIntentTypeSlug] = useState('');
+  const [intentTypeOpen, setIntentTypeOpen] = useState(false);
+  const [intentCriteria, setIntentCriteria] = useState<IntentCriterionDraft[]>([
+    { name: '', metric: '', operator: 'lte', threshold: '', unit: '' },
+  ]);
+  const [intentInputs, setIntentInputs] = useState<IntentInputDraft[]>([]);
+  const [intentErrors, setIntentErrors] = useState<string[]>([]);
+  const [intentWarning, setIntentWarning] = useState<string | null>(null);
 
   const [selectedTags, setSelectedTags] = useState<string[]>(['structure', 'validation']);
   const [tagInput, setTagInput] = useState('');
-  const [project, setProject] = useState('Default Project');
+  const [project] = useState('Default Project');
 
   const charCount = description.length;
 
@@ -805,9 +854,44 @@ export default function CreateBoardPage() {
     }
   };
 
+  const intentDraft = useMemo<IntentDraft>(
+    () => ({
+      name: intentName,
+      description: intentDescription,
+      intentType: intentTypeSlug,
+      criteria: intentCriteria,
+      inputs: intentInputs,
+    }),
+    [intentName, intentDescription, intentTypeSlug, intentCriteria, intentInputs],
+  );
+
+  // Single setter that fans the next IntentDraft out into the per-field
+  // state slots. Lets us hand a unified `onChange` to IntentSpecForm
+  // without changing the shape of the surrounding component.
+  const handleIntentDraftChange = (next: IntentDraft) => {
+    setIntentName(next.name);
+    setIntentDescription(next.description);
+    setIntentTypeSlug(next.intentType);
+    setIntentCriteria(next.criteria);
+    setIntentInputs(next.inputs);
+  };
+
   const handleCreateBoard = async () => {
     if (!boardName.trim()) return;
     setSubmitError(null);
+    setIntentWarning(null);
+
+    // Validate IntentSpec before we create anything. Acceptance
+    // criteria are required for non-Explore boards (Study/Release).
+    const errors = validateIntentDraft(intentDraft, {
+      requireCriteria: mode !== 'explore',
+    });
+    setIntentErrors(errors);
+    if (errors.length > 0) {
+      setSubmitError('Please fix the IntentSpec errors above before creating the board.');
+      return;
+    }
+
     try {
       const newBoard = await createBoard.mutateAsync({
         name: boardName.trim(),
@@ -815,10 +899,42 @@ export default function CreateBoardPage() {
         type: boardType,
         mode,
       });
+
+      // Best-effort IntentSpec creation. A failure here should not
+      // roll back the board — the user can retry from BoardDetailPage.
+      try {
+        const payload = buildIntentSpecPayload(intentDraft);
+        await createIntent(newBoard.id, payload);
+      } catch (intentErr) {
+        const msg =
+          (intentErr as { message?: string } | undefined)?.message ??
+          (intentErr instanceof Error ? intentErr.message : 'Unknown error');
+        // Surface but do not roll back — board still navigates.
+        setIntentWarning(`Board created but IntentSpec failed: ${msg}. You can add it later from the board page.`);
+      }
+
       navigate(`/boards/${newBoard.id}`);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Failed to create board. Please try again.');
     }
+  };
+
+  const toggleAgent = (agent: AgentListItem) => {
+    setSelectedAgentIds((prev) => {
+      const has = prev.includes(agent.id);
+      if (has) {
+        // Removing — clear primary if this was it
+        if (primaryAgentId === agent.id) {
+          setPrimaryAgentId(null);
+        }
+        return prev.filter((id) => id !== agent.id);
+      }
+      // First selection becomes primary by default
+      if (prev.length === 0) {
+        setPrimaryAgentId(agent.id);
+      }
+      return [...prev, agent.id];
+    });
   };
 
   return (
@@ -1094,40 +1210,117 @@ export default function CreateBoardPage() {
                 <div className="mb-[24px]">
                   <div className="flex items-center gap-[8px] mb-[4px]">
                     <SectionLabel>Linked Agents</SectionLabel>
-                    <span className="text-[10px] text-[#acacac]">Optional</span>
+                    <span className="text-[10px] text-[#acacac]">Optional — primary agent is starred</span>
                   </div>
-                  <div className="flex gap-[8px] flex-wrap mb-[8px]">
-                    {linkedAgents.map((ag) => (
-                      <LinkedChip
-                        key={ag.id}
-                        label={ag.name}
-                        primary
-                        icon={
-                          <div className="w-[16px] h-[16px] rounded-[4px] bg-[#f3e5f5] flex items-center justify-center">
-                            <span className="text-[8px] text-[#9c27b0] font-bold">AI</span>
+
+                  {agentsLoading ? (
+                    <div className="grid grid-cols-2 gap-[8px]">
+                      {[0, 1, 2, 3].map((i) => (
+                        <div
+                          key={i}
+                          className="h-[60px] rounded-[8px] bg-[#f5f5f0] animate-pulse"
+                        />
+                      ))}
+                    </div>
+                  ) : agentsError ? (
+                    <p className="text-[11px] text-[#e74c3c]">
+                      Failed to load agents — link them later from the board page.
+                    </p>
+                  ) : agentsData.length === 0 ? (
+                    <div className="rounded-[8px] border border-dashed border-[#d0d0d0] bg-[#f9f9f7] px-[16px] py-[20px] text-center">
+                      <Bot size={20} className="text-[#acacac] mx-auto mb-[6px]" />
+                      <p className="text-[12px] text-[#6b6b6b] font-medium">No agents yet</p>
+                      <p className="text-[11px] text-[#acacac] mt-[2px]">
+                        Create one in <span className="font-mono">/agents</span> to link it here.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-[8px]">
+                      {agentsData.map((agent) => {
+                        const selected = selectedAgentIds.includes(agent.id);
+                        const isPrimary = primaryAgentId === agent.id;
+                        return (
+                          <div
+                            key={agent.id}
+                            className={cn(
+                              'rounded-[8px] border px-[12px] py-[10px] flex flex-col gap-[4px] transition-all cursor-pointer',
+                              selected
+                                ? isPrimary
+                                  ? 'border-[#9c27b0] bg-[#faf5fc] shadow-[0px_0px_0px_3px_rgba(156,39,176,0.08)]'
+                                  : 'border-[#9c27b0] bg-white'
+                                : 'border-[#e8e8e8] bg-white hover:border-[#d0d0d0]',
+                            )}
+                            onClick={() => toggleAgent(agent)}
+                          >
+                            <div className="flex items-center gap-[6px]">
+                              <div className="w-[20px] h-[20px] rounded-[4px] bg-[#f3e5f5] flex items-center justify-center shrink-0">
+                                <Bot size={12} className="text-[#9c27b0]" />
+                              </div>
+                              <span className="font-semibold text-[12px] text-[#1a1a1a] truncate flex-1">
+                                {agent.name}
+                              </span>
+                              {selected && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPrimaryAgentId(isPrimary ? null : agent.id);
+                                  }}
+                                  className={cn(
+                                    'h-[18px] px-[6px] rounded-[3px] text-[9px] font-medium',
+                                    isPrimary
+                                      ? 'bg-[#9c27b0] text-white'
+                                      : 'bg-[#f0f0ec] text-[#6b6b6b] hover:bg-[#e8e8e8]',
+                                  )}
+                                  aria-label={isPrimary ? 'Unset primary agent' : 'Set as primary agent'}
+                                >
+                                  {isPrimary ? 'Primary' : 'Set primary'}
+                                </button>
+                              )}
+                            </div>
+                            <p
+                              className="text-[11px] text-[#6b6b6b] leading-[14px] line-clamp-2"
+                              title={agent.description || ''}
+                            >
+                              {agent.description || 'No description'}
+                            </p>
+                            <div className="flex items-center gap-[6px] mt-[2px]">
+                              <span className="h-[16px] px-[6px] rounded-[3px] bg-[#f0f0ec] text-[9px] text-[#6b6b6b]">
+                                {agent.owner ? agent.owner.slice(0, 12) : 'unknown owner'}
+                              </span>
+                              {selected && (
+                                <span className="text-[9px] text-[#9c27b0] font-medium ml-auto">Selected</span>
+                              )}
+                            </div>
                           </div>
-                        }
-                        onRemove={() => setLinkedAgents((prev) => prev.filter((a) => a.id !== ag.id))}
-                      />
-                    ))}
-                  </div>
-                  <div className="flex gap-[8px] flex-wrap">
-                    {nonPrimaryAgents.map((ag) => (
-                      <LinkedChip
-                        key={ag.id}
-                        label={ag.name}
-                        icon={
-                          <div className="w-[16px] h-[16px] rounded-[4px] bg-[#f0f0ec] flex items-center justify-center">
-                            <span className="text-[8px] text-[#6b6b6b] font-bold">AI</span>
-                          </div>
-                        }
-                        onRemove={() => setNonPrimaryAgents((prev) => prev.filter((a) => a.id !== ag.id))}
-                      />
-                    ))}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   <p className="text-[11px] text-[#9c27b0] mt-[8px]">
-                    {linkedAgents.length + nonPrimaryAgents.length} agent linked
+                    {selectedAgentIds.length} {selectedAgentIds.length === 1 ? 'agent' : 'agents'} linked
+                    {primaryAgentId && selectedAgentIds.length > 1 && ' (1 primary)'}
                   </p>
+                </div>
+
+                {/* ── IntentSpec ───────────────── */}
+                <div className="mb-[24px]">
+                  <div className="flex items-center gap-[8px] mb-[8px]">
+                    <SectionLabel>Intent Specification</SectionLabel>
+                    <RequiredStar />
+                    <span className="text-[10px] text-[#acacac]">Defines what success looks like for this board</span>
+                  </div>
+                  <IntentSpecForm
+                    value={intentDraft}
+                    onChange={handleIntentDraftChange}
+                    intentTypes={intentTypes}
+                    intentTypesLoading={intentTypesLoading}
+                    requireCriteria={mode !== 'explore'}
+                    errors={intentErrors}
+                    intentTypeDropdownOpen={intentTypeOpen}
+                    onIntentTypeDropdownToggle={setIntentTypeOpen}
+                  />
                 </div>
 
                 {/* ── Tags & Project ────────────── */}
@@ -1203,6 +1396,9 @@ export default function CreateBoardPage() {
       <div className="shrink-0 flex flex-col items-center py-[8px] gap-[6px]">
         {submitError && (
           <p className="text-[11px] text-[#e74c3c] font-medium">{submitError}</p>
+        )}
+        {intentWarning && (
+          <p className="text-[11px] text-[#ff9800] font-medium">{intentWarning}</p>
         )}
         <div className="bg-white rounded-[16px] shadow-[0px_-2px_12px_0px_rgba(0,0,0,0.06),0px_2px_12px_0px_rgba(0,0,0,0.04)] px-[24px] flex items-center gap-[16px] h-[52px]">
           {/* Left: tools info */}

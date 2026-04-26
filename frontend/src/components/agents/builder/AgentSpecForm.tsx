@@ -38,6 +38,9 @@ const ESCALATION_ACTIONS = [
 
 function defaultSpec(): AgentSpec {
   return {
+    api_version: 'airaie.agentspec/v1',
+    kind: 'AgentSpec',
+    metadata: { name: '', version: '1.0.0', owner: '', domain_tags: [] },
     goal: '',
     tools: [],
     scoring: {
@@ -75,12 +78,30 @@ interface AgentSpecFormProps {
 
 /* ---------- Component ---------- */
 
+// Like AgentSpec, but with the sub-objects the form always edits required.
+type FormSpec = AgentSpec & {
+  scoring: NonNullable<AgentSpec['scoring']>;
+  constraints: NonNullable<AgentSpec['constraints']>;
+  policy: NonNullable<AgentSpec['policy']>;
+};
+
+function normalizeSpec(spec: AgentSpec): FormSpec {
+  const d = defaultSpec();
+  return {
+    ...spec,
+    scoring: { ...d.scoring!, ...(spec.scoring ?? {}) },
+    constraints: { ...d.constraints!, ...(spec.constraints ?? {}) },
+    policy: { ...d.policy!, ...(spec.policy ?? {}) },
+    model: spec.model ?? d.model,
+  } as FormSpec;
+}
+
 export default function AgentSpecForm({ spec, onChange, readOnly = false }: AgentSpecFormProps) {
-  const [local, setLocal] = useState<AgentSpec>(() => spec ?? defaultSpec());
+  const [local, setLocal] = useState<FormSpec>(() => normalizeSpec(spec ?? defaultSpec()));
 
   // Sync external spec changes
   useEffect(() => {
-    if (spec) setLocal(spec);
+    if (spec) setLocal(normalizeSpec(spec));
   }, [spec]);
 
   const update = useCallback(
@@ -161,7 +182,7 @@ export default function AgentSpecForm({ spec, onChange, readOnly = false }: Agen
             className={inputClass}
             value={local.model?.model ?? ''}
             onChange={(e) =>
-              update({ model: { ...local.model, model: e.target.value } })
+              update({ model: { provider: local.model?.provider ?? 'anthropic', model: e.target.value } })
             }
             disabled={readOnly}
           >
@@ -346,7 +367,7 @@ export default function AgentSpecForm({ spec, onChange, readOnly = false }: Agen
             update({
               scoring: {
                 ...local.scoring,
-                strategy: e.target.value as AgentSpec['scoring']['strategy'],
+                strategy: e.target.value as NonNullable<AgentSpec['scoring']>['strategy'],
               },
             })
           }
@@ -572,7 +593,7 @@ export default function AgentSpecForm({ spec, onChange, readOnly = false }: Agen
         <label className={labelClass}>
           Auto-approve Threshold
           <span className="ml-2 text-xs font-normal text-zinc-500">
-            {local.policy.auto_approve_threshold.toFixed(2)}
+            {(local.policy.auto_approve_threshold ?? 0).toFixed(2)}
           </span>
         </label>
         <input

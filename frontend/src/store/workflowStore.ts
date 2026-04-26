@@ -9,6 +9,16 @@ import {
 } from '@xyflow/react';
 import type { WorkflowEditorNode, WorkflowEditorEdge, WorkflowEditorMetadata } from '@/types/workflow';
 
+/**
+ * Shape used for compile/validate errors keyed by node id. Mirrors the
+ * backend `Diagnostic` envelope (see `src/api/workflows.ts`).
+ */
+export interface NodeDiagnostic {
+  message: string;
+  severity: 'error' | 'warning';
+  field_path?: string;
+}
+
 export interface WorkflowEditorState {
   // Graph state
   nodes: WorkflowEditorNode[];
@@ -23,6 +33,11 @@ export interface WorkflowEditorState {
   // Dirty flag
   isDirty: boolean;
 
+  // Compile/validate diagnostics keyed by node_id. Errors with no node_id
+  // live under the special key `''` so the editor can render a top-level
+  // banner.
+  errorsByNode: Record<string, NodeDiagnostic[]>;
+
   // Actions
   setNodes: (nodes: WorkflowEditorNode[]) => void;
   setEdges: (edges: WorkflowEditorEdge[]) => void;
@@ -36,6 +51,8 @@ export interface WorkflowEditorState {
   setMetadata: (metadata: WorkflowEditorMetadata) => void;
   markClean: () => void;
   loadWorkflow: (nodes: WorkflowEditorNode[], edges: WorkflowEditorEdge[], metadata: WorkflowEditorMetadata) => void;
+  setErrorsByNode: (errors: Record<string, NodeDiagnostic[]>) => void;
+  clearErrors: () => void;
 }
 
 export const useWorkflowStore = create<WorkflowEditorState>((set, _get) => ({
@@ -44,6 +61,7 @@ export const useWorkflowStore = create<WorkflowEditorState>((set, _get) => ({
   selectedNodeId: null,
   metadata: null,
   isDirty: false,
+  errorsByNode: {},
 
   setNodes: (nodes) => set({ nodes, isDirty: true }),
   setEdges: (edges) => set({ edges, isDirty: true }),
@@ -95,5 +113,9 @@ export const useWorkflowStore = create<WorkflowEditorState>((set, _get) => ({
   markClean: () => set({ isDirty: false }),
 
   loadWorkflow: (nodes, edges, metadata) =>
-    set({ nodes, edges, metadata, selectedNodeId: null, isDirty: false }),
+    set({ nodes, edges, metadata, selectedNodeId: null, isDirty: false, errorsByNode: {} }),
+
+  setErrorsByNode: (errors) => set({ errorsByNode: errors }),
+
+  clearErrors: () => set({ errorsByNode: {} }),
 }));

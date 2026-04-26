@@ -1,6 +1,7 @@
 import {
   LayoutDashboard, GitBranch, Bot, Wrench, LayoutGrid,
-  CirclePlus, Settings, HelpCircle, Package,
+  CirclePlus, Settings, HelpCircle, Package, Cpu,
+  FileSearch, DollarSign,
 } from 'lucide-react';
 import { ROUTES } from '@constants/routes';
 import SidebarSection from './SidebarSection';
@@ -18,7 +19,7 @@ export default function SidebarNavigation() {
 
       {/* EXECUTE — do the work, govern the work */}
       <SidebarSection title="Execute" collapsible={false}>
-        <SidebarItem icon={<GitBranch size={16} />} label="Workflows" path={ROUTES.WORKFLOWS} badge={8} />
+        <SidebarItem icon={<GitBranch size={16} />} label="Workflows" path={ROUTES.WORKFLOWS} badge={8} testId="sidebar-workflows" />
         <SidebarItem icon={<LayoutGrid size={16} />} label="Boards" path={ROUTES.BOARDS} badge={2} />
       </SidebarSection>
 
@@ -31,6 +32,15 @@ export default function SidebarNavigation() {
       {/* DATA — the trail */}
       <SidebarSection title="Data" collapsible={false}>
         <SidebarItem icon={<Package size={16} />} label="Artifacts" path={ROUTES.ARTIFACTS} badge={47} />
+      </SidebarSection>
+
+      {/* ADMIN — TODO(Phase F): gate by admin role */}
+      <SidebarSection title="Admin" collapsible={false}>
+        <SidebarItem icon={<Cpu size={16} />} label="LLM Providers" path={ROUTES.ADMIN_LLM_PROVIDERS} />
+        {/* TODO(Phase F.2): gate by admin role */}
+        <SidebarItem icon={<FileSearch size={16} />} label="Audit Log" path={ROUTES.ADMIN_AUDIT} />
+        {/* TODO(Phase F.2): gate by admin role */}
+        <SidebarItem icon={<DollarSign size={16} />} label="Cost & Usage" path={ROUTES.ADMIN_COST} />
       </SidebarSection>
 
       {/* QUICK ACTIONS */}

@@ -61,7 +61,7 @@ const TYPE_CONFIG: Record<WorkflowNodeType, { label: string; color: string; bg: 
 };
 
 export default function InspectorHeader({
-  nodeId,
+  nodeId: _nodeId,
   label,
   nodeType,
   subtype,

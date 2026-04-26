@@ -97,9 +97,15 @@ export interface AgentSpec {
   };
   goal: string;
   tools: AgentToolPermission[];
+  /** Top-level model spec used by the builder UI. The runtime LLM config still
+   *  lives under `llm`; this mirrors provider/model for form convenience. */
+  model?: { provider: string; model: string };
   scoring?: {
     strategy: 'weighted' | 'priority' | 'cost_optimized';
-    weights?: { compatibility: number; trust: number; cost: number; latency?: number };
+    weights?: { compatibility: number; trust: number; cost: number; latency?: number; reliability?: number };
+    llm_weight?: number;
+    min_score_threshold?: number;
+    risk_penalty_weight?: number;
   };
   constraints?: {
     max_tools_per_run?: number;
@@ -224,4 +230,36 @@ export async function runAgent(
     ? `/v0/agents/${agentId}/versions/${version}/run?dry_run=true`
     : `/v0/agents/${agentId}/versions/${version}/run`;
   return apiClient.post(url, { inputs });
+}
+
+/* ---------- LLM Provider Config + Health (Phase E) ---------- */
+
+/** Read-only view of the gateway's active LLM provider config.
+ *  Surfaced by GET /v0/agents/llm/config. Never contains an API key. */
+export interface LLMProviderConfig {
+  provider: string;
+  model: string;
+  base_url?: string;
+  available_providers: string[];
+  available_models: Record<string, string[]>;
+}
+
+/** Runtime status of the active LLM provider.
+ *  Surfaced by GET /v0/agents/llm/health. Cached server-side ~30s. */
+export interface LLMProviderHealth {
+  provider: string;
+  model: string;
+  base_url?: string;
+  configured: boolean;
+  reachable: boolean;
+  last_checked_at: string;
+  last_error: string | null;
+}
+
+export function getLLMConfig(): Promise<LLMProviderConfig> {
+  return apiClient.get<LLMProviderConfig>('/v0/agents/llm/config');
+}
+
+export function getLLMHealth(): Promise<LLMProviderHealth> {
+  return apiClient.get<LLMProviderHealth>('/v0/agents/llm/health');
 }

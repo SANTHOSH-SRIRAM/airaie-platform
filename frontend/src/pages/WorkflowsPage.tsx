@@ -6,6 +6,7 @@ import {
   GitBranch,
   LayoutGrid,
   List,
+  Loader2,
   MoreHorizontal,
   Plus,
   Search,
@@ -14,10 +15,14 @@ import {
 } from 'lucide-react';
 import Button from '@components/ui/Button';
 import CreateWorkflowModal from '@components/workflows/CreateWorkflowModal';
+import { useWorkflows } from '@hooks/useWorkflow';
+import { createWorkflow, type WorkflowListItem } from '@api/workflows';
+import { workflowKeys } from '@hooks/useWorkflow';
+import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@utils/cn';
 
 type WorkflowStatus = 'published' | 'draft';
-type RunStatus = 'running' | 'succeeded' | 'failed' | 'waiting';
+type RunStatus = 'running' | 'succeeded' | 'failed' | 'waiting' | 'unknown';
 type TriggerType = 'webhook' | 'manual' | 'schedule' | 'event';
 type AccentTone = 'blue' | 'orange' | 'red';
 
@@ -36,115 +41,25 @@ interface WorkflowCard {
   pinned?: boolean;
 }
 
-// TODO(backend): wire to /v0/workflows for the real list. WORKFLOWS is
-// the page's only data source today (filtering, StatusBar, list cards).
-const WORKFLOWS: WorkflowCard[] = [
-  {
-    id: 'wf_demo_fea',
-    name: 'FEA Validation Pipeline',
-    description: 'End-to-end FEA stress validation with mesh generation and evidence gating',
-    status: 'published',
-    version: 'v3',
-    nodeCount: 5,
-    triggerType: 'webhook',
-    lastRunTime: '2m ago',
-    lastRunStatus: 'running',
-    cost: '$1.24',
-    accent: 'blue',
-    pinned: true,
-  },
-  {
-    id: 'wf_cfd_analysis',
-    name: 'CFD Analysis Flow',
-    description: 'Computational fluid dynamics pipeline for thermal analysis',
+// Map raw backend workflows to the card view model. Fields the list endpoint
+// does not yet expose (version, nodeCount, last-run, cost) render as placeholders;
+// enrichment will land alongside the workflow detail rollup endpoint.
+function toCard(w: WorkflowListItem): WorkflowCard {
+  return {
+    id: w.id,
+    name: w.name,
+    description: w.description ?? '',
     status: 'draft',
-    version: 'v1',
-    nodeCount: 3,
+    version: '—',
+    nodeCount: 0,
     triggerType: 'manual',
-    lastRunTime: '1h ago',
-    lastRunStatus: 'running',
-    cost: '$0.80',
-    accent: 'blue',
-  },
-  {
-    id: 'wf_material_testing',
-    name: 'Material Testing Pipeline',
-    description: 'Automated material property testing with approval gates',
-    status: 'published',
-    version: 'v2',
-    nodeCount: 7,
-    triggerType: 'schedule',
-    lastRunTime: '3h ago',
-    lastRunStatus: 'waiting',
-    cost: '$2.05',
-    accent: 'orange',
-  },
-  {
-    id: 'wf_topology_opt',
-    name: 'Topology Optimization',
-    description: 'Generative topology optimization for lightweight structural design',
-    status: 'draft',
-    version: 'v1',
-    nodeCount: 4,
-    triggerType: 'manual',
-    lastRunTime: 'Yesterday',
-    lastRunStatus: 'succeeded',
-    cost: '$5.20',
-    accent: 'orange',
-  },
-  {
-    id: 'wf_mesh_quality',
-    name: 'Mesh Quality Check',
-    description: 'Quick mesh quality validation and auto-repair pipeline',
-    status: 'published',
-    version: 'v1',
-    nodeCount: 2,
-    triggerType: 'webhook',
-    lastRunTime: '2 days ago',
-    lastRunStatus: 'succeeded',
-    cost: '$0.15',
-    accent: 'blue',
-  },
-  {
-    id: 'wf_fatigue_life',
-    name: 'Fatigue Life Estimation',
-    description: 'Fatigue analysis with cycle counting and S-N curve evaluation',
-    status: 'published',
-    version: 'v2',
-    nodeCount: 6,
-    triggerType: 'event',
-    lastRunTime: '3 days ago',
-    lastRunStatus: 'succeeded',
-    cost: '$3.40',
-    accent: 'blue',
-  },
-  {
-    id: 'wf_thermal_stress',
-    name: 'Thermal Stress Coupling',
-    description: 'Coupled thermal-structural analysis for high-temperature components',
-    status: 'draft',
-    version: 'v1',
-    nodeCount: 8,
-    triggerType: 'manual',
-    lastRunTime: '1 week ago',
-    lastRunStatus: 'failed',
-    cost: '',
-    accent: 'red',
-  },
-  {
-    id: 'wf_report_gen',
-    name: 'Report Generator',
-    description: 'Automated engineering report generation from simulation results',
-    status: 'published',
-    version: 'v1',
-    nodeCount: 3,
-    triggerType: 'webhook',
     lastRunTime: '',
-    lastRunStatus: 'succeeded',
-    cost: '$0.30',
+    lastRunStatus: 'unknown',
+    cost: '',
     accent: 'blue',
-  },
-];
+  };
+}
+
 
 const accentColors: Record<AccentTone, string> = {
   blue: '#2196F3',
@@ -157,6 +72,7 @@ const runStatusConfig: Record<RunStatus, { dot: string; text: string; label: str
   succeeded: { dot: 'bg-[#9c9c9c]', text: 'text-[#6b6b6b]', label: 'Succeeded' },
   failed: { dot: 'bg-[#e74c3c]', text: 'text-[#e74c3c]', label: 'Failed' },
   waiting: { dot: 'bg-[#ff9800]', text: 'text-[#ff9800]', label: 'Waiting' },
+  unknown: { dot: 'bg-[#d0d0d0]', text: 'text-[#acacac]', label: 'No runs yet' },
 };
 
 const triggerIcons: Record<TriggerType, typeof Webhook> = {
@@ -447,9 +363,19 @@ export default function WorkflowsPage() {
   const [sortBy, setSortBy] = useState<SortOption>('lastModified');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  // In-flight guard against double-submit on the create-workflow modal.
+  const [isCreating, setIsCreating] = useState(false);
+
+  const { data: rawWorkflows, isLoading, error } = useWorkflows();
+  const queryClient = useQueryClient();
+
+  const allCards = useMemo(
+    () => (rawWorkflows ?? []).map(toCard),
+    [rawWorkflows]
+  );
 
   const filtered = useMemo(() => {
-    let result = WORKFLOWS;
+    let result = allCards;
 
     if (search) {
       const query = search.toLowerCase();
@@ -475,7 +401,7 @@ export default function WorkflowsPage() {
     }
 
     return result;
-  }, [search, sortBy, statusFilter]);
+  }, [search, sortBy, statusFilter, allCards]);
 
   return (
     <div className="mx-auto w-full max-w-[1116px] px-4 pb-8">
@@ -544,6 +470,7 @@ export default function WorkflowsPage() {
               size="sm"
               icon={<Plus size={14} />}
               onClick={() => setShowCreateModal(true)}
+              data-testid="new-workflow-button" /* E2E: smoke selector */
               className="h-9 rounded-[8px] bg-[#2d2d2d] px-[14px] text-[13px] font-medium text-white shadow-none hover:bg-[#242424]"
             >
               New Workflow
@@ -551,10 +478,28 @@ export default function WorkflowsPage() {
           </div>
         </section>
 
-        {filtered.length === 0 ? (
+        {isLoading ? (
           <div className="flex min-h-[320px] flex-col items-center justify-center rounded-[12px] border border-[#ece9e3] bg-white text-center shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)]">
-            <h2 className="text-[15px] font-semibold text-[#1a1a1a]">No workflows found</h2>
-            <p className="mt-2 text-[12px] text-[#6b6b6b]">Try adjusting your search or filters.</p>
+            <Loader2 size={20} className="animate-spin text-[#acacac]" />
+            <p className="mt-3 text-[12px] text-[#6b6b6b]">Loading workflows…</p>
+          </div>
+        ) : error ? (
+          <div className="flex min-h-[320px] flex-col items-center justify-center rounded-[12px] border border-[#ece9e3] bg-white text-center shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)]">
+            <h2 className="text-[15px] font-semibold text-[#1a1a1a]">Failed to load workflows</h2>
+            <p className="mt-2 max-w-[420px] text-[12px] text-[#6b6b6b]">
+              {(error as { message?: string })?.message ?? 'Unknown error fetching /v0/workflows'}
+            </p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex min-h-[320px] flex-col items-center justify-center rounded-[12px] border border-[#ece9e3] bg-white text-center shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)]">
+            <h2 className="text-[15px] font-semibold text-[#1a1a1a]">
+              {allCards.length === 0 ? 'No workflows yet' : 'No workflows found'}
+            </h2>
+            <p className="mt-2 text-[12px] text-[#6b6b6b]">
+              {allCards.length === 0
+                ? 'Create your first workflow to get started.'
+                : 'Try adjusting your search or filters.'}
+            </p>
           </div>
         ) : viewMode === 'grid' ? (
           <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -570,16 +515,35 @@ export default function WorkflowsPage() {
           </section>
         )}
 
-        <StatusBar workflows={WORKFLOWS} />
+        <StatusBar workflows={allCards} />
       </div>
 
       <CreateWorkflowModal
         open={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSubmit={(_data) => {
+        onClose={() => {
+          if (!isCreating) setShowCreateModal(false);
+        }}
+        onSubmit={async (data) => {
+          if (isCreating) return; // double-submit guard
+          setIsCreating(true);
+          // Close optimistically so a fast double-click can't fire the modal
+          // submit twice; on error we drop the user on the editor where they
+          // can retry.
           setShowCreateModal(false);
-          // Navigate to workflow editor after creation
-          navigate('/workflow-studio');
+          try {
+            const created = await createWorkflow({
+              name: data.name || 'Untitled Workflow',
+              description: data.description || undefined,
+            });
+            await queryClient.invalidateQueries({ queryKey: workflowKeys.all });
+            navigate(`/workflow-studio/${created.id}`);
+          } catch {
+            // On failure fall back to the editor without an id; users will
+            // see a toast/error in a follow-up surface (out of scope here).
+            navigate('/workflow-studio');
+          } finally {
+            setIsCreating(false);
+          }
         }}
       />
     </div>

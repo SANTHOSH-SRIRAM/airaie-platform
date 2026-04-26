@@ -64,7 +64,7 @@ function DataNode({ data, selected }: NodeProps) {
       handles={handles}
     >
       {/* Data type indicator */}
-      {nodeData.inputs?.output_format && (
+      {Boolean(nodeData.inputs?.output_format) && (
         <div className="mt-1">
           <span className="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium uppercase text-gray-500">
             {String(nodeData.inputs.output_format)}

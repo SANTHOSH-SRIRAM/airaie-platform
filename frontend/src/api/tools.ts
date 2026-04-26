@@ -122,50 +122,151 @@ export async function validateContract(
   return apiClient.post('/v0/validate/contract', { contract, check_publish: checkPublish });
 }
 
+/* ---------- Live manifest validation (Phase C2) ---------- */
+
+/**
+ * Flattened validation issue used by the live form validator.
+ * `path` is a dotted JSON path (e.g. `metadata.name` or `interface.inputs.0.name`)
+ * pointing into the manifest object.
+ */
+export interface ContractValidationIssue {
+  path?: string;
+  code?: string;
+  message: string;
+}
+
+/**
+ * Simplified shape the Register Tool form consumes. Bridges the rich
+ * 7-section + lint result returned by `POST /v0/validate/contract` into a
+ * flat list of errors + warnings.
+ */
+export interface ContractValidation {
+  valid: boolean;
+  errors: ContractValidationIssue[];
+  warnings: ContractValidationIssue[];
+}
+
+/**
+ * Convert the rich backend response (sections + lint) into the flat
+ * `{ valid, errors, warnings }` shape used by the form. Each section
+ * contributes errors/warnings; lint check failures contribute too.
+ */
+export function toContractValidation(result: ContractValidationResult | null | undefined): ContractValidation {
+  if (!result) return { valid: false, errors: [], warnings: [] };
+  const errors: ContractValidationIssue[] = [];
+  const warnings: ContractValidationIssue[] = [];
+
+  // Section-level issues
+  for (const [section, data] of Object.entries(result.sections ?? {})) {
+    for (const e of data.errors ?? []) {
+      errors.push({
+        path: e.field ? `${section}.${e.field}` : section,
+        code: e.code,
+        message: e.message,
+      });
+    }
+    for (const w of data.warnings ?? []) {
+      warnings.push({
+        path: w.field ? `${section}.${w.field}` : section,
+        code: w.code,
+        message: w.message,
+      });
+    }
+  }
+
+  // Lint check results
+  for (const check of result.lint?.checks ?? []) {
+    if (check.status === 'fail') {
+      errors.push({ code: check.name, message: check.message });
+    } else if (check.status === 'warn') {
+      warnings.push({ code: check.name, message: check.message });
+    }
+  }
+
+  return { valid: !!result.valid, errors, warnings };
+}
+
+/**
+ * Live-validate a manifest object against `POST /v0/validate/contract`.
+ * Returns the flat shape consumed by the Register Tool form.
+ *
+ * The manifest is forwarded as the unwrapped contract body — the backend
+ * accepts both wrapped (`{contract: ...}`) and unwrapped forms; we send it
+ * wrapped so it always parses regardless of contract shape.
+ */
+export async function validateContractLive(manifest: unknown): Promise<ContractValidation> {
+  const result = await apiClient.post<ContractValidationResult>('/v0/validate/contract', {
+    contract: manifest,
+  });
+  return toContractValidation(result);
+}
+
+/**
+ * Register a tool from a (validated) manifest. Performs the two-step
+ * Airaie kernel flow under the hood:
+ *   1. POST /v0/tools           -> creates the tool record (name, description)
+ *   2. POST /v0/tools/{id}/versions -> attaches the contract as version 0.1.0
+ *
+ * Returns the resulting `{ tool_id, version }` so the caller can route to
+ * the new tool's detail page.
+ */
+export async function registerTool(manifest: unknown): Promise<{ tool_id: string; version: string }> {
+  const m = (manifest ?? {}) as Record<string, unknown>;
+  const metadata = (m.metadata ?? {}) as Record<string, unknown>;
+  const name = (metadata.name as string) ?? (m.name as string) ?? '';
+  const description = (metadata.description as string) ?? (m.description as string) ?? '';
+  const owner = (metadata.owner as string) ?? undefined;
+  const version = (metadata.version as string) ?? '0.1.0';
+
+  if (!name) {
+    throw new Error('Manifest is missing metadata.name');
+  }
+
+  const tool = await createTool({ name, description, owner });
+  await createToolVersion(tool.id, { version, contract: m });
+  return { tool_id: tool.id, version };
+}
+
+/**
+ * Locate a validation issue by form-field path. Matches an exact path or a
+ * prefix (so `metadata` matches `metadata.name`, etc). Used to attach inline
+ * errors to specific structured-form fields.
+ */
+export function manifestErrorByField(
+  issues: ContractValidationIssue[],
+  fieldPath: string,
+): ContractValidationIssue | undefined {
+  if (!fieldPath) return undefined;
+  // Exact match wins over prefix match.
+  const exact = issues.find((i) => i.path === fieldPath);
+  if (exact) return exact;
+  return issues.find((i) => i.path && (i.path === fieldPath || i.path.startsWith(`${fieldPath}.`)));
+}
+
+/**
+ * Update the trust level of a tool version. The kernel enforces strict
+ * forward progression (untested → community → tested → verified → certified)
+ * — sending a non-forward step returns an error which the UI surfaces.
+ *
+ * NOTE: the kernel handler currently accepts only `trust_level` in the
+ * request body. `rationale` is collected by the UI for audit/UX purposes
+ * but is not yet forwarded to the backend; this signature reserves the
+ * parameter so the wiring is in place when the kernel adds rationale support.
+ */
 export async function updateTrustLevel(
   toolId: string,
   version: string,
   trustLevel: TrustLevel,
+  rationale?: string,
 ): Promise<ToolVersion> {
-  return apiClient.patch(`/v0/tools/${toolId}/versions/${version}/trust-level`, { trust_level: trustLevel });
+  const body: Record<string, unknown> = { trust_level: trustLevel };
+  if (rationale && rationale.trim().length > 0) {
+    body.rationale = rationale.trim();
+  }
+  return apiClient.patch(`/v0/tools/${toolId}/versions/${version}/trust-level`, body);
 }
 
 /* ---------- Tool Detail (Sprint 1.2) ---------- */
-
-function buildToolDetail(tool: Tool): ToolDetail {
-  return {
-    ...tool,
-    trust_level: tool.status === 'published' ? 'verified' : 'untested',
-    supported_intents: ['simulate', 'analyze', 'validate'],
-    domain_tags: tool.tags,
-    owner: 'Santhosh',
-    created_at: '2026-02-01T00:00:00Z',
-    updated_at: '2026-03-30T00:00:00Z',
-  };
-}
-
-function buildToolDetailVersions(tool: Tool): ToolDetailVersion[] {
-  return tool.versions.map((v, i) => ({
-    version: v.version,
-    status: v.status,
-    trust_level: v.status === 'published' ? 'verified' as TrustLevel : 'untested' as TrustLevel,
-    published_at: v.publishedAt,
-    run_count: Math.max(0, tool.usageCount - i * 10),
-  }));
-}
-
-function buildToolRuns(tool: Tool): ToolRunEntry[] {
-  const statuses: ToolRunEntry['status'][] = ['succeeded', 'succeeded', 'failed', 'succeeded', 'running'];
-  return statuses.map((status, i) => ({
-    run_id: `run_${tool.id}_${i + 1}`,
-    tool_id: tool.id,
-    version: tool.currentVersion,
-    status,
-    duration: status === 'running' ? 0 : Math.round(Math.random() * 60 + 5),
-    cost: status === 'running' ? 0 : +(tool.costPerRun * (0.8 + Math.random() * 0.4)).toFixed(2),
-    created_at: new Date(Date.now() - i * 3_600_000).toISOString(),
-  }));
-}
 
 export const fetchToolDetail = async (id: string): Promise<ToolDetail> => {
   const res = await apiClient.get<{ tool: Record<string, unknown>; versions: Array<Record<string, unknown>> }>(`/v0/tools/${id}`);
@@ -233,13 +334,55 @@ export const fetchToolDetail = async (id: string): Promise<ToolDetail> => {
   } as ToolDetail;
 };
 
+/**
+ * Decode the kernel's contract field into a plain object (ATP manifest).
+ * The Go API marshals `contract_json` ([]byte) as a base64 string. We accept
+ * either a pre-parsed object, a JSON string, or a base64 JSON string and
+ * return `undefined` on any failure so callers can render an empty state.
+ */
+export function decodeManifest(raw: unknown): unknown | undefined {
+  if (raw == null) return undefined;
+  if (typeof raw === 'object') return raw;
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try { return JSON.parse(trimmed); } catch { return undefined; }
+  }
+  try {
+    return JSON.parse(atob(raw));
+  } catch {
+    return undefined;
+  }
+}
+
 export const fetchToolDetailVersions = async (toolId: string): Promise<ToolDetailVersion[]> => {
-  const res = await apiClient.get<{ versions: ToolDetailVersion[] }>(`/v0/tools/${toolId}/versions`);
-  return res.versions ?? [];
+  const res = await apiClient.get<{ versions: Array<Record<string, unknown>> | null }>(`/v0/tools/${toolId}/versions`);
+  const versions = res.versions ?? [];
+  return versions.map((v) => ({
+    version: (v.version as string) ?? '',
+    status: (v.status as ToolDetailVersion['status']) ?? 'draft',
+    trust_level: (v.trust_level as TrustLevel) ?? 'untested',
+    published_at: (v.published_at as string) ?? (v.created_at as string) ?? '',
+    run_count: (v.run_count as number) ?? 0,
+    manifest: decodeManifest(v.contract),
+  }));
 };
 
+/**
+ * Fetch the parsed ATP manifest for a specific tool version. The kernel
+ * embeds the manifest inline in `/v0/tools/{id}/versions` (no separate
+ * endpoint), so we read from that list. Pass `version` to pick a specific
+ * version; omit to get the latest (first) one.
+ */
+export async function getToolManifest(toolId: string, version?: string): Promise<unknown> {
+  const versions = await fetchToolDetailVersions(toolId);
+  if (versions.length === 0) return undefined;
+  if (!version) return versions[0]?.manifest;
+  return versions.find((v) => v.version === version)?.manifest;
+}
+
 export const fetchToolRuns = async (toolId: string): Promise<ToolRunEntry[]> => {
-  const res = await apiClient.get<{ runs: Array<Record<string, unknown>> | null }>(`/v0/runs?tool_id=${toolId}&limit=20`);
+  const res = await apiClient.get<{ runs: Array<Record<string, unknown>> | null }>(`/v0/tools/${toolId}/runs?limit=20`);
   return (res.runs ?? []).map((r) => {
     const toolRef = (r.tool_ref as string) ?? '';
     const version = toolRef.includes('@') ? toolRef.split('@')[1] : '';

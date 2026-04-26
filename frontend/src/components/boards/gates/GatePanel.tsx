@@ -3,10 +3,6 @@ import { cn } from '@utils/cn';
 import {
   useGateList,
   useGateRequirements,
-  useEvaluateGate,
-  useApproveGate,
-  useRejectGate,
-  useWaiveGate,
 } from '@hooks/useGates';
 import type { Gate, GateStatus, GateType } from '@/types/gate';
 import {
@@ -19,6 +15,8 @@ import {
   AlertCircle,
   Pause,
 } from 'lucide-react';
+import GateActionsBar from './GateActionsBar';
+import GateApprovalHistory from './GateApprovalHistory';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -108,7 +106,7 @@ export default function GatePanel({ boardId }: GatePanelProps) {
 // Gate Item
 // ---------------------------------------------------------------------------
 
-function GateItem({ gate, boardId }: { gate: Gate; boardId: string }) {
+function GateItem({ gate, boardId: _boardId }: { gate: Gate; boardId: string }) {
   const [expanded, setExpanded] = useState(false);
   const cfg = STATUS_CONFIG[gate.status] ?? STATUS_CONFIG.PENDING;
   const Icon = cfg.icon;
@@ -167,6 +165,11 @@ function GateItem({ gate, boardId }: { gate: Gate; boardId: string }) {
       {/* Expanded content */}
       {expanded && (
         <div className="px-[14px] pb-[12px]">
+          {/* D5: governance actions bar at the top of the expansion */}
+          <div className="mb-[10px]">
+            <GateActionsBar gate={gate} />
+          </div>
+
           {/* Description */}
           {gate.description && (
             <p className="text-[11px] text-[#6b6b6b] mb-[10px]">{gate.description}</p>
@@ -175,8 +178,14 @@ function GateItem({ gate, boardId }: { gate: Gate; boardId: string }) {
           {/* Requirements */}
           <GateRequirementsList gateId={gate.id} />
 
-          {/* Action buttons */}
-          <GateActions gate={gate} boardId={boardId} />
+          {/* Legacy inline action form removed — duplicated GateActionsBar's
+              mutation surface and produced a double-dispatch race. The
+              GateActionDialog at the top is the single approval entry point. */}
+
+          {/* D5: approval audit log */}
+          <div className="mt-[10px] pt-[10px] border-t border-[#f0f0ec]">
+            <GateApprovalHistory gateId={gate.id} />
+          </div>
         </div>
       )}
     </div>
@@ -257,123 +266,3 @@ function GateRequirementsList({ gateId }: { gateId: string }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Gate Actions
-// ---------------------------------------------------------------------------
-
-function GateActions({ gate, boardId }: { gate: Gate; boardId: string }) {
-  const evaluate = useEvaluateGate(gate.id, boardId);
-  const approve = useApproveGate(gate.id, boardId);
-  const reject = useRejectGate(gate.id, boardId);
-  const waive = useWaiveGate(gate.id, boardId);
-
-  const [showActionForm, setShowActionForm] = useState<'approve' | 'reject' | 'waive' | null>(null);
-  const [rationale, setRationale] = useState('');
-  const [role, setRole] = useState('');
-
-  const handleAction = async (action: 'approve' | 'reject' | 'waive') => {
-    const data = {
-      rationale: rationale.trim() || undefined,
-      role: role.trim() || undefined,
-    };
-
-    if (action === 'approve') await approve.mutateAsync(data);
-    else if (action === 'reject') await reject.mutateAsync(data);
-    else await waive.mutateAsync({ rationale: rationale.trim() || 'Waived', role: role.trim() || undefined });
-
-    setShowActionForm(null);
-    setRationale('');
-    setRole('');
-  };
-
-  const isPending = evaluate.isPending || approve.isPending || reject.isPending || waive.isPending;
-
-  return (
-    <div className="flex flex-col gap-[8px]">
-      {/* Action buttons */}
-      <div className="flex items-center gap-[6px]">
-        <button
-          type="button"
-          onClick={() => evaluate.mutate()}
-          disabled={isPending}
-          className="h-[28px] px-[12px] bg-[#2196f3] text-white rounded-[6px] text-[10px] font-medium hover:bg-[#1976d2] transition-colors disabled:opacity-50 flex items-center gap-[4px]"
-        >
-          {evaluate.isPending && <Loader2 size={10} className="animate-spin" />}
-          Evaluate
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowActionForm('approve')}
-          disabled={isPending}
-          className="h-[28px] px-[12px] bg-[#4caf50] text-white rounded-[6px] text-[10px] font-medium hover:bg-[#43a047] transition-colors disabled:opacity-50"
-        >
-          Approve
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowActionForm('reject')}
-          disabled={isPending}
-          className="h-[28px] px-[12px] bg-[#e74c3c] text-white rounded-[6px] text-[10px] font-medium hover:bg-[#d32f2f] transition-colors disabled:opacity-50"
-        >
-          Reject
-        </button>
-        {gate.status === 'FAILED' && (
-          <button
-            type="button"
-            onClick={() => setShowActionForm('waive')}
-            disabled={isPending}
-            className="h-[28px] px-[12px] bg-[#9e9e9e] text-white rounded-[6px] text-[10px] font-medium hover:bg-[#757575] transition-colors disabled:opacity-50"
-          >
-            Waive
-          </button>
-        )}
-      </div>
-
-      {/* Inline action form */}
-      {showActionForm && (
-        <div className="p-[10px] rounded-[8px] bg-[#fafafa] border border-[#e8e8e8] flex flex-col gap-[8px]">
-          <span className="text-[10px] font-semibold text-[#1a1a1a] capitalize">
-            {showActionForm} Gate
-          </span>
-          <input
-            type="text"
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            placeholder="Role (e.g. senior_engineer)"
-            className="h-[30px] px-[10px] rounded-[6px] border border-[#e8e8e8] text-[11px] text-[#1a1a1a] placeholder:text-[#acacac] focus:outline-none focus:border-[#ff9800] transition-colors"
-          />
-          <textarea
-            value={rationale}
-            onChange={(e) => setRationale(e.target.value)}
-            placeholder="Rationale..."
-            rows={2}
-            className="px-[10px] py-[8px] rounded-[6px] border border-[#e8e8e8] text-[11px] text-[#1a1a1a] placeholder:text-[#acacac] focus:outline-none focus:border-[#ff9800] transition-colors resize-none"
-          />
-          <div className="flex items-center gap-[6px] justify-end">
-            <button
-              type="button"
-              onClick={() => setShowActionForm(null)}
-              className="h-[26px] px-[10px] rounded-[6px] text-[10px] font-medium text-[#6b6b6b] border border-[#e8e8e8] hover:bg-[#f0f0ec] transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAction(showActionForm)}
-              disabled={isPending}
-              className={cn(
-                'h-[26px] px-[12px] rounded-[6px] text-[10px] font-semibold text-white transition-colors flex items-center gap-[4px]',
-                showActionForm === 'approve' && 'bg-[#4caf50] hover:bg-[#43a047]',
-                showActionForm === 'reject' && 'bg-[#e74c3c] hover:bg-[#d32f2f]',
-                showActionForm === 'waive' && 'bg-[#9e9e9e] hover:bg-[#757575]',
-              )}
-            >
-              {isPending && <Loader2 size={10} className="animate-spin" />}
-              Confirm {showActionForm}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}

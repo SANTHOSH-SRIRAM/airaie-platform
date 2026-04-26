@@ -10,28 +10,30 @@ interface StatCardProps {
   accentColor?: 'blue' | 'green' | 'purple' | 'teal' | 'orange';
 }
 
+// Journey-lane palette — keeps StatCards visually consistent with hero pills
+// (Execute=blue, Govern=orange, Configure=purple) and the sidebar groups.
 const iconColors = {
-  blue: 'text-[#2196f3]',
-  green: 'text-[#4caf50]',
-  purple: 'text-[#9c27b0]',
-  teal: 'text-[#009d9a]',
-  orange: 'text-[#ff9800]',
+  blue: 'text-[#1976d2]',
+  green: 'text-[#2e7d32]',
+  purple: 'text-[#7b1fa2]',
+  teal: 'text-[#00796b]',
+  orange: 'text-[#f57c00]',
 };
 
 const subtitleColors = {
-  blue: 'text-[#2196f3]',
-  green: 'text-[#4caf50]',
-  purple: 'text-[#9c27b0]',
-  teal: 'text-[#009d9a]',
-  orange: 'text-[#ff9800]',
+  blue: 'text-[#1976d2]',
+  green: 'text-[#2e7d32]',
+  purple: 'text-[#7b1fa2]',
+  teal: 'text-[#00796b]',
+  orange: 'text-[#f57c00]',
 };
 
 const dotColors = {
-  blue: 'bg-[#2196f3]',
-  green: 'bg-[#4caf50]',
-  purple: 'bg-[#9c27b0]',
-  teal: 'bg-[#009d9a]',
-  orange: 'bg-[#ff9800]',
+  blue: 'bg-[#1976d2]',
+  green: 'bg-[#2e7d32]',
+  purple: 'bg-[#7b1fa2]',
+  teal: 'bg-[#00796b]',
+  orange: 'bg-[#f57c00]',
 };
 
 export default function StatCard({ icon, label, value, subtitle, showDot = false, accentColor = 'blue' }: StatCardProps) {

@@ -47,13 +47,13 @@ interface RawBoard {
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
+// Hits the real backend and unwraps the `{ <key>: [...] }` envelope.
+// Errors propagate — React Query reports `isError`, widgets show their
+// error state with retry. We do NOT silently return empty arrays anymore;
+// that masks backend outages and looks like "no data" in the UI.
 async function safeArray<T>(path: string, key: string): Promise<T[]> {
-  try {
-    const res = await apiClient.get<Record<string, T[] | null>>(path);
-    return (res?.[key] ?? []) as T[];
-  } catch {
-    return [];
-  }
+  const res = await apiClient.get<Record<string, T[] | null>>(path);
+  return (res?.[key] ?? []) as T[];
 }
 
 /* ---------- Dashboard data ---------- */
@@ -197,7 +197,7 @@ export async function fetchSystemStatus(): Promise<SystemStatus> {
     };
   } catch {
     return {
-      overall: 'down',
+      overall: 'outage',
       apiLatencyMs: 0,
       natsConnected: false,
       runnerSlots: { used: 0, total: 4 },

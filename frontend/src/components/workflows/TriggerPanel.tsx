@@ -180,19 +180,19 @@ export default function TriggerPanel({
                     {trigger.isEnabled ? 'Active' : 'Disabled'}
                   </span>
                 </div>
-                {trigger.type === 'webhook' && trigger.config?.endpoint && (
+                {trigger.type === 'webhook' && Boolean(trigger.config?.endpoint) && (
                   <span className="mt-0.5 block truncate font-mono text-[10px] text-[#949494]">
-                    {String(trigger.config.endpoint)}
+                    {String(trigger.config?.endpoint)}
                   </span>
                 )}
-                {trigger.type === 'schedule' && trigger.config?.cron && (
+                {trigger.type === 'schedule' && Boolean(trigger.config?.cron) && (
                   <span className="mt-0.5 block font-mono text-[10px] text-[#949494]">
-                    {String(trigger.config.cron)}
+                    {String(trigger.config?.cron)}
                   </span>
                 )}
-                {trigger.type === 'event' && trigger.config?.eventType && (
+                {trigger.type === 'event' && Boolean(trigger.config?.eventType) && (
                   <span className="mt-0.5 block text-[10px] text-[#949494]">
-                    {String(trigger.config.eventType)}
+                    {String(trigger.config?.eventType)}
                   </span>
                 )}
               </div>

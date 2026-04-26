@@ -21,7 +21,7 @@ function formatRelativeTime(timestamp: string): string {
 }
 
 export default function ChatMessage({ message, agentName = 'Agent' }: ChatMessageProps) {
-  const { role, content, timestamp, toolCallProposal, runId } = message;
+  const { role, content, timestamp, toolCallProposal, runId, approvalId } = message;
 
   if (role === 'user') {
     return (
@@ -58,7 +58,7 @@ export default function ChatMessage({ message, agentName = 'Agent' }: ChatMessag
           )}
           {runId && (
             <div className="mt-3">
-              <InlineToolCallCard runId={runId} />
+              <InlineToolCallCard runId={runId} approvalId={approvalId} />
             </div>
           )}
           <p className="mt-1.5 text-[11px] text-[#9b978f]">

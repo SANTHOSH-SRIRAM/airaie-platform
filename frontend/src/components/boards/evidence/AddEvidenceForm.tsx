@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { cn } from '@utils/cn';
-import { useAddEvidence } from '@hooks/useCards';
+import { useAddCardEvidence } from '@hooks/useGates';
 import { Loader2, Plus } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
-// Props
+// AddEvidenceForm (D4) — manual evidence add for the card-scoped panel.
+//
+// Uses the unified `useAddCardEvidence` hook so both the legacy
+// `cardKeys.evidence` cache and the new `gateKeys.cardEvidenceUnified` cache
+// are invalidated on submit (and any aggregating gate views).
 // ---------------------------------------------------------------------------
 
 interface AddEvidenceFormProps {
@@ -12,36 +16,32 @@ interface AddEvidenceFormProps {
   onAdded?: () => void;
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export default function AddEvidenceForm({ cardId, onAdded }: AddEvidenceFormProps) {
-  const addEvidence = useAddEvidence(cardId);
+  const addEvidence = useAddCardEvidence(cardId);
 
-  const [metricKey, setMetricKey] = useState('');
+  const [metricName, setMetricName] = useState('');
   const [metricValue, setMetricValue] = useState<number | ''>('');
-  const [metricUnit, setMetricUnit] = useState('');
-  const [artifactId, setArtifactId] = useState('');
+  const [unit, setUnit] = useState('');
+  const [rationale, setRationale] = useState('');
+  const [sourceRunId, setSourceRunId] = useState('');
 
-  const canSubmit = metricKey.trim() && metricValue !== '' && !addEvidence.isPending;
+  const canSubmit =
+    metricName.trim() !== '' && metricValue !== '' && !addEvidence.isPending;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
-
     await addEvidence.mutateAsync({
-      metric_key: metricKey.trim(),
+      metric_name: metricName.trim(),
       metric_value: Number(metricValue),
-      metric_unit: metricUnit.trim() || undefined,
-      artifact_id: artifactId.trim() || undefined,
-      evaluation: 'info', // default; backend should re-evaluate
+      unit: unit.trim() || undefined,
+      rationale: rationale.trim() || undefined,
+      source_run_id: sourceRunId.trim() || undefined,
     });
-
-    // Reset
-    setMetricKey('');
+    setMetricName('');
     setMetricValue('');
-    setMetricUnit('');
-    setArtifactId('');
+    setUnit('');
+    setRationale('');
+    setSourceRunId('');
     onAdded?.();
   };
 
@@ -50,25 +50,17 @@ export default function AddEvidenceForm({ cardId, onAdded }: AddEvidenceFormProp
       <span className="text-[11px] font-semibold text-[#1a1a1a]">Add Evidence Manually</span>
 
       <div className="grid grid-cols-[1fr_100px_80px_1fr] gap-[8px] items-end">
-        {/* Metric key */}
-        <div>
-          <label className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] block mb-[4px]">
-            Metric Key <span className="text-[#e74c3c]">*</span>
-          </label>
+        <Field label="Metric Name" required>
           <input
             type="text"
-            value={metricKey}
-            onChange={(e) => setMetricKey(e.target.value)}
+            value={metricName}
+            onChange={(e) => setMetricName(e.target.value)}
             placeholder="e.g. max_stress"
             className="w-full h-[34px] px-[10px] rounded-[6px] border border-[#e8e8e8] text-[12px] font-mono text-[#1a1a1a] placeholder:text-[#acacac] focus:outline-none focus:border-[#ff9800] transition-colors"
           />
-        </div>
+        </Field>
 
-        {/* Value */}
-        <div>
-          <label className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] block mb-[4px]">
-            Value <span className="text-[#e74c3c]">*</span>
-          </label>
+        <Field label="Value" required>
           <input
             type="number"
             value={metricValue}
@@ -76,38 +68,45 @@ export default function AddEvidenceForm({ cardId, onAdded }: AddEvidenceFormProp
             placeholder="0"
             className="w-full h-[34px] px-[10px] rounded-[6px] border border-[#e8e8e8] text-[12px] text-[#1a1a1a] placeholder:text-[#acacac] focus:outline-none focus:border-[#ff9800] transition-colors"
           />
-        </div>
+        </Field>
 
-        {/* Unit */}
-        <div>
-          <label className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] block mb-[4px]">
-            Unit
-          </label>
+        <Field label="Unit">
           <input
             type="text"
-            value={metricUnit}
-            onChange={(e) => setMetricUnit(e.target.value)}
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
             placeholder="MPa"
             className="w-full h-[34px] px-[10px] rounded-[6px] border border-[#e8e8e8] text-[12px] text-[#1a1a1a] placeholder:text-[#acacac] focus:outline-none focus:border-[#ff9800] transition-colors"
           />
-        </div>
+        </Field>
 
-        {/* Artifact ID */}
-        <div>
-          <label className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] block mb-[4px]">
-            Artifact ID
-          </label>
+        <Field label="Source Run ID">
           <input
             type="text"
-            value={artifactId}
-            onChange={(e) => setArtifactId(e.target.value)}
-            placeholder="Optional artifact reference"
+            value={sourceRunId}
+            onChange={(e) => setSourceRunId(e.target.value)}
+            placeholder="run_xxx (optional)"
             className="w-full h-[34px] px-[10px] rounded-[6px] border border-[#e8e8e8] text-[12px] font-mono text-[#1a1a1a] placeholder:text-[#acacac] focus:outline-none focus:border-[#ff9800] transition-colors"
           />
-        </div>
+        </Field>
       </div>
 
-      {/* Submit */}
+      <Field label="Rationale">
+        <textarea
+          value={rationale}
+          onChange={(e) => setRationale(e.target.value)}
+          placeholder="Why is this evidence being added manually?"
+          rows={2}
+          className="w-full px-[10px] py-[8px] rounded-[6px] border border-[#e8e8e8] text-[12px] text-[#1a1a1a] placeholder:text-[#acacac] focus:outline-none focus:border-[#ff9800] transition-colors resize-none"
+        />
+      </Field>
+
+      {addEvidence.error && (
+        <span className="text-[11px] text-[#e74c3c]">
+          Failed to add evidence: {(addEvidence.error as Error).message}
+        </span>
+      )}
+
       <div className="flex items-center justify-end">
         <button
           type="button"
@@ -115,9 +114,7 @@ export default function AddEvidenceForm({ cardId, onAdded }: AddEvidenceFormProp
           disabled={!canSubmit}
           className={cn(
             'h-[32px] px-[16px] rounded-[8px] text-[11px] font-semibold text-white transition-colors flex items-center gap-[5px]',
-            canSubmit
-              ? 'bg-[#ff9800] hover:bg-[#f57c00]'
-              : 'bg-[#d0d0d0] cursor-not-allowed',
+            canSubmit ? 'bg-[#ff9800] hover:bg-[#f57c00]' : 'bg-[#d0d0d0] cursor-not-allowed',
           )}
         >
           {addEvidence.isPending && <Loader2 size={12} className="animate-spin" />}
@@ -125,6 +122,25 @@ export default function AddEvidenceForm({ cardId, onAdded }: AddEvidenceFormProp
           Add Evidence
         </button>
       </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac] block mb-[4px]">
+        {label} {required && <span className="text-[#e74c3c]">*</span>}
+      </label>
+      {children}
     </div>
   );
 }

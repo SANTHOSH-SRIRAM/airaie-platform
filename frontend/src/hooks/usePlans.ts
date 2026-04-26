@@ -1,5 +1,17 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getPlan, generatePlan, validatePlan, executePlan } from '@api/plans';
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  type UseMutationResult,
+} from '@tanstack/react-query';
+import {
+  getPlan,
+  generatePlan,
+  validatePlan,
+  executePlan,
+  type GeneratePlanRequest,
+} from '@api/plans';
+import type { ExecutionPlan } from '@/types/plan';
 import { cardKeys } from './useCards';
 
 // ---------------------------------------------------------------------------
@@ -42,10 +54,23 @@ export function usePlanPolling(cardId: string | undefined, enabled: boolean) {
 // Mutations
 // ---------------------------------------------------------------------------
 
-export function useGeneratePlan(cardId: string) {
+/**
+ * Generate a plan for a card.
+ *
+ * Backwards-compatible signature: callers can either invoke
+ * `useGeneratePlan(cardId)` and `mutateAsync()` (no body — kernel picks a
+ * default pipeline from the card's intent_type) OR pass a
+ * `GeneratePlanRequest` body to `mutateAsync({ pipeline_id, overrides })`.
+ *
+ * Returns the unwrapped `ExecutionPlan` on success; throws on error.
+ */
+export function useGeneratePlan(
+  cardId: string,
+): UseMutationResult<ExecutionPlan, Error, GeneratePlanRequest | void> {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => generatePlan(cardId),
+    mutationFn: (body?: GeneratePlanRequest | void) =>
+      generatePlan(cardId, (body as GeneratePlanRequest) ?? undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: planKeys.detail(cardId) });
     },

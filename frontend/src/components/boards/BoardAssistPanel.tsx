@@ -156,17 +156,17 @@ function DraftIntentSection({ boardId }: DraftIntentSectionProps) {
         onClick={handleDraft}
         disabled={!description.trim() || loading}
         className={cn(
-          'h-[32px] px-[14px] rounded-[8px] text-[11px] font-semibold flex items-center gap-[6px] transition-colors',
+          'h-[32px] px-[14px] rounded-[8px] text-[11px] font-semibold flex items-center justify-center gap-[6px] transition-colors self-start',
           !description.trim() || loading
             ? 'bg-[#f0f0ec] text-[#acacac] cursor-not-allowed'
             : 'bg-[#ff9800] hover:bg-[#f57c00] text-white',
         )}
       >
         {loading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-        {loading ? 'Drafting…' : 'Draft Intent'}
+        {loading ? 'Drafting…' : 'Generate'}
       </button>
 
-      {error && <ErrorDisplay error={error} />}
+      {Boolean(error) && <ErrorDisplay error={error} />}
 
       {result && (
         <div className="flex flex-col gap-[6px] p-[10px] rounded-[8px] bg-[#fafaf8] border border-[#ece9e3]">
@@ -271,17 +271,17 @@ function RecommendToolsSection({ boardId }: RecommendToolsSectionProps) {
         onClick={handleRecommend}
         disabled={loading}
         className={cn(
-          'h-[32px] px-[14px] rounded-[8px] text-[11px] font-semibold flex items-center gap-[6px] transition-colors',
+          'h-[32px] px-[14px] rounded-[8px] text-[11px] font-semibold flex items-center justify-center gap-[6px] transition-colors self-start',
           loading
             ? 'bg-[#f0f0ec] text-[#acacac] cursor-not-allowed'
             : 'bg-[#1a1a1a] hover:bg-[#2d2d2d] text-white',
         )}
       >
         {loading ? <Loader2 size={12} className="animate-spin" /> : <Wrench size={12} />}
-        {loading ? 'Analyzing…' : 'Recommend Tools'}
+        {loading ? 'Analyzing…' : 'Recommend'}
       </button>
 
-      {error && <ErrorDisplay error={error} />}
+      {Boolean(error) && <ErrorDisplay error={error} />}
 
       {result && result.length > 0 && (
         <div className="flex flex-col gap-[6px]">
@@ -396,7 +396,7 @@ function AnalyzeFailureSection({ boardId }: AnalyzeFailureSectionProps) {
         </button>
       </div>
 
-      {error && <ErrorDisplay error={error} />}
+      {Boolean(error) && <ErrorDisplay error={error} />}
 
       {result && (
         <div className="flex flex-col gap-[8px] p-[10px] rounded-[8px] bg-[#fafaf8] border border-[#ece9e3]">
@@ -480,17 +480,17 @@ function SummarizeApprovalsSection({ boardId }: SummarizeApprovalsSectionProps) 
         onClick={handleSummarize}
         disabled={loading}
         className={cn(
-          'h-[32px] px-[14px] rounded-[8px] text-[11px] font-semibold flex items-center gap-[6px] transition-colors',
+          'h-[32px] px-[14px] rounded-[8px] text-[11px] font-semibold flex items-center justify-center gap-[6px] transition-colors self-start',
           loading
             ? 'bg-[#f0f0ec] text-[#acacac] cursor-not-allowed'
             : 'bg-[#4caf50] hover:bg-[#43a047] text-white',
         )}
       >
         {loading ? <Loader2 size={12} className="animate-spin" /> : <CheckSquare size={12} />}
-        {loading ? 'Summarizing…' : 'Summarize Approvals'}
+        {loading ? 'Summarizing…' : 'Summarize'}
       </button>
 
-      {error && <ErrorDisplay error={error} />}
+      {Boolean(error) && <ErrorDisplay error={error} />}
 
       {result && (
         <div className="flex flex-col gap-[8px] p-[10px] rounded-[8px] bg-[#fafaf8] border border-[#ece9e3]">

@@ -1,13 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchWorkflow,
+  fetchWorkflowWithVersions,
   saveWorkflow,
   runWorkflow,
+  listWorkflows,
   listWorkflowVersions,
   compileWorkflow,
   validateWorkflow,
   publishWorkflowVersion,
   createWorkflow,
+  createWorkflowVersion,
+  deleteWorkflow,
   listTriggers,
   createTrigger,
   updateTrigger,
@@ -16,8 +20,17 @@ import {
 
 export const workflowKeys = {
   all: ['workflows'] as const,
+  list: () => [...workflowKeys.all, 'list'] as const,
   detail: (id: string) => [...workflowKeys.all, id] as const,
 };
+
+export function useWorkflows() {
+  return useQuery({
+    queryKey: workflowKeys.list(),
+    queryFn: listWorkflows,
+    staleTime: 30_000,
+  });
+}
 
 export function useWorkflow(id: string) {
   return useQuery({
@@ -25,6 +38,20 @@ export function useWorkflow(id: string) {
     queryFn: () => fetchWorkflow(id),
     enabled: !!id,
     staleTime: 60_000,
+  });
+}
+
+/**
+ * Returns the raw `{ workflow, versions[] }` envelope for the editor
+ * canvas. Cached separately from `useWorkflow` (which produces a
+ * simplified `Workflow` shape) so the two consumers don't fight.
+ */
+export function useWorkflowWithVersions(id: string) {
+  return useQuery({
+    queryKey: [...workflowKeys.all, id, 'envelope'] as const,
+    queryFn: () => fetchWorkflowWithVersions(id),
+    enabled: !!id,
+    staleTime: 30_000,
   });
 }
 
@@ -41,6 +68,16 @@ export function useSaveWorkflow(id: string) {
 export function useRunWorkflow(id: string) {
   return useMutation({
     mutationFn: () => runWorkflow(id),
+  });
+}
+
+export function useDeleteWorkflow() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteWorkflow(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: workflowKeys.all });
+    },
   });
 }
 
@@ -85,6 +122,23 @@ export function useCreateWorkflow() {
   });
 }
 
+/**
+ * Persist the editor canvas as a new workflow version. Pass the DSL as a
+ * stringified JSON blob — the kernel route accepts it in the `dsl_yaml`
+ * field (JSON is valid YAML, and the kernel parser reads either).
+ */
+export function useCreateWorkflowVersion(workflowId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (dslJson: string) => createWorkflowVersion(workflowId, dslJson),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [...workflowKeys.all, workflowId, 'versions'] });
+      qc.invalidateQueries({ queryKey: [...workflowKeys.all, workflowId, 'envelope'] });
+      qc.invalidateQueries({ queryKey: workflowKeys.detail(workflowId) });
+    },
+  });
+}
+
 // --- Trigger hooks ---
 
 export const triggerKeys = {
@@ -103,7 +157,7 @@ export function useCreateTrigger(workflowId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: { type: string; config: Record<string, unknown>; is_enabled: boolean }) =>
-      createTrigger(workflowId, data),
+      createTrigger(workflowId, { ...data, type: data.type as 'webhook' | 'schedule' | 'manual' | 'event' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: triggerKeys.list(workflowId) }),
   });
 }

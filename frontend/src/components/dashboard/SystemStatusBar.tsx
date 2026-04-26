@@ -7,16 +7,16 @@ export default function SystemStatusBar() {
   if (!status) return null;
 
   const overallColor = status.overall === 'operational'
-    ? 'bg-[#4caf50]'
+    ? 'bg-[#2e7d32]'
     : status.overall === 'degraded'
-      ? 'bg-[#ff9800]'
-      : 'bg-[#e74c3c]';
+      ? 'bg-[#f57c00]'
+      : 'bg-[#c62828]';
 
   const overallTextColor = status.overall === 'operational'
-    ? 'text-[#4caf50]'
+    ? 'text-[#2e7d32]'
     : status.overall === 'degraded'
-      ? 'text-[#ff9800]'
-      : 'text-[#e74c3c]';
+      ? 'text-[#f57c00]'
+      : 'text-[#c62828]';
 
   const storagePercent = status.storageUsed.totalBytes > 0
     ? Math.round((status.storageUsed.bytes / status.storageUsed.totalBytes) * 100)

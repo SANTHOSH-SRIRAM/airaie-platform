@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import { useToolList } from '@hooks/useTools';
-import type { Tool, ToolStatus, ToolAdapter, ToolCategory } from '@/types/tool';
+import type { Tool, ToolStatus, ToolAdapter } from '@/types/tool';
 
 const TOOL_ICONS: Record<string, React.ElementType> = {
   FlaskConical, Wind, Grid2X2, Database, BarChart3, Box, Paperclip,

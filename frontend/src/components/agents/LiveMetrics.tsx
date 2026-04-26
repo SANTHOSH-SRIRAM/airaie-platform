@@ -30,7 +30,7 @@ export default function LiveMetrics({ metrics }: LiveMetricsProps) {
         <div className="flex items-center justify-between text-xs">
           <span className="text-cds-text-secondary">Iterations</span>
           <span className="text-cds-text-primary font-medium">
-            {metrics.iterations.current} / {maxLabel}
+            {metrics.iterations.current ?? '—'} / {maxLabel}
           </span>
         </div>
 

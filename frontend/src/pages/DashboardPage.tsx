@@ -24,14 +24,24 @@ export default function DashboardPage() {
 
   const activeRunCount = activeRuns?.filter((r) => r.status === 'running').length ?? 0;
   const pendingGateCount = governance?.filter((g) => g.approvalStatus === 'pending').length ?? 0;
+  const agentDecisionsToday = stats?.agents.decisionsToday ?? 0;
+
+  // First-time user: no entities yet across all systems → show welcome variant.
+  const isFirstTimeUser =
+    !!stats &&
+    stats.workflows.total === 0 &&
+    stats.agents.total === 0 &&
+    stats.boards.total === 0;
 
   return (
-    <div className="min-h-full px-[16px] pb-[72px]">
+    <div className="min-h-full px-[16px] pb-[72px]" data-testid="dashboard-page">
       <div className="flex flex-col gap-[16px]">
         <DashboardGreeting
           userName="Santhosh"
           activeRunCount={activeRunCount}
           pendingGateCount={pendingGateCount}
+          agentDecisionsToday={agentDecisionsToday}
+          isFirstTimeUser={isFirstTimeUser}
         />
 
         {statsError ? (

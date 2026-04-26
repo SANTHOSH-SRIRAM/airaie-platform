@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   X, Zap, Clock, CircleDot, MousePointerClick,
   ArrowRight, Folder, Info,
@@ -135,7 +135,7 @@ function ImportYamlIcon({ className }: { className?: string }) {
   );
 }
 
-const START_ICONS: Record<StartFrom, (props: { className?: string }) => JSX.Element> = {
+const START_ICONS: Record<StartFrom, (props: { className?: string }) => React.ReactElement> = {
   blank: BlankCanvasIcon,
   template: TemplateGridIcon,
   yaml: ImportYamlIcon,
@@ -233,6 +233,7 @@ export default function CreateWorkflowModal({ open, onClose, onSubmit }: CreateW
             <div className="h-[44px] px-[16px] rounded-[8px] bg-[#f5f5f0] flex items-center">
               <input
                 type="text"
+                data-testid="create-workflow-name" /* E2E: smoke selector */
                 value={form.name}
                 onChange={(e) => update('name', e.target.value)}
                 placeholder="e.g. FEA Validation Pipeline"
@@ -416,6 +417,7 @@ export default function CreateWorkflowModal({ open, onClose, onSubmit }: CreateW
             </button>
             <button
               type="button"
+              data-testid="create-workflow-submit" /* E2E: smoke selector */
               onClick={() => onSubmit?.({ ...form })}
               className="h-[40px] px-[24px] rounded-[8px] bg-[#2196f3] text-white text-[13px] font-semibold flex items-center gap-[8px] hover:bg-[#1976d2] transition-colors shadow-sm"
             >

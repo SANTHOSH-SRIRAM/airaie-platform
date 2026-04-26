@@ -7,12 +7,12 @@ import { useAgentExecution } from '@hooks/useRunAgent';
 import { useAgent, useAgentVersions } from '@hooks/useAgents';
 import { useAuth } from '@contexts/AuthContext';
 import AgentPlaygroundTopBar from '@components/agents/AgentPlaygroundTopBar';
+import LLMHealthChip from '@components/agents/LLMHealthChip';
 import ChatInterface from '@components/agents/ChatInterface';
 import PlaygroundActionBar from '@components/agents/PlaygroundActionBar';
 import ProposalViewer from '@components/agents/execution/ProposalViewer';
 import PolicyDecisionDisplay from '@components/agents/execution/PolicyDecisionDisplay';
 import ApprovalFlow from '@components/agents/execution/ApprovalFlow';
-import EvalTab from '@components/agents/eval/EvalTab';
 import Button from '@components/ui/Button';
 import Badge from '@components/ui/Badge';
 
@@ -39,8 +39,9 @@ export default function AgentPlaygroundPage() {
   const [activeTab, setActiveTab] = useState('playground');
 
   const handleTabChange = (tab: string) => {
-    if (tab === 'builder' || tab === 'runs') {
-      const suffix = tab === 'runs' ? '?tab=runs' : '';
+    // E-Evals: route Evals tab to the agent-studio's evals tab too.
+    if (tab === 'builder' || tab === 'runs' || tab === 'evals') {
+      const suffix = tab === 'runs' ? '?tab=runs' : tab === 'evals' ? '?tab=evals' : '';
       navigate(`/agent-studio/${resolvedAgentId}${suffix}`);
       return;
     }
@@ -158,6 +159,10 @@ export default function AgentPlaygroundPage() {
         onNewSession={handleNewSession}
         newSessionPending={createSessionMutation.isPending}
       />
+      {/* LLM provider health indicator — clicking routes to admin/llm-providers */}
+      <div className="mt-2 flex w-full max-w-[992px] mx-auto justify-end">
+        <LLMHealthChip />
+      </div>
     </div>
   );
 
@@ -213,24 +218,10 @@ export default function AgentPlaygroundPage() {
     );
   }
 
-  // ── Evals tab ────────────────────────────────────────────────────────────────
-  if (activeTab === 'evals') {
-    return (
-      <div data-testid="agent-playground-page" className="flex flex-col h-full bg-[#f5f5f0] overflow-hidden">
-        {topBar}
-        <div className="flex flex-1 min-h-0 gap-3 px-[14px] py-3 lg:px-[18px]">
-          {sessionsPanel}
-          <div className="flex-1 flex flex-col min-h-0 bg-white rounded-[20px] border border-[#ece9e3] shadow-[0px_1px_10px_0px_rgba(0,0,0,0.05)] overflow-hidden">
-            <div className="flex-1 min-h-0 overflow-hidden">
-              <EvalTab agentId={resolvedAgentId} sessionId={sessionId} />
-            </div>
-            <PlaygroundActionBar />
-          </div>
-          {inspectorPanel}
-        </div>
-      </div>
-    );
-  }
+  // Note: the 'evals' tab is owned by AgentStudioPage. handleTabChange
+  // navigates there before this component re-renders, so no playground-side
+  // mount of EvalTab is reachable. Don't add one back without redirecting
+  // through /agent-studio/{id}?tab=evals.
 
   // ── Playground tab (main) ────────────────────────────────────────────────────
   return (

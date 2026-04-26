@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { cn } from '@utils/cn';
 import { useCreateCard } from '@hooks/useCards';
+import { useIntentList } from '@hooks/useIntents';
 import type { CardType, CardKPI } from '@/types/card';
-import { X, Plus, Trash2, Loader2 } from 'lucide-react';
+import { X, Plus, Trash2, Loader2, AlertTriangle } from 'lucide-react';
+// D7: IntentSpec picker
+import IntentSpecPicker from './IntentSpecPicker';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,12 +36,26 @@ interface CreateCardModalProps {
 
 export default function CreateCardModal({ boardId, isOpen, onClose }: CreateCardModalProps) {
   const createCard = useCreateCard(boardId);
+  // D7: load intents to expose the picker + smart default.
+  const { data: intents } = useIntentList(boardId);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [cardType, setCardType] = useState<CardType>('analysis');
   const [intentType, setIntentType] = useState('');
   const [kpis, setKpis] = useState<CardKPI[]>([]);
+  // D7: intent_spec_id link
+  const [intentSpecId, setIntentSpecId] = useState<string | undefined>(undefined);
+
+  // D7: pre-populate with the board's only intent if there's exactly one and
+  // the user hasn't picked anything yet. Re-runs when the modal opens.
+  useEffect(() => {
+    if (!isOpen) return;
+    if (intentSpecId) return;
+    if (intents && intents.length === 1) {
+      setIntentSpecId(intents[0].id);
+    }
+  }, [isOpen, intents, intentSpecId]);
 
   const addKpi = () => {
     setKpis((prev) => [
@@ -66,6 +83,9 @@ export default function CreateCardModal({ boardId, isOpen, onClose }: CreateCard
       intent_type: intentType.trim() || undefined,
       description: description.trim() || undefined,
       kpis: kpis.filter((k) => k.metric_key.trim()),
+      // D7: link card to IntentSpec on creation. Backend stores via the
+      // `intent_spec_id` column on `cards` (whitelisted in postgres_cards.go).
+      intent_spec_id: intentSpecId,
     });
 
     // Reset form
@@ -74,6 +94,7 @@ export default function CreateCardModal({ boardId, isOpen, onClose }: CreateCard
     setCardType('analysis');
     setIntentType('');
     setKpis([]);
+    setIntentSpecId(undefined);
     onClose();
   };
 
@@ -129,6 +150,27 @@ export default function CreateCardModal({ boardId, isOpen, onClose }: CreateCard
               rows={3}
               className="w-full px-[12px] py-[10px] rounded-[8px] border border-[#e8e8e8] text-[13px] text-[#1a1a1a] placeholder:text-[#acacac] focus:outline-none focus:border-[#ff9800] transition-colors resize-none"
             />
+          </div>
+
+          {/* D7: Linked IntentSpec */}
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#acacac] block mb-[6px]">
+              Linked IntentSpec
+            </label>
+            <IntentSpecPicker
+              boardId={boardId}
+              value={intentSpecId}
+              onChange={setIntentSpecId}
+              allowClear
+            />
+            {!intentSpecId && (
+              <div className="mt-[6px] flex items-start gap-[6px] p-[8px] rounded-[6px] bg-[#fff3e0] border border-[#ffe0b2]">
+                <AlertTriangle size={12} className="text-[#ff9800] shrink-0 mt-[1px]" />
+                <span className="text-[10px] text-[#6b6b6b] leading-[14px]">
+                  This card has no IntentSpec — its evidence will be empty until linked.
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Card Type + Intent Type */}

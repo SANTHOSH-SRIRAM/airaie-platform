@@ -97,6 +97,8 @@ export interface ToolDetailVersion {
   trust_level: TrustLevel;
   published_at: string;
   run_count: number;
+  /** ATP manifest (parsed from the version's contract field). May be missing when not yet loaded. */
+  manifest?: unknown;
 }
 
 export interface ToolRunEntry {

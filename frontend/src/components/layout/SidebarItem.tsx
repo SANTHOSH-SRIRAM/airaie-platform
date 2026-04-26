@@ -13,10 +13,12 @@ interface SidebarItemProps {
   onClick?: () => void;
   /** Smaller item height for RECENT section */
   compact?: boolean;
+  /** Optional data-testid for E2E selectors. */
+  testId?: string;
 }
 
 export default function SidebarItem({
-  icon, label, path, external, bullet, bulletColor = 'bg-[#2196f3]', badge, onClick, compact,
+  icon, label, path, external, bullet, bulletColor = 'bg-[#2196f3]', badge, onClick, compact, testId,
 }: SidebarItemProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -31,6 +33,7 @@ export default function SidebarItem({
   return (
     <button
       onClick={handleClick}
+      data-testid={testId}
       className={cn(
         'w-full flex items-center rounded-[8px] transition-colors duration-100',
         compact ? 'h-[32px] px-[10px] gap-[8px]' : 'h-[36px] px-[12px] gap-[10px]',

@@ -16,19 +16,36 @@ export function useRunWorkflow(workflowId: string) {
     onError: () => executionStore.setSSEConnected(false),
   });
 
-  const start = useCallback(async () => {
-    try {
-      setIsStarting(true);
-      setError(null);
-      const result = await runWorkflow(workflowId);
-      setRunId(result.runId);
-      executionStore.startRun(result.runId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start run');
-    } finally {
-      setIsStarting(false);
-    }
-  }, [workflowId, executionStore]);
+  // The first argument is an optional `{version, inputs}` opts object.
+  // Existing call sites pass `start` directly to onClick, in which case
+  // a MouseEvent is bound — we strip non-plain inputs at runtime so the
+  // backend never sees garbage.
+  const start = useCallback(
+    async (rawOpts?: unknown): Promise<string | null> => {
+      const opts: { version?: number; inputs?: Record<string, unknown> } = {};
+      if (rawOpts && typeof rawOpts === 'object' && !('nativeEvent' in (rawOpts as Record<string, unknown>))) {
+        const o = rawOpts as Record<string, unknown>;
+        if (typeof o.version === 'number') opts.version = o.version;
+        if (o.inputs && typeof o.inputs === 'object') {
+          opts.inputs = o.inputs as Record<string, unknown>;
+        }
+      }
+      try {
+        setIsStarting(true);
+        setError(null);
+        const result = await runWorkflow(workflowId, opts);
+        setRunId(result.runId);
+        executionStore.startRun(result.runId);
+        return result.runId;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to start run');
+        return null;
+      } finally {
+        setIsStarting(false);
+      }
+    },
+    [workflowId, executionStore],
+  );
 
   const cancel = useCallback(async () => {
     if (runId) {

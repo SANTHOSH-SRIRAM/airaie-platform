@@ -163,6 +163,7 @@ export default function LoginPage() {
                 <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#acacac]" />
                 <input
                   id="email"
+                  data-testid="login-email" // E2E: smoke test selector
                   type="email"
                   placeholder="name@company.com"
                   value={email}
@@ -191,6 +192,7 @@ export default function LoginPage() {
                 <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#acacac]" />
                 <input
                   id="password"
+                  data-testid="login-password" // E2E: smoke test selector
                   type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••••"
                   value={password}
@@ -229,6 +231,7 @@ export default function LoginPage() {
             {/* Sign In Button */}
             <button
               type="submit"
+              data-testid="login-submit" // E2E: smoke test selector
               disabled={isLoading}
               className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#1a1a1a] hover:bg-[#2d2d2d] text-white text-[13px] font-medium rounded-lg transition-colors disabled:opacity-60 mt-1"
             >

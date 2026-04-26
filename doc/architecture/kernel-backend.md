@@ -1,6 +1,17 @@
 # AIRAIE Kernel Backend Reference
 
 > Go control plane + Rust data plane. This document maps every endpoint, model, service, store, state machine, and algorithm in the kernel.
+> **Authored:** 2026-04-05 · **Conceptually re-anchored:** 2026-04-26
+
+---
+
+> **Scope.** Implementation reference for the kernel (API gateway + runner). For the *concept* the kernel implements — the chain from IntentSpec to Release Packet, plus governance — read:
+>
+> - [`../concepts/01-CORE-MODEL.md`](../concepts/01-CORE-MODEL.md) (every primary noun the kernel persists)
+> - [`../concepts/02-GOVERNANCE-AND-MODES.md`](../concepts/02-GOVERNANCE-AND-MODES.md) (auth, RBAC, audit trail, Trust formula)
+> - [`../protocol/ATP-SPEC.md`](../protocol/ATP-SPEC.md) (the Tool protocol the runner enforces)
+>
+> Sections below remain current for endpoint URLs, model fields, service boundaries, and the state machines.
 
 ---
 

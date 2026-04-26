@@ -17,12 +17,15 @@ function formatRelative(dateStr: string): string {
 }
 
 function confidenceColor(confidence: number): string {
-  if (confidence >= 0.8) return 'text-[#4caf50]';
-  if (confidence >= 0.6) return 'text-[#ff9800]';
-  return 'text-[#d32f2f]';
+  // green when confidently auto-approvable, orange when borderline, red when low
+  if (confidence >= 0.8) return 'text-[#2e7d32]';
+  if (confidence >= 0.6) return 'text-[#f57c00]';
+  return 'text-[#c62828]';
 }
 
-const ACTIVITY_DOT_COLORS = ['bg-[#9c27b0]', 'bg-[#ff9800]', 'bg-[#9c27b0]', 'bg-[#ff9800]', 'bg-[#9c27b0]'];
+// Alternate Configure-purple and Govern-orange to visually code the action
+// type at a glance (selected-tool decisions vs escalations).
+const ACTIVITY_DOT_COLORS = ['bg-[#7b1fa2]', 'bg-[#f57c00]', 'bg-[#7b1fa2]', 'bg-[#f57c00]', 'bg-[#7b1fa2]'];
 
 const ActivityRow = memo(function ActivityRow({ entry, index }: { entry: AgentActivityEntry; index: number }) {
   const dotColor = ACTIVITY_DOT_COLORS[index % ACTIVITY_DOT_COLORS.length];
@@ -54,7 +57,7 @@ export default function AgentActivityWidget() {
     <div className="bg-white rounded-[12px] border border-[#ece9e3] shadow-[0px_1px_8px_0px_rgba(0,0,0,0.05)] p-[20px]">
       <div className="flex items-center justify-between pb-[16px]">
         <div className="flex items-center gap-2">
-          <Bot size={14} className="text-[#9c27b0]" />
+          <Bot size={14} className="text-[#7b1fa2]" />
           <h2 className="text-[14px] font-semibold text-[#1a1a1a]">Agent Activity</h2>
         </div>
         <button className="text-[12px] text-[#6b6b6b] hover:text-[#1a1a1a] font-medium transition-colors duration-100" onClick={() => navigate('/agents')}>View All</button>
@@ -65,9 +68,20 @@ export default function AgentActivityWidget() {
         <div className="animate-pulse space-y-3">
           {[1, 2, 3].map((i) => <div key={i} className="h-10 bg-[#f0f0ec] rounded" />)}
         </div>
+      ) : (activity ?? []).length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-10 text-center">
+          <Bot size={20} className="text-[#cdc8bf] mb-2" />
+          <p className="text-[12px] font-medium text-[#6b6b6b]">No agent decisions yet</p>
+          <button
+            className="mt-3 text-[12px] font-semibold text-[#7b1fa2] hover:underline"
+            onClick={() => navigate('/agent-studio')}
+          >
+            Configure your first agent →
+          </button>
+        </div>
       ) : (
         <div>
-          {(activity ?? []).map((entry, i) => <ActivityRow key={entry.id} entry={entry} index={i} />)}
+          {activity!.map((entry, i) => <ActivityRow key={entry.id} entry={entry} index={i} />)}
         </div>
       )}
     </div>

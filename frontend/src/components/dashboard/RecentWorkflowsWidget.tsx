@@ -44,7 +44,7 @@ export default function RecentWorkflowsWidget() {
     <div className="bg-white rounded-[12px] border border-[#ece9e3] shadow-[0px_1px_8px_0px_rgba(0,0,0,0.05)] p-[20px]">
       <div className="flex items-center justify-between pb-[16px]">
         <div className="flex items-center gap-2">
-          <GitBranch size={14} className="text-[#4caf50]" />
+          <GitBranch size={14} className="text-[#1976d2]" />
           <h2 className="text-[14px] font-semibold text-[#1a1a1a]">Recent Workflows</h2>
         </div>
         <div className="flex items-center gap-2">
@@ -64,9 +64,20 @@ export default function RecentWorkflowsWidget() {
         <div className="animate-pulse space-y-3">
           {[1, 2, 3].map((i) => <div key={i} className="h-10 bg-[#f0f0ec] rounded" />)}
         </div>
+      ) : (workflows ?? []).length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-10 text-center">
+          <GitBranch size={20} className="text-[#cdc8bf] mb-2" />
+          <p className="text-[12px] font-medium text-[#6b6b6b]">No workflows yet</p>
+          <button
+            className="mt-3 text-[12px] font-semibold text-[#1976d2] hover:underline"
+            onClick={() => navigate('/workflow-studio')}
+          >
+            Create your first workflow →
+          </button>
+        </div>
       ) : (
         <div>
-          {(workflows ?? []).map((wf) => <WorkflowRow key={wf.id} wf={wf} onClick={() => navigate(`/workflow-studio/${wf.id}`)} />)}
+          {workflows!.map((wf) => <WorkflowRow key={wf.id} wf={wf} onClick={() => navigate(`/workflow-studio/${wf.id}`)} />)}
         </div>
       )}
     </div>

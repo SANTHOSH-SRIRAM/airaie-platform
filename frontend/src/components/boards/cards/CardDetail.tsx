@@ -12,6 +12,8 @@ import {
   Eye,
   FileText,
 } from 'lucide-react';
+// D7: card → IntentSpec linkage
+import LinkedIntentSection from './LinkedIntentSection';
 
 // ---------------------------------------------------------------------------
 // Status config
@@ -48,13 +50,16 @@ interface CardDetailProps {
   cardId: string;
   onGeneratePlan?: (cardId: string) => void;
   onViewPlan?: (cardId: string) => void;
+  // D7: optional board id so the LinkedIntentSection can scope its picker.
+  // Falls back to card.board_id if omitted.
+  boardId?: string;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export default function CardDetail({ cardId, onGeneratePlan, onViewPlan }: CardDetailProps) {
+export default function CardDetail({ cardId, onGeneratePlan, onViewPlan, boardId }: CardDetailProps) {
   const { data: card, isLoading: cardLoading } = useCard(cardId);
   const { data: evidence, isLoading: evLoading } = useCardEvidence(cardId);
   const generatePlan = useGeneratePlan(cardId);
@@ -79,7 +84,7 @@ export default function CardDetail({ cardId, onGeneratePlan, onViewPlan }: CardD
   const typeCfg = TYPE_COLORS[card.card_type] ?? { bg: 'bg-[#f0f0ec]', text: 'text-[#6b6b6b]' };
 
   // Build KPI table with evidence actuals
-  const kpiRows = card.kpis.map((kpi) => {
+  const kpiRows = (card.kpis ?? []).map((kpi) => {
     const ev = evidence?.find((e) => e.metric_key === kpi.metric_key);
     const actual = ev?.metric_value;
     const passed = ev?.passed;
@@ -130,6 +135,9 @@ export default function CardDetail({ cardId, onGeneratePlan, onViewPlan }: CardD
           </p>
         )}
       </div>
+
+      {/* D7: Linked IntentSpec — shows current link, or empty state with link CTA. */}
+      <LinkedIntentSection card={card} boardId={boardId ?? card.board_id} />
 
       {/* ── KPIs Table ─────────────────────────────────────── */}
       {kpiRows.length > 0 && (

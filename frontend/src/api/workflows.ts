@@ -1,5 +1,6 @@
 import type { Workflow, WorkflowStep } from '@/types/workflow';
 import { api, apiClient } from '@api/client';
+import { unwrapList } from '@/utils/apiEnvelope';
 
 // --- Types ---
 
@@ -11,16 +12,24 @@ export interface WorkflowVersion {
   created_at: string;
 }
 
+export interface Diagnostic {
+  node_id?: string;
+  field_path?: string;
+  message: string;
+  severity: 'error' | 'warning';
+}
+
 export interface CompileResult {
   success: boolean;
   ast_json?: unknown;
-  errors: { node_id?: string; message: string; severity: 'error' | 'warning' }[];
+  errors: Diagnostic[];
+  warnings?: Diagnostic[];
 }
 
 export interface ValidateResult {
   valid: boolean;
-  errors: { node_id?: string; message: string; severity: 'error' | 'warning' }[];
-  warnings: { node_id?: string; message: string; severity: 'warning' }[];
+  errors: Diagnostic[];
+  warnings: Diagnostic[];
 }
 
 interface RawWorkflow {
@@ -32,9 +41,17 @@ interface RawWorkflow {
   updated_at: string;
 }
 
-interface RawWorkflowDetailEnvelope {
+export interface RawWorkflowVersion {
+  id: string;
+  version: number;
+  dsl?: string;
+  status?: string;
+  created_at?: string;
+}
+
+export interface RawWorkflowDetailEnvelope {
   workflow: RawWorkflow;
-  versions?: Array<{ id: string; version: number; dsl?: string; status?: string }>;
+  versions?: RawWorkflowVersion[];
 }
 
 interface RawDslNode {
@@ -123,6 +140,41 @@ function dslToSteps(dsl: RawDsl | null): WorkflowStep[] {
   });
 }
 
+export interface WorkflowListItem {
+  id: string;
+  name: string;
+  description?: string;
+  projectId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function listWorkflows(): Promise<WorkflowListItem[]> {
+  const env = await api<{ workflows: RawWorkflow[] }>('/v0/workflows', { method: 'GET' });
+  return (env.workflows ?? []).map((w) => ({
+    id: w.id,
+    name: w.name,
+    description: w.description,
+    projectId: w.project_id,
+    createdAt: w.created_at,
+    updatedAt: w.updated_at,
+  }));
+}
+
+/**
+ * Returns the raw `{ workflow, versions[] }` envelope. Use this when the
+ * caller needs access to all versions and the raw base64 DSL payloads —
+ * for example the editor canvas, which decodes the DSL with
+ * `decodeDsl()` from `@utils/workflowDsl`.
+ *
+ * Distinct from `fetchWorkflow` which produces a simplified `Workflow`
+ * shape via `dslToSteps` — that helper is only used by the legacy detail
+ * page surfaces (`WorkflowDetailPage`).
+ */
+export function fetchWorkflowWithVersions(id: string): Promise<RawWorkflowDetailEnvelope> {
+  return api<RawWorkflowDetailEnvelope>(`/v0/workflows/${id}`, { method: 'GET' });
+}
+
 export async function fetchWorkflow(id: string): Promise<Workflow> {
   const env = await api<RawWorkflowDetailEnvelope>(`/v0/workflows/${id}`, { method: 'GET' });
   const w = env.workflow;
@@ -155,14 +207,40 @@ export function saveWorkflow(id: string, data: Partial<Workflow>): Promise<Workf
   });
 }
 
-export function runWorkflow(id: string): Promise<{ runId: string }> {
-  return api(`/v0/workflows/${id}/run`, { method: 'POST' });
+export interface RunWorkflowOptions {
+  version?: number;
+  inputs?: Record<string, unknown>;
+}
+
+export async function runWorkflow(id: string, opts: RunWorkflowOptions = {}): Promise<{ runId: string }> {
+  // Backend route is POST /v0/workflows/{id}/run and accepts an optional
+  // {version, inputs, actor} body. The response envelope is {run: {id,...}}.
+  const body: Record<string, unknown> = {};
+  if (opts.version !== undefined) body.version = opts.version;
+  if (opts.inputs !== undefined) body.inputs = opts.inputs;
+
+  const resp = await api<unknown>(`/v0/workflows/${id}/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  // Tolerate both shapes: { runId } (legacy mock) and { run: { id, ... } }.
+  if (resp && typeof resp === 'object') {
+    const r = resp as Record<string, unknown>;
+    if (typeof r.runId === 'string') return { runId: r.runId };
+    if (r.run && typeof r.run === 'object') {
+      const run = r.run as Record<string, unknown>;
+      if (typeof run.id === 'string') return { runId: run.id };
+    }
+  }
+  throw new Error('runWorkflow: unexpected response shape');
 }
 
 // --- Version management ---
 
-export function listWorkflowVersions(workflowId: string): Promise<WorkflowVersion[]> {
-  return api(`/v0/workflows/${workflowId}/versions`, { method: 'GET' });
+export async function listWorkflowVersions(workflowId: string): Promise<WorkflowVersion[]> {
+  const res = await api<unknown>(`/v0/workflows/${workflowId}/versions`, { method: 'GET' });
+  return unwrapList<WorkflowVersion>(res, 'versions');
 }
 
 export function createWorkflowVersion(workflowId: string, dslYaml: string): Promise<WorkflowVersion> {

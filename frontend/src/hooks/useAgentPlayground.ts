@@ -57,12 +57,12 @@ export function useSession(agentId: string, sessionId: string | null) {
  * Sends a chat message to the active session.
  * After success, invalidates the session query so ChatInterface refreshes.
  */
-export function useSendMessage(agentId: string, sessionId: string | null) {
+export function useSendMessage(agentId: string | null | undefined, sessionId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (content: string) => sendMessage(agentId, sessionId!, content),
+    mutationFn: (content: string) => sendMessage(agentId ?? '', sessionId!, content),
     onSuccess: () => {
-      if (sessionId) {
+      if (sessionId && agentId) {
         queryClient.invalidateQueries({
           queryKey: agentSessionKeys.session(agentId, sessionId),
         });
@@ -76,21 +76,21 @@ export function useSendMessage(agentId: string, sessionId: string | null) {
  * NOTE: Do NOT pass `enabled` to useMutation — not valid in react-query v5.
  * Guard at call site: only call .mutate() when sessionId is truthy.
  */
-export function useCloseSession(agentId: string, sessionId: string | null) {
+export function useCloseSession(agentId: string | null | undefined, sessionId: string | null) {
   return useMutation({
-    mutationFn: () => closeSession(agentId, sessionId!),
+    mutationFn: () => closeSession(agentId ?? '', sessionId!),
   });
 }
 
 /**
  * Approves a pending session action.
  */
-export function useApproveAction(agentId: string, sessionId: string | null) {
+export function useApproveAction(agentId: string | null | undefined, sessionId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => approveSessionAction(agentId, sessionId!),
+    mutationFn: () => approveSessionAction(agentId ?? '', sessionId!),
     onSuccess: () => {
-      if (sessionId) {
+      if (sessionId && agentId) {
         queryClient.invalidateQueries({
           queryKey: agentSessionKeys.session(agentId, sessionId),
         });
@@ -104,8 +104,8 @@ export function useApproveAction(agentId: string, sessionId: string | null) {
 /**
  * Returns parsed ChatMessage[] from session history.
  */
-export function useSessionMessages(agentId: string, sessionId: string | null) {
-  const { data: session, ...rest } = useSession(agentId, sessionId);
+export function useSessionMessages(agentId: string | null | undefined, sessionId: string | null) {
+  const { data: session, ...rest } = useSession(agentId ?? '', sessionId);
   return { data: session ? extractMessages(session) : [], ...rest };
 }
 

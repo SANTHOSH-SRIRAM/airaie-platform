@@ -34,55 +34,13 @@ interface Notification {
   }[];
 }
 
-const MOCK_NOTIFICATIONS: Notification[] = [
-  {
-    id: 'notif_1',
-    category: 'runs',
-    title: 'Run Failed — FEA Solver error',
-    description: 'run_a1b0e5 failed at FEA Solver node with convergence error. 3/5 nodes completed before failure.',
-    timestamp: '2m ago',
-    read: false,
-    contextIcon: Play,
-    contextText: 'FEA Validation Pipeline · v3',
-  },
-  {
-    id: 'notif_2',
-    category: 'approvals',
-    title: 'Approval Required — Thermal Evidence Gate',
-    description: 'Your sign-off is needed as lead_engineer. 1 of 3 requirements met. CFD results pending.',
-    timestamp: '15m ago',
-    read: false,
-    contextIcon: Shield,
-    contextText: 'Structural Validation Study · Study mode',
-    actions: [
-      { label: 'Approve', type: 'primary', color: 'bg-[#4caf50]' },
-      { label: 'Review', type: 'text', color: 'text-[#ff9800]' },
-    ],
-  },
-  {
-    id: 'notif_3',
-    category: 'agents',
-    title: 'Agent Escalated — Low confidence decision',
-    description: 'FEA Optimizer Agent proposed fea-solver with confidence 0.42 (below 0.85 threshold). Material uncertainty detected.',
-    timestamp: '1h ago',
-    read: false,
-    contextIcon: Globe,
-    contextText: 'FEA Optimizer Agent · Session ses_x7k2m',
-    actions: [
-      { label: 'Review Proposal', type: 'text', color: 'text-[#9c27b0]' },
-    ],
-  },
-  {
-    id: 'notif_4',
-    category: 'runs',
-    title: 'Run Succeeded — FEA Validation Pipeline',
-    description: 'All 5 nodes completed successfully in 2m 14s. Artifacts generated and saved to registry.',
-    timestamp: '4h ago',
-    read: true,
-    contextIcon: Play,
-    contextText: 'FEA Validation Pipeline · v3',
-  },
-];
+// TODO(backend): wire to a real `/v0/notifications` (or `/v0/inbox`) endpoint
+// when the kernel ships one. Until then the inbox renders an empty state —
+// preferable to faking activity that doesn't reflect the user's real work.
+//
+// Shape kept on the type so swapping in a fetch hook is a one-liner once the
+// backend exists.
+const INITIAL_NOTIFICATIONS: Notification[] = [];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -109,7 +67,7 @@ function getCategoryStyles(category: NotificationCategory) {
 export default function NotificationCenter() {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'All' | 'Runs' | 'Approvals' | 'Agents' | 'System'>('All');
-  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -218,7 +176,17 @@ export default function NotificationCenter() {
 
           {/* List Content */}
           <div className="flex-1 overflow-y-auto">
-            {notifications.map((notif) => {
+            {notifications.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                <div className="w-12 h-12 rounded-full bg-[#f0f0ec] flex items-center justify-center mb-3">
+                  <Bell size={20} className="text-[#acacac]" />
+                </div>
+                <p className="text-[13px] font-semibold text-[#1a1a1a] mb-1">All caught up</p>
+                <p className="text-[12px] text-[#6b6b6b] leading-relaxed max-w-[260px]">
+                  Run failures, approvals, and agent escalations will appear here as your platform activity grows.
+                </p>
+              </div>
+            ) : notifications.map((notif) => {
               const styles = getCategoryStyles(notif.category);
               const Icon = styles.icon;
 

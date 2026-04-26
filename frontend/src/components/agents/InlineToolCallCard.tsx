@@ -1,10 +1,15 @@
-import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Wrench, Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Wrench, Loader2, CheckCircle, XCircle, Clock, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { fetchRunWithNodes, decodeNodeOutputs } from '@api/runs';
+import { apiClient } from '@api/client';
 
 interface InlineToolCallCardProps {
   runId: string;
+  /** When the dispatched run requires manual approval, this is the
+   *  approval-request id from POST /v0/agents/{id}/sessions/{sid}/messages.
+   *  Drives the Approve/Reject buttons; absent = no approval needed. */
+  approvalId?: string;
 }
 
 const TERMINAL = new Set(['SUCCEEDED', 'FAILED', 'CANCELED', 'SKIPPED']);
@@ -31,7 +36,11 @@ function decodeRunOutputs(b64?: string): { plan?: unknown; proposal?: ProposalSh
   }
 }
 
-export default function InlineToolCallCard({ runId }: InlineToolCallCardProps) {
+export default function InlineToolCallCard({ runId, approvalId }: InlineToolCallCardProps) {
+  const qc = useQueryClient();
+  const [decision, setDecision] = useState<'pending' | 'approved' | 'rejected'>('pending');
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['run-detail', runId],
     queryFn: () => fetchRunWithNodes(runId),
@@ -40,6 +49,26 @@ export default function InlineToolCallCard({ runId }: InlineToolCallCardProps) {
       const status = q.state.data?.run?.status;
       return status && TERMINAL.has(status) ? false : 2000;
     },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: () => apiClient.post(`/v0/approvals/${approvalId}/approve`, { comment: 'approved via playground' }),
+    onSuccess: () => {
+      setDecision('approved');
+      setDecisionError(null);
+      qc.invalidateQueries({ queryKey: ['run-detail', runId] });
+    },
+    onError: (err: unknown) => setDecisionError((err as { message?: string })?.message ?? 'Approve failed'),
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: () => apiClient.post(`/v0/approvals/${approvalId}/reject`, { reason: 'rejected via playground' }),
+    onSuccess: () => {
+      setDecision('rejected');
+      setDecisionError(null);
+      qc.invalidateQueries({ queryKey: ['run-detail', runId] });
+    },
+    onError: (err: unknown) => setDecisionError((err as { message?: string })?.message ?? 'Reject failed'),
   });
 
   const proposalAction = useMemo<ProposalAction | null>(() => {
@@ -157,6 +186,64 @@ export default function InlineToolCallCard({ runId }: InlineToolCallCardProps) {
               ))}
             </ul>
           </Section>
+        )}
+
+        {/* APPROVE / REJECT (only when an approvalId is attached and the
+            user hasn't already decided) */}
+        {approvalId && decision === 'pending' && (
+          <Section label="Approval Required">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                data-testid="inline-tool-approve-btn"
+                onClick={() => approveMutation.mutate()}
+                disabled={approveMutation.isPending || rejectMutation.isPending}
+                className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#16a34a] px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm hover:bg-[#15803d] disabled:opacity-50"
+              >
+                {approveMutation.isPending ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <ThumbsUp className="w-3 h-3" />
+                )}
+                {approveMutation.isPending ? 'Approving…' : 'Approve'}
+              </button>
+              <button
+                type="button"
+                data-testid="inline-tool-reject-btn"
+                onClick={() => rejectMutation.mutate()}
+                disabled={approveMutation.isPending || rejectMutation.isPending}
+                className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#ece9e3] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#4f4a43] hover:bg-[#faf9f6] disabled:opacity-50"
+              >
+                {rejectMutation.isPending ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <ThumbsDown className="w-3 h-3" />
+                )}
+                {rejectMutation.isPending ? 'Rejecting…' : 'Reject'}
+              </button>
+            </div>
+            {decisionError && (
+              <p className="mt-2 text-[11px] text-red-500">{decisionError}</p>
+            )}
+          </Section>
+        )}
+
+        {approvalId && decision === 'approved' && (
+          <div
+            data-testid="inline-tool-approved-banner"
+            className="rounded-[8px] bg-[#dcfce7] px-3 py-2 text-[12px] text-[#15803d] flex items-center gap-1.5"
+          >
+            <CheckCircle className="w-3.5 h-3.5" /> Approved by you — run resumed.
+          </div>
+        )}
+
+        {approvalId && decision === 'rejected' && (
+          <div
+            data-testid="inline-tool-rejected-banner"
+            className="rounded-[8px] bg-[#fee2e2] px-3 py-2 text-[12px] text-[#991b1b] flex items-center gap-1.5"
+          >
+            <XCircle className="w-3.5 h-3.5" /> Rejected — run will be marked failed.
+          </div>
         )}
 
         {/* OUTPUTS (after run completes) */}

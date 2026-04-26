@@ -69,16 +69,18 @@ export function useCreateTool() {
 export function useCreateToolVersion(toolId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { version: string; contract_json: string }) => createToolVersion(toolId, data),
+    mutationFn: (data: { version: string; contract_json: string }) =>
+      createToolVersion(toolId, { version: data.version, contract: JSON.parse(data.contract_json) as Record<string, unknown> }),
     onSuccess: () => qc.invalidateQueries({ queryKey: toolKeys.versions(toolId) }),
   });
 }
 
-export function usePublishToolVersion(toolId: string) {
+export function usePublishToolVersion(toolId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (version: string) => publishToolVersion(toolId, version),
+    mutationFn: (version: string) => publishToolVersion(toolId ?? '', version),
     onSuccess: () => {
+      if (!toolId) return;
       qc.invalidateQueries({ queryKey: toolKeys.versions(toolId) });
       qc.invalidateQueries({ queryKey: toolKeys.list() });
       qc.invalidateQueries({ queryKey: toolKeys.detail(toolId) });
@@ -101,13 +103,18 @@ export function useValidateContract() {
 
 export function useUpdateTrustLevel() {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { toolId: string; version: string; trustLevel: TrustLevel }) =>
-      updateTrustLevel(data.toolId, data.version, data.trustLevel),
+  return useMutation<
+    unknown,
+    Error,
+    { toolId: string; version: string; trustLevel: TrustLevel; rationale?: string }
+  >({
+    mutationFn: (data) =>
+      updateTrustLevel(data.toolId, data.version, data.trustLevel, data.rationale),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: toolKeys.list() });
       qc.invalidateQueries({ queryKey: toolKeys.versions(variables.toolId) });
       qc.invalidateQueries({ queryKey: toolKeys.detailVersions(variables.toolId) });
+      qc.invalidateQueries({ queryKey: toolKeys.detailFull(variables.toolId) });
     },
   });
 }

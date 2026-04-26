@@ -12,6 +12,7 @@ import {
   Clock,
   FileText,
   Lightbulb,
+  Target,
   TrendingUp,
   Zap,
   Eye,
@@ -22,6 +23,9 @@ import { cn } from '@utils/cn';
 import Sidebar from '@components/layout/Sidebar';
 import { useUiStore } from '@store/uiStore';
 import { useBoard, useBoardSummary } from '@hooks/useBoards';
+import { useIntentList } from '@hooks/useIntents';
+import { useCardList } from '@hooks/useCards';
+import PlanGeneratorPanel from '@components/boards/PlanGeneratorPanel';
 import CardList from '@components/boards/cards/CardList';
 import CardDetail from '@components/boards/cards/CardDetail';
 import CreateCardModal from '@components/boards/cards/CreateCardModal';
@@ -32,6 +36,8 @@ import PlanViewer from '@components/boards/plans/PlanViewer';
 import ExecutePlanButton from '@components/boards/plans/ExecutePlanButton';
 import RecordsTab from '@components/boards/RecordsTab';
 import BoardAssistPanel from '@components/boards/BoardAssistPanel';
+import IntentSpecModal from '@components/boards/IntentSpecModal';
+import type { IntentSpec } from '@/types/intent';
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -131,6 +137,11 @@ export default function BoardDetailPage() {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [showCreateCard, setShowCreateCard] = useState(false);
   const [showPlanViewer, setShowPlanViewer] = useState<string | null>(null);
+  // ── D2: IntentSpec modal ──────────────────────────────
+  const [showIntentModal, setShowIntentModal] = useState(false);
+  const { data: intents = [] } = useIntentList(boardId);
+  // ── D3: PlanGeneratorPanel needs cards to drive the card-scoped plan generator
+  const { data: cards = [] } = useCardList(boardId);
 
   // Derive from summary
   const cardStats = summary?.card_stats ?? { total: 0, completed: 0, failed: 0, running: 0, pending: 0 };
@@ -234,6 +245,16 @@ export default function BoardDetailPage() {
               );
             })}
           </div>
+
+          {/* D2: open IntentSpec modal */}
+          <button
+            type="button"
+            onClick={() => setShowIntentModal(true)}
+            className="h-[34px] px-[12px] bg-[#ff9800] hover:bg-[#f57c00] text-white rounded-[8px] font-semibold text-[12px] flex items-center gap-[6px] transition-colors shadow-sm"
+          >
+            <Plus size={12} strokeWidth={2.5} />
+            New Intent
+          </button>
 
           <button className="h-[34px] px-[15px] border border-[#ff9800] text-[#ff9800] rounded-[8px] font-medium text-[12px] hover:bg-[#fff3e0] transition-colors">
             Evaluate Gates
@@ -391,9 +412,7 @@ export default function BoardDetailPage() {
             {activeTab === 'records' && boardId && <RecordsTab boardId={boardId} />}
 
             {activeTab === 'ai-assist' && boardId && (
-              <div className="max-w-[720px]">
-                <BoardAssistPanel boardId={boardId} />
-              </div>
+              <BoardAssistPanel boardId={boardId} />
             )}
           </div>
         </div>
@@ -432,6 +451,39 @@ export default function BoardDetailPage() {
             </div>
 
             <div className="h-[1px] bg-[#e8e8e8] mb-[20px]" />
+
+            {/* D2: IntentSpec list ─────────────────────────── */}
+            {boardId && (
+              <>
+                <IntentsPanel
+                  boardId={boardId}
+                  intents={intents}
+                  onCreate={() => setShowIntentModal(true)}
+                />
+                <div className="h-[1px] bg-[#e8e8e8] mb-[20px]" />
+              </>
+            )}
+
+            {/* D3: ExecutionPlan generator + DAG viewer ─────── */}
+            {boardId && (intents.length > 0 || cards.length > 0) && (
+              <>
+                <PlanGeneratorPanel
+                  boardId={boardId}
+                  intentSpecs={intents.map((i: IntentSpec) => ({
+                    id: i.id,
+                    name: i.goal || i.id,
+                  }))}
+                  cards={cards.map((c) => ({
+                    id: c.id,
+                    name: c.title || c.id,
+                    intent_spec_id: c.intent_spec_id,
+                  }))}
+                  cardId={selectedCardId ?? undefined}
+                  className="mb-[20px]"
+                />
+                <div className="h-[1px] bg-[#e8e8e8] mb-[20px]" />
+              </>
+            )}
 
             {/* Governance Status */}
             <div className="mb-[20px]">
@@ -575,7 +627,113 @@ export default function BoardDetailPage() {
           onClose={() => setShowCreateCard(false)}
         />
       )}
+
+      {/* D2: IntentSpec Modal */}
+      {boardId && (
+        <IntentSpecModal
+          open={showIntentModal}
+          onClose={() => setShowIntentModal(false)}
+          boardId={boardId}
+        />
+      )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// D2: Intents Panel — lists IntentSpecs attached to the board.
+// ---------------------------------------------------------------------------
+
+function IntentsPanel({
+  boardId,
+  intents,
+  onCreate,
+}: {
+  boardId: string;
+  intents: IntentSpec[];
+  onCreate: () => void;
+}) {
+  const navigate = useNavigate();
+
+  return (
+    <div className="mb-[20px]">
+      <div className="flex items-center justify-between mb-[10px]">
+        <span className="text-[10px] font-semibold text-[#acacac] uppercase tracking-[0.5px]">
+          INTENTS
+        </span>
+        <button
+          type="button"
+          onClick={onCreate}
+          className="text-[10px] font-medium text-[#ff9800] hover:text-[#f57c00] transition-colors flex items-center gap-[3px]"
+          aria-label="Create new IntentSpec"
+        >
+          <Plus size={10} strokeWidth={2.5} />
+          New
+        </button>
+      </div>
+
+      {intents.length === 0 ? (
+        <div className="rounded-[8px] border border-dashed border-[#e8e8e8] px-[12px] py-[14px] text-center">
+          <Target size={14} className="text-[#d0d0d0] mx-auto mb-[4px]" />
+          <p className="text-[10px] text-[#6b6b6b] leading-[14px]">
+            No intents yet. Click + New Intent to define this board&apos;s first goal.
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-[6px]">
+          {intents.map((intent) => (
+            <button
+              key={intent.id}
+              type="button"
+              onClick={() => {
+                // TODO(D7): navigate to /boards/:boardId/intents/:intentId once
+                // the card-linkage agent ships the intent detail page.
+                console.log('Intent clicked', intent.id);
+                navigate(`/boards/${boardId}/intents/${intent.id}`);
+              }}
+              className="w-full text-left bg-white border border-[#e8e8e8] hover:border-[#ff9800] rounded-[8px] px-[10px] py-[8px] transition-colors"
+            >
+              <div className="flex items-center justify-between gap-[6px] mb-[4px]">
+                <span className="text-[11px] font-semibold text-[#1a1a1a] truncate">
+                  {intent.goal || `Intent ${intent.id.slice(0, 8)}`}
+                </span>
+                <IntentStatusBadge status={intent.status} />
+              </div>
+              <div className="flex items-center justify-between gap-[6px]">
+                <span className="inline-flex items-center h-[18px] px-[6px] rounded-[4px] bg-[#fff3e0] text-[#ff9800] text-[9px] font-medium font-mono">
+                  {intent.intent_type}
+                </span>
+                <span className="text-[9px] text-[#acacac]">
+                  {new Date(intent.created_at).toLocaleDateString()}
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IntentStatusBadge({ status }: { status: string }) {
+  const config: Record<string, { bg: string; text: string }> = {
+    draft: { bg: 'bg-[#f0f0ec]', text: 'text-[#6b6b6b]' },
+    locked: { bg: 'bg-[#fff3e0]', text: 'text-[#ff9800]' },
+    active: { bg: 'bg-[#e3f2fd]', text: 'text-[#2196f3]' },
+    completed: { bg: 'bg-[#e8f5e9]', text: 'text-[#4caf50]' },
+    failed: { bg: 'bg-[#ffebee]', text: 'text-[#e74c3c]' },
+  };
+  const c = config[status] ?? { bg: 'bg-[#f0f0ec]', text: 'text-[#6b6b6b]' };
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center h-[16px] px-[6px] rounded-full text-[9px] font-medium capitalize shrink-0',
+        c.bg,
+        c.text,
+      )}
+    >
+      {status}
+    </span>
   );
 }
 
@@ -738,7 +896,8 @@ function CardsTab({ boardId, selectedCardId, onSelectCard, showPlanViewer, onSho
             </div>
           )}
 
-          {/* Evidence for selected card */}
+          {/* D4: Evidence for selected card. Already gated by selectedCardId
+              parent block (line 859), so cardId is always non-null here. */}
           <div className="bg-white rounded-[12px] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)] p-[20px]">
             <EvidencePanel cardId={selectedCardId} />
           </div>

@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ExternalLink, Play, Eye, GitBranch, DollarSign,
@@ -8,18 +8,33 @@ import {
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import { useUiStore } from '@store/uiStore';
-import { useTriggers, useCreateTrigger, useUpdateTrigger, useDeleteTrigger } from '@hooks/useWorkflow';
+import {
+  useWorkflow,
+  useWorkflowVersions,
+  useWorkflowWithVersions,
+  useTriggers,
+  useCreateTrigger,
+  useUpdateTrigger,
+  useDeleteTrigger,
+  useRunWorkflow,
+  useDeleteWorkflow,
+} from '@hooks/useWorkflow';
+import { useRunList } from '@hooks/useRuns';
+import { decodeDsl, type WorkflowDslNode, type WorkflowDslNodeType } from '@utils/workflowDsl';
+import { formatRelativeTime, formatDate } from '@utils/format';
+import type { WorkflowVersion, RawWorkflowVersion } from '@api/workflows';
+import type { RunEntry } from '@/types/run';
 import TriggerPanel from '@components/workflows/TriggerPanel';
 import type { WorkflowTrigger } from '@/types/workflow';
 
 // ── Types ────────────────────────────────────────────────────
 
-type RunStatus = 'running' | 'succeeded' | 'failed' | 'cancelled' | 'queued';
-type NodeType = 'trigger' | 'tool' | 'agent' | 'gate';
+type RunStatusUi = 'running' | 'succeeded' | 'failed' | 'cancelled' | 'queued';
+type NodeTypeUi = 'trigger' | 'tool' | 'agent' | 'gate';
 
 interface RunItem {
   id: string;
-  status: RunStatus;
+  status: RunStatusUi;
   nodes?: string;
   progress?: number;
   failedAt?: string;
@@ -31,7 +46,7 @@ interface RunItem {
 
 interface NodeItem {
   name: string;
-  type: NodeType;
+  type: NodeTypeUi;
   tags: string[];
   edges: number;
   avgDuration: string;
@@ -40,81 +55,182 @@ interface NodeItem {
 
 interface VersionItem {
   version: string;
-  status: 'published' | 'active' | 'deprecated';
+  status: 'published' | 'active' | 'deprecated' | 'draft' | 'compiled';
   label?: string;
   description: string;
   tags: string[];
   date: string;
 }
 
-// ── Mock Data ────────────────────────────────────────────────
+// ── Mappers ──────────────────────────────────────────────────
 
-// TODO(backend): replace this WORKFLOW mock with useWorkflow(workflowId) data.
-// Page UI is currently driven by this object literal across ~400 lines.
-const WORKFLOW = {
-  id: 'wf_demo',
-  name: 'FEA Validation Pipeline',
-  description: 'End-to-end finite-element analysis stress validation pipeline with automated mesh generation, FEA simulation, and evidence gating for structural compliance under ISO 13849.',
-  version: 'v3',
-  status: 'published' as const,
-  tags: ['Engineering', '5 nodes', 'Webhook trigger', 'ISO 13849'],
-  stats: {
-    totalRuns: 156,
-    successRate: 94,
-    avgDuration: '42s',
-    avgCost: '$1.85',
-    activeSince: 'Mar 30, 2026',
-    lastRun: '2 min ago',
-  },
-  owner: 'Santhosh',
-  project: 'Default Project',
+function toVersionItem(
+  v: WorkflowVersion,
+  isLatestPublished: boolean,
+): VersionItem {
+  // Active = the latest published version. Deprecated = older published.
+  let status: VersionItem['status'];
+  let description: string;
+  if (v.status === 'published') {
+    status = isLatestPublished ? 'active' : 'deprecated';
+    description = isLatestPublished ? 'Active published version' : 'Previously published version';
+  } else if (v.status === 'compiled') {
+    status = 'compiled';
+    description = 'Compiled (not yet published)';
+  } else {
+    status = 'draft';
+    description = 'Draft version';
+  }
+  return {
+    version: `v${v.version}`,
+    status,
+    description,
+    tags: [],
+    date: v.created_at ? formatDate(v.created_at) : '—',
+  };
+}
+
+function toRunItem(raw: RunEntry): RunItem {
+  // Map RunEntry.status (frontend RunStatus) to local UI status.
+  const statusMap: Record<string, RunStatusUi> = {
+    running: 'running',
+    succeeded: 'succeeded',
+    failed: 'failed',
+    cancelled: 'cancelled',
+    waiting: 'queued',
+  };
+  const status = statusMap[raw.status] ?? 'queued';
+  const durStr = raw.duration > 0
+    ? raw.duration < 60
+      ? `${raw.duration}s`
+      : `${Math.floor(raw.duration / 60)}m${raw.duration % 60 ? ` ${raw.duration % 60}s` : ''}`
+    : '';
+  return {
+    id: raw.id,
+    status,
+    nodes: raw.nodesTotal > 0 ? `${raw.nodesCompleted}/${raw.nodesTotal} nodes` : undefined,
+    duration: durStr,
+    cost: raw.costUsd > 0 ? `$${raw.costUsd.toFixed(2)}` : '',
+    time: raw.startedAt ? formatRelativeTime(raw.startedAt) : '—',
+  };
+}
+
+const NODE_KIND_TO_UI: Record<WorkflowDslNodeType, NodeTypeUi | null> = {
+  trigger: 'trigger',
+  tool: 'tool',
+  agent: 'agent',
+  gate: 'gate',
+  logic: 'tool',
+  data: 'tool',
+  stickyNote: null,
 };
 
-const VERSIONS: VersionItem[] = [
-  {
-    version: 'v3',
-    status: 'active',
-    label: 'Active',
-    description: 'Added Evidence Gate node and AI Optimizer agent integration',
-    tags: ['Gate node', 'diff path v1'],
-    date: 'Mar 28, 2026',
-  },
-  {
-    version: 'v2',
-    status: 'published',
-    description: 'Upgraded FEA Solver to v2.1 with nonlinear support',
-    tags: ['Solver minor', 'diff path v1'],
-    date: 'Mar 23, 2026',
-  },
-  {
-    version: 'v1',
-    status: 'deprecated',
-    description: 'Initial release with basic 3-node pipeline',
-    tags: [],
-    date: 'Mar 15, 2026',
-  },
-];
+function humanizeNodeId(id: string): string {
+  return id
+    .replace(/^node_\d+_/, '')
+    .split(/[_-]/)
+    .filter(Boolean)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(' ') || id;
+}
 
-const RUNS: RunItem[] = [
-  { id: 'run_a1b2c3', status: 'running', nodes: '5/5 nodes', progress: 60, duration: '11..31', cost: '', time: '2m ago' },
-  { id: 'run_x4k9d8', status: 'succeeded', nodes: '156 nodes', duration: '34..12', cost: '$1.24', time: '5m ago' },
-  { id: 'run_d3f5g6', status: 'failed', failedAt: 'Failed at FEA Solver', duration: '11..16', cost: '$1.05', time: '3 hrs' },
-  { id: 'run_p2r5t9', status: 'succeeded', duration: '11..41', cost: '', time: '1d ago' },
-  { id: 'run_b7f9p2', status: 'cancelled', duration: '41..21', cost: '', time: '2d ago' },
-  { id: 'run_c2d4f5', status: 'queued', queueMsg: 'Queue: approval pending', duration: '', cost: '', time: 'Yesterday' },
-];
+export function toNodeItem(rawNode: WorkflowDslNode, edgeCount: number): NodeItem | null {
+  const ui = NODE_KIND_TO_UI[rawNode.type];
+  if (!ui) return null;
+  const name = rawNode.label || humanizeNodeId(rawNode.id);
+  const tags: string[] = [];
+  if (rawNode.type === 'tool' && (rawNode as { tool?: string }).tool) {
+    tags.push((rawNode as { tool?: string }).tool!);
+  }
+  if (rawNode.type === 'agent' && (rawNode as { agent?: string }).agent) {
+    tags.push((rawNode as { agent?: string }).agent!);
+  }
+  return {
+    name,
+    type: ui,
+    tags,
+    edges: edgeCount,
+    avgDuration: '',
+  };
+}
 
-const NODES: NodeItem[] = [
-  { name: 'Webhook', type: 'trigger', tags: ['HTTPS', 'POST /v0/...'], edges: 1, avgDuration: '4,200ms' },
-  { name: 'Mesh Generator', type: 'tool', tags: ['70th-11r0127.1'], edges: 1, avgDuration: '7,200ms' },
-  { name: 'FEA Solver', type: 'tool', tags: ['70th-v1d05ff_1'], edges: 1, avgDuration: '14,000ms', note: 'Longest runtime; may be improved' },
-  { name: 'AI Optimizer', type: 'agent', tags: ['TASK-LINECV'], edges: 1, avgDuration: '1,790ms' },
-  { name: 'Evidence Gate', type: 'gate', tags: ['0 requirements'], edges: 1, avgDuration: '' },
-];
+/**
+ * Pick the version to summarize: latest published > highest version.
+ * Returns null if no version has a DSL.
+ */
+export function pickActiveVersion(
+  versions: RawWorkflowVersion[] | undefined,
+): RawWorkflowVersion | null {
+  if (!versions || versions.length === 0) return null;
+  const sorted = [...versions].sort((a, b) => b.version - a.version);
+  return sorted.find((v) => v.status === 'published') ?? sorted[0] ?? null;
+}
+
+/**
+ * Derive node summary list from a DSL. Counts outgoing edges per node,
+ * preferring the explicit `edges` array but falling back to inverse
+ * `depends_on` for legacy workflows.
+ */
+export function deriveNodeItems(version: RawWorkflowVersion | null): NodeItem[] | 'error' {
+  if (!version || !version.dsl) return [];
+  const dsl = decodeDsl(version.dsl);
+  if (!dsl) return 'error';
+  const nodes = dsl.nodes ?? [];
+  if (nodes.length === 0) return [];
+
+  // Count outgoing edges per node id.
+  const outCount = new Map<string, number>();
+  if (dsl.edges && dsl.edges.length > 0) {
+    dsl.edges.forEach((e) => {
+      outCount.set(e.source, (outCount.get(e.source) ?? 0) + 1);
+    });
+  } else {
+    // Legacy: derive from depends_on (inverse)
+    nodes.forEach((n) => {
+      (n.depends_on ?? []).forEach((parent) => {
+        outCount.set(parent, (outCount.get(parent) ?? 0) + 1);
+      });
+    });
+  }
+
+  return nodes
+    .map((n) => toNodeItem(n, outCount.get(n.id) ?? 0))
+    .filter((x): x is NodeItem => x !== null);
+}
+
+// ── Placeholder data (versions/runs/nodes still backend-pending) ─────
+
+interface WorkflowHeader {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  status: 'published' | 'draft';
+  tags: string[];
+  stats: {
+    totalRuns: string;
+    successRate: string;
+    avgDuration: string;
+    avgCost: string;
+    activeSince: string;
+    lastRun: string;
+  };
+  owner: string;
+  project: string;
+}
+
+const EMPTY_STATS: WorkflowHeader['stats'] = {
+  totalRuns: '—',
+  successRate: '—',
+  avgDuration: '—',
+  avgCost: '—',
+  activeSince: '—',
+  lastRun: '—',
+};
 
 // ── Status Config ────────────────────────────────────────────
 
-const RUN_STATUS: Record<RunStatus, { bg: string; text: string; label: string }> = {
+const RUN_STATUS: Record<RunStatusUi, { bg: string; text: string; label: string }> = {
   running:   { bg: 'bg-[#e3f2fd]', text: 'text-[#2196f3]', label: 'Running' },
   succeeded: { bg: 'bg-[#e8f5e9]', text: 'text-[#4caf50]', label: 'Succeeded' },
   failed:    { bg: 'bg-[#ffebee]', text: 'text-[#e74c3c]', label: 'Failed' },
@@ -122,7 +238,7 @@ const RUN_STATUS: Record<RunStatus, { bg: string; text: string; label: string }>
   queued:    { bg: 'bg-[#fff3e0]', text: 'text-[#ff9800]', label: 'Queued' },
 };
 
-const NODE_TYPE_STYLE: Record<NodeType, { bg: string; text: string }> = {
+const NODE_TYPE_STYLE: Record<NodeTypeUi, { bg: string; text: string }> = {
   trigger: { bg: 'bg-[#e3f2fd]', text: 'text-[#2196f3]' },
   tool:    { bg: 'bg-[#fff3e0]', text: 'text-[#ff9800]' },
   agent:   { bg: 'bg-[#f3e5f9]', text: 'text-[#9c27b0]' },
@@ -158,7 +274,8 @@ function SectionHeader({ icon: Icon, title, right }: { icon: typeof Activity; ti
 
 // ── Mini DAG Visualization ───────────────────────────────────
 
-function MiniDAG() {
+function MiniDAG({ workflowId }: { workflowId: string }) {
+  const navigate = useNavigate();
   const nodes = [
     { name: 'Webhook', x: 40, color: '#2196f3' },
     { name: 'Mesh Gen', x: 190, color: '#ff9800' },
@@ -171,7 +288,12 @@ function MiniDAG() {
     <div className="bg-white rounded-[12px] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)] p-[20px] overflow-x-auto">
       <div className="flex items-center justify-between mb-[8px]">
         <span className="text-[9px] font-semibold uppercase tracking-[0.5px] text-[#acacac]">Node Flow Preview</span>
-        <button className="text-[11px] text-[#2196f3] hover:underline">Open full editor &rarr;</button>
+        <button
+          onClick={() => navigate(`/workflow-studio/${workflowId}`)}
+          className="text-[11px] text-[#2196f3] hover:underline"
+        >
+          Open full editor &rarr;
+        </button>
       </div>
       <svg width="700" height="80" viewBox="0 0 700 80" className="w-full max-w-[700px]">
         {/* Connection lines */}
@@ -194,6 +316,22 @@ function MiniDAG() {
   );
 }
 
+function SkeletonRows({ count = 3, height = 44 }: { count?: number; height?: number }) {
+  return (
+    <div className="flex flex-col" aria-hidden="true">
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="border-b border-[#fafaf8] last:border-b-0 px-[4px] flex items-center"
+          style={{ height }}
+        >
+          <div className="h-[10px] w-full max-w-[400px] bg-[#f0f0ec] rounded animate-pulse" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Main Page ────────────────────────────────────────────────
 
 export default function WorkflowDetailPage() {
@@ -204,10 +342,66 @@ export default function WorkflowDetailPage() {
 
   // useTriggers/useCreateTrigger... all internally enabled-guard on truthy id.
   const workflowId = id ?? '';
+  const { data: workflowDetail, isLoading: workflowLoading, error: workflowError } = useWorkflow(workflowId);
+  const { data: versionsData, isLoading: versionsLoading, error: versionsError } = useWorkflowVersions(workflowId);
+  const { data: envelope, isLoading: envelopeLoading, error: envelopeError } = useWorkflowWithVersions(workflowId);
+  const { data: runsData, isLoading: runsLoading, error: runsError } = useRunList(workflowId);
   const { data: triggerEntries } = useTriggers(workflowId);
+
+  // Derive view-models
+  const versionItems: VersionItem[] = useMemo(() => {
+    const list = versionsData ?? [];
+    if (list.length === 0) return [];
+    // Latest published = highest version with status='published'
+    const sorted = [...list].sort((a, b) => b.version - a.version);
+    const latestPub = sorted.find((v) => v.status === 'published');
+    return sorted.map((v) => toVersionItem(v, !!latestPub && v.id === latestPub.id));
+  }, [versionsData]);
+
+  const runItems: RunItem[] = useMemo(() => {
+    const list = runsData ?? [];
+    return [...list]
+      .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
+      .slice(0, 10)
+      .map(toRunItem);
+  }, [runsData]);
+
+  const nodeItemsResult = useMemo(() => {
+    const active = pickActiveVersion(envelope?.versions);
+    return deriveNodeItems(active);
+  }, [envelope]);
+  const nodesError = nodeItemsResult === 'error';
+  const nodeItems: NodeItem[] = nodesError ? [] : nodeItemsResult;
   const createTriggerMutation = useCreateTrigger(workflowId);
   const updateTriggerMutation = useUpdateTrigger(workflowId);
   const deleteTriggerMutation = useDeleteTrigger(workflowId);
+  const runWorkflowMutation = useRunWorkflow(workflowId);
+  const deleteWorkflowMutation = useDeleteWorkflow();
+
+  const handleStartRun = useCallback(() => {
+    if (!workflowId || runWorkflowMutation.isPending) return;
+    runWorkflowMutation.mutate(undefined, {
+      onSuccess: ({ runId }) => {
+        navigate(`/workflow-runs/${runId}`);
+      },
+      onError: (err: unknown) => {
+        const msg = (err as { message?: string })?.message ?? 'Failed to start run';
+        window.alert(msg);
+      },
+    });
+  }, [workflowId, runWorkflowMutation, navigate]);
+
+  const handleDeleteWorkflow = useCallback(() => {
+    if (!workflowId || deleteWorkflowMutation.isPending) return;
+    if (!window.confirm('Permanently delete this workflow? This cannot be undone.')) return;
+    deleteWorkflowMutation.mutate(workflowId, {
+      onSuccess: () => navigate('/workflows'),
+      onError: (err: unknown) => {
+        const msg = (err as { message?: string })?.message ?? 'Failed to delete workflow';
+        window.alert(msg);
+      },
+    });
+  }, [workflowId, deleteWorkflowMutation, navigate]);
 
   // Map API trigger entries to WorkflowTrigger shape for TriggerPanel
   const triggers: WorkflowTrigger[] = (triggerEntries ?? []).map((t) => ({
@@ -254,8 +448,38 @@ export default function WorkflowDetailPage() {
     hideBottomBar();
   }, [hideBottomBar, setSidebarContentType]);
 
-  const wf = WORKFLOW;
+  const latestPublishedVersion = (versionsData ?? []).find((v) => v.status === 'published');
+  const versionLabel = latestPublishedVersion
+    ? `v${latestPublishedVersion.version}`
+    : (versionsData && versionsData.length > 0)
+      ? `v${Math.max(...versionsData.map((v) => v.version))}`
+      : '—';
+
+  const wf: WorkflowHeader = {
+    id: workflowDetail?.id ?? workflowId,
+    name: workflowDetail?.name ?? (workflowLoading ? 'Loading…' : 'Workflow'),
+    description: workflowDetail?.description ?? '',
+    version: versionLabel,
+    status: latestPublishedVersion ? 'published' : 'draft',
+    tags: [
+      ...(workflowDetail?.steps?.length ? [`${workflowDetail.steps.length} nodes`] : []),
+    ],
+    stats: EMPTY_STATS,
+    owner: workflowDetail?.ownerName || '—',
+    project: workflowDetail?.projectId || '—',
+  };
   const s = wf.stats;
+
+  if (workflowError) {
+    return (
+      <div className="mx-auto w-full max-w-[1116px] px-4 pt-12 text-center">
+        <h2 className="text-[15px] font-semibold text-[#1a1a1a]">Workflow not found</h2>
+        <p className="mt-2 text-[12px] text-[#6b6b6b]">
+          {(workflowError as { message?: string })?.message ?? `Could not load workflow ${workflowId}`}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-[1116px] px-4 pb-16 pt-0 flex flex-col gap-[16px]">
@@ -274,13 +498,24 @@ export default function WorkflowDetailPage() {
           </span>
         </div>
         <div className="flex items-center gap-[8px]">
-          <button className="h-[30px] px-[14px] rounded-[8px] bg-[#2d2d2d] text-white text-[11px] font-medium flex items-center gap-[6px] hover:bg-[#1a1a1a] transition-colors">
+          <button
+            onClick={() => navigate(`/workflow-studio/${workflowId}`)}
+            className="h-[30px] px-[14px] rounded-[8px] bg-[#2d2d2d] text-white text-[11px] font-medium flex items-center gap-[6px] hover:bg-[#1a1a1a] transition-colors"
+          >
             <ExternalLink size={12} /> Open Editor
           </button>
-          <button className="h-[30px] px-[14px] rounded-[8px] bg-[#4caf50] text-white text-[11px] font-medium flex items-center gap-[6px] hover:bg-[#43a047] transition-colors">
-            <Play size={12} fill="white" /> Start Run
+          <button
+            onClick={handleStartRun}
+            disabled={runWorkflowMutation.isPending}
+            className="h-[30px] px-[14px] rounded-[8px] bg-[#4caf50] text-white text-[11px] font-medium flex items-center gap-[6px] hover:bg-[#43a047] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <Play size={12} fill="white" /> {runWorkflowMutation.isPending ? 'Starting…' : 'Start Run'}
           </button>
-          <button className="h-[30px] px-[14px] rounded-[8px] border border-[#e8e8e8] text-[11px] font-medium text-[#6b6b6b] flex items-center gap-[6px] hover:bg-[#f5f5f0] transition-colors">
+          <button
+            disabled
+            title="Deactivate is not yet wired to the backend"
+            className="h-[30px] px-[14px] rounded-[8px] border border-[#e8e8e8] text-[11px] font-medium text-[#6b6b6b] flex items-center gap-[6px] hover:bg-[#f5f5f0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             Deactivate
           </button>
           <div className="w-[28px] h-[28px] rounded-full bg-[#2d2d2d] flex items-center justify-center text-white text-[11px] font-semibold">S</div>
@@ -316,7 +551,10 @@ export default function WorkflowDetailPage() {
             >
               <ExternalLink size={14} /> Open Editor
             </button>
-            <button className="h-[36px] px-[20px] rounded-[8px] border border-[#e8e8e8] text-[12px] font-medium text-[#6b6b6b] flex items-center gap-[8px] hover:bg-[#f5f5f0] transition-colors">
+            <button
+              onClick={() => navigate('/workflow-runs')}
+              className="h-[36px] px-[20px] rounded-[8px] border border-[#e8e8e8] text-[12px] font-medium text-[#6b6b6b] flex items-center gap-[8px] hover:bg-[#f5f5f0] transition-colors"
+            >
               <Eye size={14} /> View Runs
             </button>
             <button 
@@ -363,7 +601,7 @@ export default function WorkflowDetailPage() {
       {/* ═══════════════════════════════════════════
           MINI DAG
          ═══════════════════════════════════════════ */}
-      <MiniDAG />
+      <MiniDAG workflowId={workflowId} />
 
       {/* ═══════════════════════════════════════════
           STATS CARDS ROW
@@ -395,13 +633,20 @@ export default function WorkflowDetailPage() {
           title="Version History"
           right={
             <div className="flex items-center gap-[12px]">
-              <span className="text-[10px] text-[#acacac]">3 versions</span>
+              <span className="text-[10px] text-[#acacac]">{versionItems.length} version{versionItems.length === 1 ? '' : 's'}</span>
               <button className="text-[11px] text-[#9c27b0] font-medium hover:underline">+ New Version</button>
             </div>
           }
         />
+        {versionsLoading ? (
+          <SkeletonRows count={3} height={56} />
+        ) : versionsError ? (
+          <p className="text-[12px] text-[#e74c3c]">Unable to load versions.</p>
+        ) : versionItems.length === 0 ? (
+          <p className="text-[12px] text-[#6b6b6b]">No versions yet — save the editor to create v1.</p>
+        ) : (
         <div className="relative pl-[24px] border-l-[2px] border-[#f0f0ec] ml-[7px] flex flex-col gap-[24px]">
-          {VERSIONS.map((ver) => {
+          {versionItems.map((ver) => {
             const isActive = ver.status === 'active';
             const isDeprecated = ver.status === 'deprecated';
             return (
@@ -446,6 +691,7 @@ export default function WorkflowDetailPage() {
             );
           })}
         </div>
+        )}
       </section>
 
       {/* ═══════════════════════════════════════════
@@ -455,13 +701,34 @@ export default function WorkflowDetailPage() {
         <SectionHeader
           icon={Play}
           title="Recent Runs"
-          right={<button className="text-[11px] text-[#2196f3] font-medium hover:underline flex items-center gap-[4px]">View all 156 runs <ArrowRight size={12} /></button>}
+          right={
+            <button
+              onClick={() => navigate('/workflow-runs')}
+              className="text-[11px] text-[#2196f3] font-medium hover:underline flex items-center gap-[4px]"
+            >
+              View all runs <ArrowRight size={12} />
+            </button>
+          }
         />
+        {runsLoading ? (
+          <SkeletonRows count={3} />
+        ) : runsError ? (
+          <p className="text-[12px] text-[#e74c3c]">Unable to load runs.</p>
+        ) : runItems.length === 0 ? (
+          <p className="text-[12px] text-[#6b6b6b]">No runs yet — click Run to start.</p>
+        ) : (
         <div className="flex flex-col">
-          {RUNS.map((run) => {
+          {runItems.map((run) => {
             const cfg = RUN_STATUS[run.status];
             return (
-              <div key={run.id} className="flex items-center gap-[12px] h-[44px] border-b border-[#fafaf8] last:border-b-0 px-[4px]">
+              <div
+                key={run.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate(`/workflow-runs/${run.id}`)}
+                onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/workflow-runs/${run.id}`); }}
+                className="flex items-center gap-[12px] h-[44px] border-b border-[#fafaf8] last:border-b-0 px-[4px] cursor-pointer hover:bg-[#fafaf8]"
+              >
                 {/* Status dot */}
                 <CircleDot size={14} className={cfg.text} />
                 {/* Run ID */}
@@ -500,15 +767,25 @@ export default function WorkflowDetailPage() {
             );
           })}
         </div>
+        )}
       </section>
 
       {/* ═══════════════════════════════════════════
           NODE BREAKDOWN
          ═══════════════════════════════════════════ */}
       <section className="bg-white rounded-[12px] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)] p-[24px]">
-        <SectionHeader icon={Activity} title="Node Breakdown" right={<span className="text-[10px] text-[#acacac]">5 nodes</span>} />
+        <SectionHeader icon={Activity} title="Node Breakdown" right={<span className="text-[10px] text-[#acacac]">{nodeItems.length} node{nodeItems.length === 1 ? '' : 's'}</span>} />
+        {envelopeLoading ? (
+          <SkeletonRows count={3} />
+        ) : envelopeError ? (
+          <p className="text-[12px] text-[#e74c3c]">Unable to load workflow envelope.</p>
+        ) : nodesError ? (
+          <p className="text-[12px] text-[#6b6b6b]">Unable to load nodes.</p>
+        ) : nodeItems.length === 0 ? (
+          <p className="text-[12px] text-[#6b6b6b]">No nodes yet — open the editor to add nodes.</p>
+        ) : (
         <div className="flex flex-col">
-          {NODES.map((node) => {
+          {nodeItems.map((node) => {
             const style = NODE_TYPE_STYLE[node.type];
             return (
               <div key={node.name} className="flex items-center gap-[12px] h-[44px] border-b border-[#fafaf8] last:border-b-0 px-[4px]">
@@ -547,6 +824,7 @@ export default function WorkflowDetailPage() {
             );
           })}
         </div>
+        )}
       </section>
 
       {/* ═══════════════════════════════════════════
@@ -683,8 +961,12 @@ export default function WorkflowDetailPage() {
               Permanently delete this workflow and all its versions. Active triggers will be deactivated. Existing run history will be preserved.
             </p>
           </div>
-          <button className="h-[36px] px-[18px] rounded-[8px] bg-[#e74c3c] text-white text-[12px] font-semibold flex items-center gap-[6px] hover:bg-[#c62828] transition-colors shrink-0">
-            <Trash2 size={14} /> Delete Workflow
+          <button
+            onClick={handleDeleteWorkflow}
+            disabled={deleteWorkflowMutation.isPending}
+            className="h-[36px] px-[18px] rounded-[8px] bg-[#e74c3c] text-white text-[12px] font-semibold flex items-center gap-[6px] hover:bg-[#c62828] transition-colors shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <Trash2 size={14} /> {deleteWorkflowMutation.isPending ? 'Deleting…' : 'Delete Workflow'}
           </button>
         </div>
       </section>

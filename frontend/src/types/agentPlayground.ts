@@ -12,6 +12,18 @@ export interface AgentSession {
   status: 'active' | 'closed' | 'expired';
   created_at: string;
   expires_at: string;
+  /** Server-derived metrics, returned only by GET /v0/agents/{id}/sessions/{sid}.
+   *  Optional fields are omitted (not zeroed) when the backend can't compute them
+   *  — that's what lets LiveMetrics render "—" instead of "$0.00". */
+  metrics?: BackendSessionMetrics;
+}
+
+export interface BackendSessionMetrics {
+  iterations: number;
+  total_cost_usd?: number;
+  budget_remaining_usd?: number;
+  duration_seconds?: number;
+  timeout_seconds?: number;
 }
 
 // Raw backend shape from context._decision_trace
@@ -54,6 +66,9 @@ export interface ChatMessage {
   toolCallProposal?: ToolCallProposal;
   /** Set when the assistant invoked a tool — drives inline tool-call card. */
   runId?: string;
+  /** Set when the dispatched run requires manual approval. Drives inline
+   *  Approve / Reject buttons in InlineToolCallCard. */
+  approvalId?: string;
 }
 
 export interface DecisionTraceEntry {
@@ -65,12 +80,14 @@ export interface DecisionTraceEntry {
   stepType?: 'scoring' | 'selection' | 'execution' | 'result' | 'replan';
 }
 
+/** Frontend-shaped metrics: undefined = "absent" (renders as —),
+ *  number = real value (including legitimate zeros). */
 export interface AgentMetrics {
-  iterations: { current: number; max: number | null };
-  totalCost: number | null;
-  budgetRemaining: number | null;
-  duration: number | null;
-  timeout: number | null;
+  iterations: { current: number | undefined; max: number | null };
+  totalCost: number | undefined;
+  budgetRemaining: number | undefined;
+  duration: number | undefined;
+  timeout: number | undefined;
 }
 
 export interface PolicyStatus {

@@ -8,6 +8,7 @@ import DecisionTraceTimeline from '@components/agents/DecisionTraceTimeline';
 import LiveMetrics from '@components/agents/LiveMetrics';
 import PolicyStatusCard from '@components/agents/PolicyStatusCard';
 import ScoringBreakdownPanel from '@components/agents/ScoringBreakdownPanel';
+import RunOutputsPanel from '@components/agents/execution/RunOutputsPanel';
 import { cn } from '@utils/cn';
 
 const INSPECTOR_TABS = [
@@ -22,6 +23,7 @@ export default function InspectorPanel() {
   const storeAgentId = useAgentPlaygroundStore((s) => s.activeAgentId);
   const agentId = storeAgentId ?? paramAgentId ?? null;
   const activeSessionId = useAgentPlaygroundStore((s) => s.activeSessionId);
+  const chatRunId = useAgentPlaygroundStore((s) => s.chatRunId);
   const [activeTab, setActiveTab] = useState<InspectorTab>('overview');
 
   const { data: activeSession } = useSession(agentId ?? '', activeSessionId);
@@ -125,6 +127,17 @@ export default function InspectorPanel() {
           <div className="p-3 border-b border-cds-border-subtle">
             <LiveMetrics metrics={metricsData} />
           </div>
+
+          {/* RUN OUTPUTS — surfaces post-run artifacts when the most recent
+              tool dispatch produced a run id. Hidden until a run starts. */}
+          {chatRunId && (
+            <div className="p-3 border-b border-cds-border-subtle">
+              <p className="text-[10px] font-medium tracking-wider text-cds-text-secondary uppercase mb-2">
+                LATEST RUN
+              </p>
+              <RunOutputsPanel runId={chatRunId} />
+            </div>
+          )}
 
           {/* POLICY STATUS */}
           <div className="p-3">

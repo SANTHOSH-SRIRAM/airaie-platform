@@ -11,7 +11,8 @@ import {
 import { useToolList } from '@hooks/useTools';
 import { useAuth } from '@contexts/AuthContext';
 import { listMemories } from '@api/agentMemory';
-import EvalTab from '@components/agents/eval/EvalTab';
+// E-Evals: panel composes case list + create modal + run history + per-run detail.
+import EvalRunnerPanel from '@components/agents/eval/EvalRunnerPanel';
 import RunsTab from '@components/agents/runs/RunsTab';
 import type { AgentSpec, AgentToolPermission } from '@api/agents';
 import {
@@ -687,9 +688,12 @@ export default function AgentStudioPage() {
           <section className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[20px] border border-[#ece9e3] bg-white shadow-[0px_1px_10px_0px_rgba(0,0,0,0.05)]">
             <div className="h-full overflow-y-auto px-6 pb-28 pt-6 scrollbar-hide lg:px-7">
               {activeTab === 'evals' && agentId && (
+                // E-Evals: full eval runner UI.
                 <div className="space-y-4">
-                  <SectionLabel>Evals</SectionLabel>
-                  <EvalTab agentId={agentId} />
+                  <EvalRunnerPanel
+                    agentId={agentId}
+                    agentVersion={latestVersion?.version}
+                  />
                 </div>
               )}
               {activeTab === 'runs' && (

@@ -35,17 +35,30 @@ export const ROUTES = {
   RELEASE_PACKET: '/boards/:id/release',
   WORKFLOW_STUDIO: '/workflow-studio',
   AGENT_STUDIO: '/agent-studio',
+
+  // Admin (TODO(Phase F): gate behind admin role)
+  ADMIN_LLM_PROVIDERS: '/admin/llm-providers',
+  ADMIN_AUDIT: '/admin/audit',
+  ADMIN_COST: '/admin/cost',
 } as const;
 
-/** Top navigation page tabs — order matches tab bar left-to-right */
+/** Top navigation page tabs — order matches tab bar left-to-right.
+ *  Order follows the user journey, not the dependency graph:
+ *    1. Dashboard — situational awareness, always-home
+ *    2. Workflows — the primary verb (do the work)
+ *    3. Boards    — execute → govern progression (govern the work)
+ *    4. Agents    — intelligence layer used inside workflows
+ *    5. Tools     — infrastructure / catalog
+ *    6. Artifacts — data trail, rarely an entry point
+ *  Approvals is intentionally NOT a top-level tab — it's an inbox surface
+ *  exposed via the bell icon and inside Boards detail. */
 export const PAGE_TABS = [
   { label: 'Dashboard', path: ROUTES.DASHBOARD, matchPrefix: '/dashboard' },
   { label: 'Workflows', path: ROUTES.WORKFLOWS, matchPrefix: '/workflow' },
+  { label: 'Boards', path: ROUTES.BOARDS, matchPrefix: '/boards' },
   { label: 'Agents', path: ROUTES.AGENTS, matchPrefix: '/agent' },
   { label: 'Tools', path: ROUTES.TOOLS, matchPrefix: '/tools' },
-  { label: 'Boards', path: ROUTES.BOARDS, matchPrefix: '/boards' },
   { label: 'Artifacts', path: ROUTES.ARTIFACTS, matchPrefix: '/artifacts' },
-  { label: 'Approvals', path: ROUTES.APPROVALS, matchPrefix: '/approvals' },
 ] as const;
 
 /** Map route prefixes to sidebar content types */

@@ -59,8 +59,8 @@ export default function DataTable({ data, maxRows = 100 }: DataTableProps) {
   const sortedRows = useMemo(() => {
     if (!sortColumn) return rows;
     const sorted = [...rows].sort((a, b) => {
-      const av = a[sortColumn];
-      const bv = b[sortColumn];
+      const av = (a as Record<string, unknown>)[sortColumn];
+      const bv = (b as Record<string, unknown>)[sortColumn];
       if (av === bv) return 0;
       if (av === null || av === undefined) return 1;
       if (bv === null || bv === undefined) return -1;
@@ -137,9 +137,9 @@ export default function DataTable({ data, maxRows = 100 }: DataTableProps) {
                     key={col}
                     className="group relative max-w-[240px] truncate px-3 py-1.5 text-[#1a1a1a]"
                   >
-                    <CellValue value={row[col]} />
+                    <CellValue value={(row as Record<string, unknown>)[col]} />
                     <button
-                      onClick={() => handleCopyCell(cellKey, row[col])}
+                      onClick={() => handleCopyCell(cellKey, (row as Record<string, unknown>)[col])}
                       className="invisible absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-[#949494] hover:text-[#1a1a1a] group-hover:visible"
                       aria-label="Copy value"
                     >
