@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ChevronRight, Loader2, MoreHorizontal, Play, Pause, Sparkles, Settings2 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import { useUpdateCard } from '@hooks/useCards';
@@ -139,6 +139,8 @@ interface CardTopBarProps {
 export default function CardTopBar({ card, board }: CardTopBarProps) {
   const navigate = useNavigate();
   const updateCard = useUpdateCard(card.id, card.board_id);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const onCanvas = searchParams.get('canvas') === '1';
 
   // Pull the same plan + intent the body sections use; React Query keeps the
   // cache shared so we don't refetch.
@@ -297,6 +299,16 @@ export default function CardTopBar({ card, board }: CardTopBarProps) {
 
       {/* ── Right: Save (when dirty) · Run · ⋯ ──────────────── */}
       <div className="flex items-center gap-[8px] shrink-0">
+        {!onCanvas && (
+          <button
+            type="button"
+            onClick={() => setSearchParams({ canvas: '1' })}
+            title="Open this card in the canvas (Tiptap editor)"
+            className="text-[11px] text-[#9b978f] hover:text-[#1a1a1a] hover:underline"
+          >
+            Try canvas →
+          </button>
+        )}
         {isDirty && (
           <button
             type="button"

@@ -29,8 +29,8 @@
 //   one release window. Non-`analysis` card types continue to show the
 //   side-sheet via `UnsupportedCardTypeFallback`.
 
-import { useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useMemo } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useCard } from '@hooks/useCards';
 import { useBoard } from '@hooks/useBoards';
 import { useIntent } from '@hooks/useIntents';
@@ -57,6 +57,10 @@ import UnsupportedCardTypeFallback from '@components/cards/UnsupportedCardTypeFa
 import type { Card } from '@/types/card';
 import type { IntentSpec } from '@/types/intent';
 import type { RunDetail } from '@/types/run';
+
+// Phase 10 — Card Canvas, behind `?canvas=1`. Lazy-loaded so the Tiptap
+// editor chunk only enters the bundle when the user opens the canvas.
+const CardCanvasPage = lazy(() => import('./CardCanvasPage'));
 
 // ---------------------------------------------------------------------------
 // computeLifecycleStage — pure helper. Determines which sections to render
@@ -102,9 +106,20 @@ export function computeLifecycleStage(
 
 export default function CardDetailPage() {
   const { cardId } = useParams<{ cardId: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const setSidebarContentType = useUiStore((s) => s.setSidebarContentType);
   const hideBottomBar = useUiStore((s) => s.hideBottomBar);
+
+  // Phase 10 — `?canvas=1` opts the user into the Tiptap canvas. The chunk
+  // is lazy-imported so non-canvas Card opens don't pay for the editor.
+  if (searchParams.get('canvas') === '1') {
+    return (
+      <Suspense fallback={<PageSkeleton />}>
+        <CardCanvasPage />
+      </Suspense>
+    );
+  }
 
   const { data: card, isLoading: cardLoading, error: cardError, refetch: refetchCard } = useCard(cardId);
   const { data: board, isLoading: boardLoading } = useBoard(card?.board_id);
