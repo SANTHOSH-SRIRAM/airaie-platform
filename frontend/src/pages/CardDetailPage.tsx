@@ -113,13 +113,10 @@ export default function CardDetailPage() {
 
   // Phase 10 — `?canvas=1` opts the user into the Tiptap canvas. The chunk
   // is lazy-imported so non-canvas Card opens don't pay for the editor.
-  if (searchParams.get('canvas') === '1') {
-    return (
-      <Suspense fallback={<PageSkeleton />}>
-        <CardCanvasPage />
-      </Suspense>
-    );
-  }
+  // NOTE: this dispatch must happen as a *render-tree* delegation, not an
+  // early return before the other hooks, otherwise React's rules-of-hooks
+  // breaks (different hook count per render).
+  const onCanvas = searchParams.get('canvas') === '1';
 
   const { data: card, isLoading: cardLoading, error: cardError, refetch: refetchCard } = useCard(cardId);
   const { data: board, isLoading: boardLoading } = useBoard(card?.board_id);
@@ -161,6 +158,18 @@ export default function CardDetailPage() {
       setSidebarContentType('navigation');
     };
   }, [setSidebarContentType, hideBottomBar]);
+
+  // Phase 10 canvas dispatch — placed AFTER all hooks so rules-of-hooks
+  // (consistent hook count per render) is preserved. The data fetches
+  // above are cached by React Query and reused inside CardCanvasPage,
+  // so the work is not wasted.
+  if (onCanvas) {
+    return (
+      <Suspense fallback={<PageSkeleton />}>
+        <CardCanvasPage />
+      </Suspense>
+    );
+  }
 
   // ── Loading state: show skeleton while card is fetching ─────────
   if (cardLoading) {
