@@ -1,168 +1,113 @@
 /**
- * CardTopBar — tests for the Run state machine + label derivation.
+ * CardTopBar — tests for the visual-mapping helper.
  *
- * Note on test environment:
- *   The frontend's vitest config uses `environment: 'node'` and does NOT
- *   currently install `@testing-library/react`. Following the precedent set
- *   by the existing test files (e.g. `utils/trustLevel.test.ts`), these
- *   tests target the pure exported helper `deriveRunButtonState` rather
- *   than full DOM rendering. The Wave-1 day-one functional Run button is
- *   driven entirely by this pure helper, so covering all 4 state-machine
- *   stages here gives us regression protection without a runtime change.
+ * As of 08-02 (Wave 2), the underlying state-machine logic was promoted to
+ * the shared `useCardRunState` hook (see hooks/useCardRunState.test.ts for
+ * the discriminator coverage). What's left to test in CardTopBar is the
+ * mapping from CardRunState → button visual props (`runStateToButton`),
+ * which is responsible for collapsing Wave 2's richer states (no-inputs,
+ * completed, failed) back to Wave 1 vocabulary so the top-bar UX stays
+ * compact.
  *
- *   When @testing-library/react is wired up (post-MVP testing infra task),
- *   this file should grow JSX render tests that mount the component with a
- *   QueryClientProvider + MemoryRouter to verify breadcrumb navigation,
- *   inline-edit blur behavior, and toast surfacing on mutation error.
+ * The test environment remains vitest env=node without
+ * @testing-library/react. We test `runStateToButton` as a pure function;
+ * the cross-surface sync invariant (CardTopBar and CardActionBar agree
+ * on stage) is covered in `hooks/useCardRunState.test.ts`.
  */
 
-import { describe, it, expect } from 'vitest';
-import { deriveRunButtonState } from './CardTopBar';
-import type { Card, CardStatus } from '@/types/card';
-import type { ExecutionPlan } from '@/types/plan';
+import { describe, it, expect, vi } from 'vitest';
+import { runStateToButton } from './CardTopBar';
+import type { CardRunState } from '@hooks/useCardRunState';
+
+const NOOP = vi.fn().mockResolvedValue(undefined);
 
 // ---------------------------------------------------------------------------
-// Helpers
+// 1-7: stage → button label
 // ---------------------------------------------------------------------------
 
-function makeCard(partial: Partial<Pick<Card, 'intent_spec_id' | 'status'>>): Pick<Card, 'intent_spec_id' | 'status'> {
-  return {
-    intent_spec_id: undefined,
-    status: 'draft' as CardStatus,
-    ...partial,
-  };
-}
-
-const NO_PENDING = { generate: false, execute: false, cancel: false };
-
-// Minimal ExecutionPlan stub — only fields the helper inspects matter (it
-// just checks falsiness).
-const STUB_PLAN: ExecutionPlan = {
-  id: 'plan_abc',
-  card_id: 'card_xyz',
-  status: 'compiled',
-} as unknown as ExecutionPlan;
-
-// ---------------------------------------------------------------------------
-// 1-4: Run state-machine stages
-// ---------------------------------------------------------------------------
-
-describe('deriveRunButtonState — Run state machine', () => {
-  it('Stage 1 — no IntentSpec → "Draft Intent first" disabled', () => {
-    const result = deriveRunButtonState(
-      makeCard({ intent_spec_id: undefined, status: 'draft' }),
-      null,
-      NO_PENDING,
-    );
+describe('runStateToButton — stage → label', () => {
+  it('no-intent → "Draft Intent first" disabled', () => {
+    const result = runStateToButton({ stage: 'no-intent' });
     expect(result.label).toBe('Draft Intent first');
-    expect(result.action).toBe('draft');
     expect(result.disabled).toBe(true);
     expect(result.title).toMatch(/IntentSpec/);
+    expect(result.variant).toBe('sparkle');
   });
 
-  it('Stage 2 — IntentSpec set, no Plan → "Generate Plan" enabled', () => {
-    const result = deriveRunButtonState(
-      makeCard({ intent_spec_id: 'is_123', status: 'draft' }),
-      null,
-      NO_PENDING,
-    );
+  it('no-inputs → collapses to disabled "Generate Plan" with input-pin tooltip', () => {
+    const result = runStateToButton({ stage: 'no-inputs' });
     expect(result.label).toBe('Generate Plan');
-    expect(result.action).toBe('generate');
-    expect(result.disabled).toBe(false);
+    expect(result.disabled).toBe(true);
+    expect(result.title).toMatch(/Pin at least one input/);
   });
 
-  it('Stage 3 — Plan exists, ready → "Run Card" enabled', () => {
-    const result = deriveRunButtonState(
-      makeCard({ intent_spec_id: 'is_123', status: 'ready' }),
-      STUB_PLAN,
-      NO_PENDING,
-    );
+  it('no-plan → "Generate Plan" enabled', () => {
+    const state: CardRunState = { stage: 'no-plan', isPending: false, generate: NOOP };
+    const result = runStateToButton(state);
+    expect(result.label).toBe('Generate Plan');
+    expect(result.disabled).toBe(false);
+    expect(result.variant).toBe('settings');
+  });
+
+  it('ready → "Run Card" enabled', () => {
+    const state: CardRunState = { stage: 'ready', isPending: false, run: NOOP };
+    const result = runStateToButton(state);
     expect(result.label).toBe('Run Card');
-    expect(result.action).toBe('run');
+    expect(result.disabled).toBe(false);
+    expect(result.variant).toBe('primary');
+  });
+
+  it('running → "Cancel" enabled', () => {
+    const state: CardRunState = { stage: 'running', isPending: false, cancel: NOOP };
+    const result = runStateToButton(state);
+    expect(result.label).toBe('Cancel');
+    expect(result.disabled).toBe(false);
+    expect(result.variant).toBe('cancel');
+  });
+
+  it('completed → "Run Card" (CardTopBar collapses to Wave 1 wording)', () => {
+    const state: CardRunState = { stage: 'completed', isPending: false, rerun: NOOP };
+    const result = runStateToButton(state);
+    expect(result.label).toBe('Run Card');
+    expect(result.variant).toBe('primary');
     expect(result.disabled).toBe(false);
   });
 
-  it('Stage 4 — running → "Cancel" enabled (action: cancel)', () => {
-    const result = deriveRunButtonState(
-      makeCard({ intent_spec_id: 'is_123', status: 'running' }),
-      STUB_PLAN,
-      NO_PENDING,
-    );
-    expect(result.label).toBe('Cancel');
-    expect(result.action).toBe('cancel');
+  it('failed → "Run Card" (CardTopBar collapses to Wave 1 wording)', () => {
+    const state: CardRunState = { stage: 'failed', isPending: false, rerun: NOOP };
+    const result = runStateToButton(state);
+    expect(result.label).toBe('Run Card');
+    expect(result.variant).toBe('primary');
     expect(result.disabled).toBe(false);
   });
 });
 
 // ---------------------------------------------------------------------------
-// 5-7: Pending-state overrides
+// 8-10: pending overrides
 // ---------------------------------------------------------------------------
 
-describe('deriveRunButtonState — pending overrides', () => {
-  it('generate pending → "Generating…" disabled with spinner', () => {
-    const result = deriveRunButtonState(
-      makeCard({ intent_spec_id: 'is_1', status: 'draft' }),
-      null,
-      { ...NO_PENDING, generate: true },
-    );
+describe('runStateToButton — pending overrides', () => {
+  it('no-plan + pending → "Generating…" disabled', () => {
+    const state: CardRunState = { stage: 'no-plan', isPending: true, generate: NOOP };
+    const result = runStateToButton(state);
     expect(result.label).toBe('Generating…');
     expect(result.pending).toBe(true);
     expect(result.disabled).toBe(true);
   });
 
-  it('execute pending → "Starting…" disabled', () => {
-    const result = deriveRunButtonState(
-      makeCard({ intent_spec_id: 'is_1', status: 'ready' }),
-      STUB_PLAN,
-      { ...NO_PENDING, execute: true },
-    );
+  it('ready + pending → "Starting…" disabled', () => {
+    const state: CardRunState = { stage: 'ready', isPending: true, run: NOOP };
+    const result = runStateToButton(state);
     expect(result.label).toBe('Starting…');
-    expect(result.action).toBe('run');
     expect(result.pending).toBe(true);
     expect(result.disabled).toBe(true);
   });
 
-  it('cancel pending → "Cancelling…" disabled (takes precedence over running status)', () => {
-    const result = deriveRunButtonState(
-      makeCard({ intent_spec_id: 'is_1', status: 'running' }),
-      STUB_PLAN,
-      { ...NO_PENDING, cancel: true },
-    );
+  it('running + pending (cancel in flight) → "Cancelling…" disabled', () => {
+    const state: CardRunState = { stage: 'running', isPending: true, cancel: NOOP };
+    const result = runStateToButton(state);
     expect(result.label).toBe('Cancelling…');
-    expect(result.action).toBe('cancel');
     expect(result.pending).toBe(true);
     expect(result.disabled).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 8-9: Edge cases & queued status (run-in-flight variant)
-// ---------------------------------------------------------------------------
-
-describe('deriveRunButtonState — edge cases', () => {
-  it('queued status counts as in-flight → "Cancel" available', () => {
-    // The kernel exposes `queued` as a transient pre-running status; we
-    // surface Cancel for it so users can abort before solver-start.
-    const result = deriveRunButtonState(
-      makeCard({ intent_spec_id: 'is_1', status: 'queued' }),
-      STUB_PLAN,
-      NO_PENDING,
-    );
-    expect(result.label).toBe('Cancel');
-    expect(result.action).toBe('cancel');
-  });
-
-  it('completed card with plan → "Run Card" (re-run path)', () => {
-    // After a successful run, status flips to `completed`. The user should
-    // be able to re-run; the same Run-Card label applies (no separate
-    // "Re-run" wording in Wave 1).
-    const result = deriveRunButtonState(
-      makeCard({ intent_spec_id: 'is_1', status: 'completed' }),
-      STUB_PLAN,
-      NO_PENDING,
-    );
-    expect(result.label).toBe('Run Card');
-    expect(result.action).toBe('run');
-    expect(result.disabled).toBe(false);
   });
 });
