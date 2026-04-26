@@ -38,16 +38,49 @@ export default defineConfig({
     chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          query: ['@tanstack/react-query'],
-          ui: ['lucide-react', 'recharts'],
-          reactflow: ['@xyflow/react'],
+        // Function-form manualChunks lets us route any @tiptap/* or
+        // prosemirror-* module into the `editor` chunk without enumerating
+        // every subpath (Tiptap pulls in 15+ ProseMirror packages
+        // transitively, several of which have no top-level entry).
+        manualChunks(id) {
+          // Phase 10 (Card Canvas) — Tiptap + ProseMirror live in the
+          // `editor` chunk. CardCanvasPage is React.lazy-imported, so
+          // these bytes only ship to users who open `?canvas=1`.
+          if (
+            id.includes('node_modules/@tiptap/') ||
+            id.includes('node_modules/prosemirror-') ||
+            id.includes('node_modules/orderedmap/') ||
+            id.includes('node_modules/rope-sequence/') ||
+            id.includes('node_modules/w3c-keyname/')
+          ) {
+            return 'editor';
+          }
           // Phase 2a renderer registry — papaparse is dynamically imported
-          // inside the CSV renderers; isolating it here ensures the bytes
-          // are deferred until a Card actually mounts CsvTableRenderer or
-          // CsvChartRenderer.
-          'render-csv': ['papaparse'],
+          // inside the CSV renderers; isolate so the bytes are deferred
+          // until a Card actually mounts CsvTableRenderer or CsvChartRenderer.
+          if (id.includes('node_modules/papaparse/')) {
+            return 'render-csv';
+          }
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/') ||
+            id.includes('node_modules/react-router-dom/')
+          ) {
+            return 'vendor';
+          }
+          if (id.includes('node_modules/@tanstack/react-query/')) {
+            return 'query';
+          }
+          if (
+            id.includes('node_modules/lucide-react/') ||
+            id.includes('node_modules/recharts/')
+          ) {
+            return 'ui';
+          }
+          if (id.includes('node_modules/@xyflow/react/')) {
+            return 'reactflow';
+          }
+          return undefined;
         },
       },
     },
