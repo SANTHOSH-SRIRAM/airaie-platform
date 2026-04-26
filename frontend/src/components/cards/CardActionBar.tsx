@@ -272,7 +272,7 @@ export default function CardActionBar({ card, intent, plan, rules: _rules }: Car
       className="fixed bottom-[16px] left-1/2 -translate-x-1/2 z-40 h-[52px] bg-white rounded-full shadow-[0px_4px_24px_0px_rgba(0,0,0,0.12)] border border-[#f0f0ec] flex items-center gap-[12px] px-[16px]"
     >
       {/* ── Left: status pill ──────────────────────────────────── */}
-      <div className="flex items-center gap-[6px]">
+      <div className="flex items-center gap-[6px]" role="status" aria-live="polite" aria-atomic="true">
         <span
           className={cn('w-[8px] h-[8px] rounded-full shrink-0', pillDot(view.stage))}
           aria-hidden="true"

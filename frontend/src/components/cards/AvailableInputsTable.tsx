@@ -97,15 +97,15 @@ export default function AvailableInputsTable({
       }
     >
       {isLoading && (
-        <div className="flex items-center gap-[6px] py-[12px]">
-          <Loader2 size={14} className="animate-spin text-[#acacac]" />
+        <div className="flex items-center gap-[6px] py-[12px]" role="status" aria-busy="true">
+          <Loader2 size={14} className="animate-spin text-[#acacac]" aria-hidden="true" />
           <span className="text-[12px] text-[#acacac]">Loading artifacts…</span>
         </div>
       )}
 
       {error && (
-        <div className="flex items-center gap-[6px] py-[12px]">
-          <AlertCircle size={14} className="text-[#e74c3c]" />
+        <div className="flex items-center gap-[6px] py-[12px]" role="alert">
+          <AlertCircle size={14} className="text-[#e74c3c]" aria-hidden="true" />
           <span className="text-[12px] text-[#e74c3c]">Failed to load Board artifacts</span>
         </div>
       )}

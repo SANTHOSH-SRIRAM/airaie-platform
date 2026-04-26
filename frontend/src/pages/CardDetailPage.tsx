@@ -226,9 +226,10 @@ export default function CardDetailPage() {
 
         {stage !== 'draft' && intent && configurationLocked && (
           <details
+            aria-label="Card configuration (collapsed during run)"
             className="bg-white rounded-[12px] border border-[#f0f0ec] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.04)] p-[16px]"
           >
-            <summary className="cursor-pointer text-[12px] font-medium text-[#6b6b6b] hover:text-[#1a1a1a] flex items-center gap-[6px]">
+            <summary className="cursor-pointer text-[12px] font-medium text-[#6b6b6b] hover:text-[#1a1a1a] flex items-center gap-[6px] focus-visible:outline-2 focus-visible:outline-[#f57c00] focus-visible:outline-offset-2 rounded">
               <span aria-hidden="true">🔒</span>
               {stage === 'running'
                 ? 'Configuration locked during run'

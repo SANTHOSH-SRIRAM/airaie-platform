@@ -56,15 +56,15 @@ export default function AvailableMethodsTable({
       }
     >
       {isLoading && (
-        <div className="flex items-center gap-[6px] py-[12px]">
-          <Loader2 size={14} className="animate-spin text-[#acacac]" />
+        <div className="flex items-center gap-[6px] py-[12px]" role="status" aria-busy="true">
+          <Loader2 size={14} className="animate-spin text-[#acacac]" aria-hidden="true" />
           <span className="text-[12px] text-[#acacac]">Loading methods…</span>
         </div>
       )}
 
       {error && (
-        <div className="flex items-center gap-[6px] py-[12px]">
-          <AlertCircle size={14} className="text-[#e74c3c]" />
+        <div className="flex items-center gap-[6px] py-[12px]" role="alert">
+          <AlertCircle size={14} className="text-[#e74c3c]" aria-hidden="true" />
           <span className="text-[12px] text-[#e74c3c]">Failed to load methods</span>
         </div>
       )}
@@ -80,6 +80,7 @@ export default function AvailableMethodsTable({
       {!isLoading && !error && pipelines && pipelines.length > 0 && (
         <table
           aria-label="Available methods (pipelines)"
+          role="table"
           className="w-full text-[12px]"
         >
           <thead>
