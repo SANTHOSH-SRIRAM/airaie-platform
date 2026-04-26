@@ -17,6 +17,43 @@ export async function listGates(boardId: string): Promise<Gate[]> {
   return unwrapList<Gate>(raw, 'gates');
 }
 
+/**
+ * List gates that apply to a single Card.
+ *
+ * The kernel does NOT expose a `/v0/cards/{id}/gates` endpoint (the research
+ * doc explicitly notes this). We compose it client-side: list the Board's
+ * gates, fetch each gate's requirements, keep gates whose requirements
+ * reference `cardId` in their `config.card_id` (or `config.cardId`) field.
+ *
+ * Concurrency: requirements fetches run in parallel via `Promise.all` so a
+ * Board with 10 gates resolves in roughly one round-trip rather than ten.
+ *
+ * Errors propagate. Callers that want graceful degradation should wrap this
+ * in `try/catch` and fall back to an empty list (`useCardGates` does this).
+ */
+export async function listCardGates(boardId: string, cardId: string): Promise<Gate[]> {
+  const allGates = await listGates(boardId);
+  if (allGates.length === 0) return [];
+
+  const matches = await Promise.all(
+    allGates.map(async (gate) => {
+      try {
+        const reqs = await listGateRequirements(gate.id);
+        const refs = reqs.some((r) => {
+          const cfg = (r.config ?? {}) as Record<string, unknown>;
+          const cid = (cfg.card_id ?? cfg.cardId) as string | undefined;
+          return typeof cid === 'string' && cid === cardId;
+        });
+        return refs ? gate : null;
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  return matches.filter((g): g is Gate => g !== null);
+}
+
 export async function getGate(id: string): Promise<Gate> {
   return api(`/v0/gates/${id}`, { method: 'GET' });
 }
