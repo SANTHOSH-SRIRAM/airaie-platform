@@ -30,9 +30,11 @@ export function formatBytes(bytes: number, decimals = 2): string {
 /**
  * Format a date relative to now (e.g., "2 hours ago")
  */
-export function formatRelativeTime(date: Date | string): string {
-  const now = new Date();
+export function formatRelativeTime(date: Date | string | null | undefined): string {
+  if (!date) return '';
   const targetDate = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(targetDate.getTime())) return '';
+  const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - targetDate.getTime()) / 1000);
 
   const intervals = [

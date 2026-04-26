@@ -214,10 +214,12 @@ export default function CardActionBar({ card, intent, plan, rules: _rules }: Car
   const runCount = runs?.length ?? 0;
   const lastActivity = useMemo(() => {
     if (!runs || runs.length === 0) return null;
-    const latest = [...runs].sort(
+    const withStart = runs.filter((r): r is typeof r & { started_at: string } => !!r.started_at);
+    if (withStart.length === 0) return null;
+    const latest = [...withStart].sort(
       (a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime(),
     )[0];
-    return latest ? formatRelativeTime(latest.started_at) : null;
+    return formatRelativeTime(latest.started_at);
   }, [runs]);
 
   // Clear ephemeral action errors a few seconds after they show.
