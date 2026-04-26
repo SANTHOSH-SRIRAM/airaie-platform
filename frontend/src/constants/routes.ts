@@ -32,6 +32,7 @@ export const ROUTES = {
 
   // Embedded studio routes
   BOARDS: '/boards',
+  CARD_DETAIL: '/cards/:cardId',
   RELEASE_PACKET: '/boards/:id/release',
   WORKFLOW_STUDIO: '/workflow-studio',
   AGENT_STUDIO: '/agent-studio',
@@ -76,6 +77,13 @@ export const ROUTE_SIDEBAR_MAP: Record<string, 'navigation' | 'nodePalette' | 's
   '/approvals': 'navigation',
   '/profile': 'profile',
 };
+
+/**
+ * Per-card detail page path (Phase 8 Card-as-page).
+ * Replaces the BoardDetailPage Cards-tab side-sheet with `/cards/:cardId`.
+ * Side-sheet remains available behind `?legacy=1` on the Board route for one release.
+ */
+export const cardDetailPath = (id: string) => `/cards/${id}`;
 
 /**
  * Generate route with parameters

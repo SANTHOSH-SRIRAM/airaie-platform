@@ -24,6 +24,7 @@ const AgentStudioPage = lazy(() => import('@pages/AgentStudioPage'));
 const AgentPlaygroundPage = lazy(() => import('@pages/AgentPlaygroundPage'));
 const BoardsPage = lazy(() => import('@pages/BoardsPage'));
 const BoardDetailPage = lazy(() => import('@pages/BoardDetailPage'));
+const CardDetailPage = lazy(() => import('@pages/CardDetailPage'));
 const CreateBoardPage = lazy(() => import('@pages/CreateBoardPage'));
 const ToolRegistryPage = lazy(() => import('@pages/ToolRegistryPage'));
 const ToolDetailPage = lazy(() => import('@pages/ToolDetailPage'));
@@ -107,7 +108,14 @@ function App() {
         </Route>
         {/* Board detail -- full-screen standalone page (protected, no AppShell) */}
         <Route path="/boards/:boardId" element={<ProtectedLazy><BoardDetailPage /></ProtectedLazy>} />
-        
+
+        {/* Card detail -- per-card route (Phase 8 Card-as-page).
+            Mounted inside AppShell so the sidebar can render ThisBoardNav +
+            ThisCardStatusPill while on this route. */}
+        <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
+          <Route path={ROUTES.CARD_DETAIL} element={<LazyPage><CardDetailPage /></LazyPage>} />
+        </Route>
+
         {/* Workflow Eval -- full-screen standalone page */}
         <Route path={ROUTES.WORKFLOW_EVAL} element={<ProtectedLazy><WorkflowEvalPage /></ProtectedLazy>} />
 
