@@ -14,6 +14,7 @@ Rebuild the AirAIE platform frontend to match the v2 Figma design. The journey s
 - [ ] **Phase 6: Tool Registry** — Filterable tool grid, version history, tool contract, execution config, sandbox policy
 - [ ] **Phase 7: Integration and Polish** — Cross-screen navigation, error handling, loading states, responsive refinements, dark mode pass
 - [x] **Phase 8: Card-as-Page** — Replace BoardDetailPage's CardDetail side-sheet with a per-card route (`/cards/:cardId`) that becomes the configuration-first surface for an entire chain instance (Intent + Plan + Run + Results + Evidence + Gates). Wave 1 (08-01) shipped the foundation: route, navigation, top bar with functional Run state machine, sidebar context blocks, ?legacy=1 fallback. Wave 2 (08-02) shipped body composition (Hero, AvailableInputsTable, AvailableMethodsTable, KPI form, Sequence/Status, action bar, lifecycle, mode rules, card-scoped gate hooks). Both surfaces (CardTopBar + CardActionBar) share a single `useCardRunState` hook so a Run started from either flips both within one render cycle.
+- [x] **Phase 9: Renderer Registry MVP (concept Phase 2a)** — Replace CardStatusPanel's bullet-list-of-artifact-download-links Results subsection with a renderer registry that picks the right component per `(intent_type, artifact_kind)` and mounts it inline. Wave 1 (09-01) shipped 5 lazy-loaded renderers (image, json-metrics, csv-chart, csv-table, fallback), 3 per-intent layouts (cfd_analysis, fea_static, parameter_sweep), and a `render-csv` Vite manualChunk for `papaparse`. `pickRenderer(artifact, intent)` honors a 4-tier priority: manifest hint → exact (intent_type, kind) → kind-only → always-true fallback. ResultsSection extracts a pure `planResults` helper for unit-testable dispatch. 38 net-new tests, 289 total passing. Heavy renderers (3D CAD, PDF, scientific viz) deferred to Phase 2b–2f.
 
 ## Phase Details
 
@@ -115,3 +116,18 @@ Rebuild the AirAIE platform frontend to match the v2 Figma design. The journey s
 **Plans**:
   - [x] 08-01 — Foundation (route, navigation, top bar, sidebar augmentation) — Wave 1, shipped 2026-04-26 — see `phases/08-card-as-page/08-01-SUMMARY.md`
   - [x] 08-02 — Body composition (Hero, configuration tables, KPI form, sequence + status, action bar, lifecycle, mode rules, card-scoped gate hooks) — Wave 2, shipped 2026-04-26 — see `phases/08-card-as-page/08-02-SUMMARY.md`
+
+### Phase 9: Renderer Registry MVP
+**Goal**: Replace CardStatusPanel's bullet-list-of-artifact-download-links Results subsection with a renderer registry — `(intent_type, artifact_kind) → React component (lazy)`. Phase 2a of the conceptual rollout (`doc/concepts/04-RENDERER-REGISTRY.md`). Ships 5 renderers covering 80% of today's tools' output formats (image / JSON metrics / CSV-as-table / CSV-as-chart / fallback) and 3 per-intent layouts (cfd_analysis / fea_static / parameter_sweep). Heavy renderers (3D CAD, PDF, scientific viz, streaming, view-state lock) deferred to Phase 2b–2f.
+**Depends on**: Phase 8 (Card-as-page provides the CardStatusPanel surface; useRunArtifacts provides RunArtifact[])
+**Requirements**: REQ-01, REQ-04, NFR-04
+**Success Criteria** (what must be TRUE):
+  1. Registry data structure with `match(ctx)` predicate and `lazy()` component, 4-tier lookup priority
+  2. 5 renderers in priority order (image, json-metrics, csv-chart, csv-table, fallback) — csv-chart BEFORE csv-table in array
+  3. Per-`intent_type` layout config — at least 3 entries (cfd_analysis, fea_static, parameter_sweep)
+  4. ResultsSection composes the layout (12-col grid) or falls through to auto-pick stacking for non-layout intents
+  5. CardStatusPanel mounts `<ResultsSection>` instead of bullet-list (only on `run.status === 'completed'`)
+  6. Each renderer is its own lazy chunk; `papaparse` segregated into a render-csv manualChunk
+  7. `tsc --noEmit` clean (default + strict), vitest run passes, npm run build succeeds with verified `dist/assets/render-csv-*.js` chunk
+**Plans**:
+  - [x] 09-01 — Renderer Registry MVP (5 renderers + 3 layouts + ResultsSection + CardStatusPanel wiring) — Wave 1, shipped 2026-04-26 — see `phases/09-renderer-registry/09-01-SUMMARY.md`
