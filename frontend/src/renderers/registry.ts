@@ -28,6 +28,12 @@ import type { Renderer, RendererCtx } from './types';
 // ---------------------------------------------------------------------------
 
 const IMAGE_KINDS = new Set(['png', 'jpg', 'jpeg', 'svg', 'webp', 'gif']);
+const CHART_FRIENDLY_INTENTS = new Set([
+  'parameter_sweep',
+  'cfd_analysis',
+  'fea_dynamic',
+  'time_series',
+]);
 
 export const registry: Renderer[] = [
   // Task 3 — image renderer (no library)
@@ -42,9 +48,17 @@ export const registry: Renderer[] = [
     match: (c) => c.artifact_kind.toLowerCase() === 'json',
     component: lazy(() => import('./JsonMetricsRenderer')),
   },
-  // Task 5 — CSV-as-table (kind-only fallback for csv). Task 6 inserts the
-  // intent-specific csv-chart entry BEFORE this one so charts win for
-  // chart-friendly intent_types; csv-table catches everything else.
+  // Task 6 — CSV-as-chart for chart-friendly intent_types. Position is
+  // critical: this MUST come before csv-table so the lookup picks the chart
+  // when intent_type is one of the chart-friendly set; csv-table catches
+  // every other csv.
+  {
+    id: 'csv-chart',
+    match: (c) =>
+      c.artifact_kind.toLowerCase() === 'csv' && CHART_FRIENDLY_INTENTS.has(c.intent_type),
+    component: lazy(() => import('./CsvChartRenderer')),
+  },
+  // Task 5 — CSV-as-table (kind-only fallback for csv).
   {
     id: 'csv-table',
     match: (c) => c.artifact_kind.toLowerCase() === 'csv',
