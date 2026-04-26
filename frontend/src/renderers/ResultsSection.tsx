@@ -9,6 +9,66 @@ import type { RunArtifact } from '@api/runs';
 import type { IntentSpec } from '@/types/intent';
 
 // ---------------------------------------------------------------------------
+// planResults — pure dispatch helper. Decides whether to render in layout
+// mode, auto-pick mode, or empty mode. Exported for vitest unit tests since
+// the env=node setup can't render JSX.
+//
+// The plan's `items` carry pre-resolved (artifact, renderer) tuples so the
+// JSX rendering layer is a thin dumb mapper.
+// ---------------------------------------------------------------------------
+
+export type ResultsPlan =
+  | { kind: 'empty' }
+  | {
+      kind: 'layout';
+      intentType: string;
+      items: Array<{
+        slot: ResultsSlot;
+        artifact: RunArtifact | null;
+        renderer: Renderer | null;
+      }>;
+    }
+  | {
+      kind: 'auto-pick';
+      items: Array<{ artifact: RunArtifact; renderer: Renderer | null }>;
+    };
+
+export function planResults(
+  runArtifacts: RunArtifact[],
+  intent: IntentSpec | undefined,
+): ResultsPlan {
+  if (runArtifacts.length === 0) {
+    return { kind: 'empty' };
+  }
+
+  const layout = getLayoutForIntent(intent?.intent_type);
+
+  if (layout) {
+    return {
+      kind: 'layout',
+      intentType: intent!.intent_type,
+      items: layout.slots.map((slot) => {
+        const artifact = runArtifacts.find(slot.match) ?? null;
+        const renderer = artifact
+          ? slot.rendererId
+            ? findRendererById(slot.rendererId) ?? pickRenderer(artifact, intent)
+            : pickRenderer(artifact, intent)
+          : null;
+        return { slot, artifact, renderer };
+      }),
+    };
+  }
+
+  return {
+    kind: 'auto-pick',
+    items: runArtifacts.map((artifact) => ({
+      artifact,
+      renderer: pickRenderer(artifact, intent),
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // ResultsSection — composes the renderer registry + the per-intent layout
 // into the Card's "Results" surface. Two modes:
 //
@@ -50,7 +110,9 @@ const HEIGHT_CLASS: Record<string, string> = {
 };
 
 export default function ResultsSection({ runArtifacts, intent }: ResultsSectionProps) {
-  if (runArtifacts.length === 0) {
+  const plan = planResults(runArtifacts, intent);
+
+  if (plan.kind === 'empty') {
     return (
       <p className="text-[11px] text-[#acacac]" role="status">
         No artifacts produced.
@@ -58,16 +120,15 @@ export default function ResultsSection({ runArtifacts, intent }: ResultsSectionP
     );
   }
 
-  const layout = getLayoutForIntent(intent?.intent_type);
-
-  if (layout) {
+  if (plan.kind === 'layout') {
     return (
       <div className="grid grid-cols-12 gap-[16px]" aria-label="Results">
-        {layout.slots.map((slot, i) => (
+        {plan.items.map((item, i) => (
           <SlotMount
             key={i}
-            slot={slot}
-            allArtifacts={runArtifacts}
+            slot={item.slot}
+            artifact={item.artifact}
+            renderer={item.renderer}
             intent={intent}
           />
         ))}
@@ -78,9 +139,13 @@ export default function ResultsSection({ runArtifacts, intent }: ResultsSectionP
   // Auto-pick mode — stack each artifact at full width.
   return (
     <div className="grid grid-cols-12 gap-[16px]" aria-label="Results">
-      {runArtifacts.map((artifact) => (
-        <div key={artifact.id} className={COL_SPAN_CLASS[12]}>
-          <AutoPickSlot artifact={artifact} intent={intent} />
+      {plan.items.map((item) => (
+        <div key={item.artifact.id} className={COL_SPAN_CLASS[12]}>
+          <RendererBoundary
+            renderer={item.renderer}
+            artifact={item.artifact}
+            intent={intent}
+          />
         </div>
       ))}
     </div>
@@ -88,21 +153,22 @@ export default function ResultsSection({ runArtifacts, intent }: ResultsSectionP
 }
 
 // ---------------------------------------------------------------------------
-// SlotMount — finds the first artifact matching `slot.match`, then either
-// shows fallbackText or mounts the slot's renderer.
+// SlotMount — renders one layout slot. The artifact + renderer are
+// pre-resolved by `planResults`; this component just handles the visual
+// chrome (col-span, height) and the empty-state placeholder.
 // ---------------------------------------------------------------------------
 
 function SlotMount({
   slot,
-  allArtifacts,
+  artifact,
+  renderer,
   intent,
 }: {
   slot: ResultsSlot;
-  allArtifacts: RunArtifact[];
+  artifact: RunArtifact | null;
+  renderer: Renderer | null;
   intent: IntentSpec | undefined;
 }) {
-  const artifact = allArtifacts.find(slot.match);
-
   const className = `${COL_SPAN_CLASS[slot.span] ?? 'col-span-12'} ${
     HEIGHT_CLASS[slot.height ?? 'auto'] ?? ''
   }`;
@@ -115,32 +181,11 @@ function SlotMount({
     );
   }
 
-  // Pick the renderer: explicit override beats the heuristic.
-  const renderer = slot.rendererId
-    ? findRendererById(slot.rendererId) ?? pickRenderer(artifact, intent)
-    : pickRenderer(artifact, intent);
-
   return (
     <div className={className}>
       <RendererBoundary renderer={renderer} artifact={artifact} intent={intent} />
     </div>
   );
-}
-
-// ---------------------------------------------------------------------------
-// AutoPickSlot — used in auto-pick mode (no layout). Mounts pickRenderer's
-// answer for one artifact at full width.
-// ---------------------------------------------------------------------------
-
-function AutoPickSlot({
-  artifact,
-  intent,
-}: {
-  artifact: RunArtifact;
-  intent: IntentSpec | undefined;
-}) {
-  const renderer = pickRenderer(artifact, intent);
-  return <RendererBoundary renderer={renderer} artifact={artifact} intent={intent} />;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { RotateCcw, X, Download, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { RotateCcw, X, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { useCardEvidence } from '@hooks/useCards';
 import { useCardGates } from '@hooks/useGates';
 import { useRunDetail, useRunArtifacts, useCancelRun } from '@hooks/useRuns';
 import { useExecutePlan } from '@hooks/usePlans';
 import ConfigSection from './ConfigSection';
+import { ResultsSection } from '@/renderers';
 import type { Card, CardStatus } from '@/types/card';
 import type { IntentSpec } from '@/types/intent';
 import type { CardModeRules } from '@hooks/useCardModeRules';
@@ -185,29 +186,12 @@ export default function CardStatusPanel({
       {/* ── Results + Evidence detail (only on run complete) ──── */}
       {runComplete && (
         <div className="mt-[16px] pt-[12px] border-t border-[#f0f0ec] grid grid-cols-2 gap-[16px]">
-          {/* Left: Results (artifact list) */}
+          {/* Left: Results — renderer-registry-driven inline previews */}
           <div>
             <h3 className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[#6b6b6b] mb-[8px]">
               Results
             </h3>
-            {(runArtifacts ?? []).length === 0 ? (
-              <p className="text-[11px] text-[#acacac]">No artifacts produced.</p>
-            ) : (
-              <ul className="flex flex-col gap-[4px]" aria-label="Run artifacts">
-                {(runArtifacts ?? []).map((a) => (
-                  <li
-                    key={a.id}
-                    className="flex items-center gap-[6px] text-[11px] hover:bg-[#fafafa] rounded-[4px] px-[6px] py-[4px]"
-                  >
-                    <Download size={10} className="text-[#acacac] shrink-0" />
-                    <span className="font-medium text-[#1a1a1a] truncate flex-1">
-                      {a.name ?? a.id.slice(0, 12)}
-                    </span>
-                    <span className="text-[10px] text-[#acacac]">{a.type}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ResultsSection runArtifacts={runArtifacts ?? []} intent={intent} />
           </div>
 
           {/* Right: Evidence rows (one per acceptance criterion) */}
