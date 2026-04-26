@@ -13,7 +13,7 @@ Rebuild the AirAIE platform frontend to match the v2 Figma design. The journey s
 - [ ] **Phase 5: Agent Playground** — Chat interface, tool call proposals, session management, decision trace inspector, live metrics
 - [ ] **Phase 6: Tool Registry** — Filterable tool grid, version history, tool contract, execution config, sandbox policy
 - [ ] **Phase 7: Integration and Polish** — Cross-screen navigation, error handling, loading states, responsive refinements, dark mode pass
-- [~] **Phase 8: Card-as-Page** — Replace BoardDetailPage's CardDetail side-sheet with a per-card route (`/cards/:cardId`) that becomes the configuration-first surface for an entire chain instance (Intent + Plan + Run + Results + Evidence + Gates). Wave 1 (08-01) ships the foundation: route, navigation, top bar with functional Run state machine, sidebar context blocks, ?legacy=1 fallback. Wave 2 (08-02) ships body composition (Hero, AvailableInputsTable, AvailableMethodsTable, KPI form, Sequence/Status, action bar, lifecycle, mode rules, gate hooks).
+- [x] **Phase 8: Card-as-Page** — Replace BoardDetailPage's CardDetail side-sheet with a per-card route (`/cards/:cardId`) that becomes the configuration-first surface for an entire chain instance (Intent + Plan + Run + Results + Evidence + Gates). Wave 1 (08-01) shipped the foundation: route, navigation, top bar with functional Run state machine, sidebar context blocks, ?legacy=1 fallback. Wave 2 (08-02) shipped body composition (Hero, AvailableInputsTable, AvailableMethodsTable, KPI form, Sequence/Status, action bar, lifecycle, mode rules, card-scoped gate hooks). Both surfaces (CardTopBar + CardActionBar) share a single `useCardRunState` hook so a Run started from either flips both within one render cycle.
 
 ## Phase Details
 
@@ -114,4 +114,4 @@ Rebuild the AirAIE platform frontend to match the v2 Figma design. The journey s
   6. `tsc --noEmit` clean (default + strict tsconfig.app.json), vitest run passes
 **Plans**:
   - [x] 08-01 — Foundation (route, navigation, top bar, sidebar augmentation) — Wave 1, shipped 2026-04-26 — see `phases/08-card-as-page/08-01-SUMMARY.md`
-  - [ ] 08-02 — Body composition (Hero, configuration tables, KPI form, sequence + status, action bar, lifecycle, mode rules, gate hooks) — Wave 2, plan staged at `phases/08-card-as-page/08-02-PLAN.md`
+  - [x] 08-02 — Body composition (Hero, configuration tables, KPI form, sequence + status, action bar, lifecycle, mode rules, card-scoped gate hooks) — Wave 2, shipped 2026-04-26 — see `phases/08-card-as-page/08-02-SUMMARY.md`
