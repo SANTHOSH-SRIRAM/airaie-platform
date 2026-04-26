@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { cardDetailPath } from '@constants/routes';
 import {
   ArrowLeft,
   Shield,
@@ -121,7 +122,17 @@ const TABS: { value: Tab; label: string }[] = [
 export default function BoardDetailPage() {
   const navigate = useNavigate();
   const { boardId } = useParams<{ boardId: string }>();
+  const location = useLocation();
   const setSidebarContentType = useUiStore((s) => s.setSidebarContentType);
+
+  // Phase 8 (08-01) Card-as-page: card click navigates to `/cards/:cardId`.
+  // The `?legacy=1` query flag restores the side-sheet behavior (mounting
+  // CardDetail inside CardsTab) for one release window so we can fall back
+  // if the per-card page misbehaves on a particular Card type.
+  const isLegacy = useMemo(
+    () => new URLSearchParams(location.search).get('legacy') === '1',
+    [location.search],
+  );
 
   useEffect(() => {
     setSidebarContentType('navigation');
@@ -399,7 +410,21 @@ export default function BoardDetailPage() {
               <CardsTab
                 boardId={boardId}
                 selectedCardId={selectedCardId}
-                onSelectCard={setSelectedCardId}
+                // Phase 8 (08-01): default click navigates to /cards/:cardId.
+                // ?legacy=1 keeps the original side-sheet behavior available
+                // for one release.
+                onSelectCard={(id) => {
+                  if (id === null) {
+                    setSelectedCardId(null);
+                    return;
+                  }
+                  if (isLegacy) {
+                    setSelectedCardId(id);
+                  } else {
+                    navigate(cardDetailPath(id));
+                  }
+                }}
+                isLegacy={isLegacy}
                 showPlanViewer={showPlanViewer}
                 onShowPlanViewer={setShowPlanViewer}
               />
@@ -838,23 +863,29 @@ interface CardsTabProps {
   boardId: string;
   selectedCardId: string | null;
   onSelectCard: (id: string | null) => void;
+  /** When true, clicking a card opens the in-tab side-sheet (legacy behavior).
+   *  When false, the parent navigates to /cards/:cardId instead. */
+  isLegacy: boolean;
   showPlanViewer: string | null;
   onShowPlanViewer: (cardId: string | null) => void;
 }
 
-function CardsTab({ boardId, selectedCardId, onSelectCard, showPlanViewer, onShowPlanViewer }: CardsTabProps) {
+function CardsTab({ boardId, selectedCardId, onSelectCard, isLegacy, showPlanViewer, onShowPlanViewer }: CardsTabProps) {
+  // Side-sheet is only mounted when ?legacy=1 is set; otherwise card clicks
+  // navigate to the per-card page (Phase 8 Card-as-page, Wave 1).
+  const showSideSheet = isLegacy && !!selectedCardId;
   return (
     <div className="flex gap-[12px]">
       {/* Card list (left side) */}
-      <div className={cn('bg-white rounded-[12px] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)] p-[20px]', selectedCardId ? 'w-[380px] shrink-0' : 'flex-1')}>
+      <div className={cn('bg-white rounded-[12px] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)] p-[20px]', showSideSheet ? 'w-[380px] shrink-0' : 'flex-1')}>
         <span className="text-[10px] font-semibold text-[#acacac] uppercase tracking-[0.5px] block mb-[12px]">
           Validation Cards
         </span>
         <CardList boardId={boardId} onSelectCard={(id) => { onSelectCard(id); onShowPlanViewer(null); }} />
       </div>
 
-      {/* Card detail (right side panel) */}
-      {selectedCardId && (
+      {/* Card detail (right side panel — legacy fallback only) */}
+      {showSideSheet && (
         <div className="flex-1 flex flex-col gap-[12px]">
           {/* Card Detail */}
           <div className="bg-white rounded-[12px] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)] p-[20px]">
