@@ -13,6 +13,7 @@ Rebuild the AirAIE platform frontend to match the v2 Figma design. The journey s
 - [ ] **Phase 5: Agent Playground** — Chat interface, tool call proposals, session management, decision trace inspector, live metrics
 - [ ] **Phase 6: Tool Registry** — Filterable tool grid, version history, tool contract, execution config, sandbox policy
 - [ ] **Phase 7: Integration and Polish** — Cross-screen navigation, error handling, loading states, responsive refinements, dark mode pass
+- [~] **Phase 8: Card-as-Page** — Replace BoardDetailPage's CardDetail side-sheet with a per-card route (`/cards/:cardId`) that becomes the configuration-first surface for an entire chain instance (Intent + Plan + Run + Results + Evidence + Gates). Wave 1 (08-01) ships the foundation: route, navigation, top bar with functional Run state machine, sidebar context blocks, ?legacy=1 fallback. Wave 2 (08-02) ships body composition (Hero, AvailableInputsTable, AvailableMethodsTable, KPI form, Sequence/Status, action bar, lifecycle, mode rules, gate hooks).
 
 ## Phase Details
 
@@ -99,3 +100,18 @@ Rebuild the AirAIE platform frontend to match the v2 Figma design. The journey s
   4. Sidebar and panels work at 1280px minimum width
   5. Dark mode renders correctly on all screens
 **Plans**: TBD
+
+### Phase 8: Card-as-Page
+**Goal**: A Card is the entire chain instance — Intent + Plan + Run + Results + Evidence + Gates — rendered as one configuration-first page rather than a row + side-sheet. Validates the Phase 1 mental model from `doc/concepts/03-CARDS-AS-PAGES.md` cheaply before investing in the renderer registry.
+**Depends on**: Phases 1, 2, 3, 4 (foundations + Boards + Workflow Editor + Workflow Runs)
+**Requirements**: REQ-01, REQ-02, REQ-04, NFR-04
+**Success Criteria** (what must be TRUE):
+  1. `/cards/:cardId` route renders for every existing Card without TypeError
+  2. Functional Run button on day one — 4-stage state machine (Draft Intent → Generate Plan → Run Card → Cancel), no stubs
+  3. Sidebar swaps to card-detail context: ThisBoardNav (sibling cards with active highlight) + ThisCardStatusPill (live status pill)
+  4. BoardDetailPage Cards click navigates; legacy side-sheet behind `?legacy=1` fallback for one release
+  5. Mode-aware affordances apply (Wave 2): Explore allows everything, Study locks Inputs+Intent after first Run, Release hides manual Evidence
+  6. `tsc --noEmit` clean (default + strict tsconfig.app.json), vitest run passes
+**Plans**:
+  - [x] 08-01 — Foundation (route, navigation, top bar, sidebar augmentation) — Wave 1, shipped 2026-04-26 — see `phases/08-card-as-page/08-01-SUMMARY.md`
+  - [ ] 08-02 — Body composition (Hero, configuration tables, KPI form, sequence + status, action bar, lifecycle, mode rules, gate hooks) — Wave 2, plan staged at `phases/08-card-as-page/08-02-PLAN.md`
