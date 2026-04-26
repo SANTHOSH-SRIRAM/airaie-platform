@@ -36,6 +36,12 @@ export const registry: Renderer[] = [
     match: (c) => IMAGE_KINDS.has(c.artifact_kind.toLowerCase()),
     component: lazy(() => import('./ImageRenderer')),
   },
+  // Task 4 — JSON metrics renderer (fetch + key-value grid)
+  {
+    id: 'json-metrics',
+    match: (c) => c.artifact_kind.toLowerCase() === 'json',
+    component: lazy(() => import('./JsonMetricsRenderer')),
+  },
 ];
 
 /**
