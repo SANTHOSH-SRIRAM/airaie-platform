@@ -15,6 +15,7 @@ Rebuild the AirAIE platform frontend to match the v2 Figma design. The journey s
 - [ ] **Phase 7: Integration and Polish** — Cross-screen navigation, error handling, loading states, responsive refinements, dark mode pass
 - [x] **Phase 8: Card-as-Page** — Replace BoardDetailPage's CardDetail side-sheet with a per-card route (`/cards/:cardId`) that becomes the configuration-first surface for an entire chain instance (Intent + Plan + Run + Results + Evidence + Gates). Wave 1 (08-01) shipped the foundation: route, navigation, top bar with functional Run state machine, sidebar context blocks, ?legacy=1 fallback. Wave 2 (08-02) shipped body composition (Hero, AvailableInputsTable, AvailableMethodsTable, KPI form, Sequence/Status, action bar, lifecycle, mode rules, card-scoped gate hooks). Both surfaces (CardTopBar + CardActionBar) share a single `useCardRunState` hook so a Run started from either flips both within one render cycle.
 - [x] **Phase 9: Renderer Registry MVP (concept Phase 2a)** — Replace CardStatusPanel's bullet-list-of-artifact-download-links Results subsection with a renderer registry that picks the right component per `(intent_type, artifact_kind)` and mounts it inline. Wave 1 (09-01) shipped 5 lazy-loaded renderers (image, json-metrics, csv-chart, csv-table, fallback), 3 per-intent layouts (cfd_analysis, fea_static, parameter_sweep), and a `render-csv` Vite manualChunk for `papaparse`. `pickRenderer(artifact, intent)` honors a 4-tier priority: manifest hint → exact (intent_type, kind) → kind-only → always-true fallback. ResultsSection extracts a pure `planResults` helper for unit-testable dispatch. 38 net-new tests, 289 total passing. Heavy renderers (3D CAD, PDF, scientific viz) deferred to Phase 2b–2f.
+- [ ] **Phase 10: Card Canvas (Tiptap-direct block editor)** — Replace the structured-sections Card-page (Phase 8) with a single flowing Notion-like canvas. Block editor on Tiptap directly (no BlockNote dependency — long-term ownership of the block + UI layers, ProseMirror under the hood). Typed governance blocks (Intent, Input, KPI, Method, Run, Result, Evidence, Gate, EmbedCard, EmbedRecord, AiAssist) compose freely with text/heading/list/callout/divider blocks. Slash menu + drag-drop palette. ~7 waves spanning ~24-28 dev-days. Wave 1 (10-01) shipped the framework: Tiptap install, schema, persistence, auto-migration, feature-flagged `/cards/:cardId?canvas=1` route. All 11 typed blocks render as `TypedBlockPlaceholder` until 10-02 ships real NodeView components. Backend `cards.body_blocks JSONB` + `PATCH /v0/cards/{id}/body` with optimistic concurrency.
 
 ## Phase Details
 
@@ -131,3 +132,27 @@ Rebuild the AirAIE platform frontend to match the v2 Figma design. The journey s
   7. `tsc --noEmit` clean (default + strict), vitest run passes, npm run build succeeds with verified `dist/assets/render-csv-*.js` chunk
 **Plans**:
   - [x] 09-01 — Renderer Registry MVP (5 renderers + 3 layouts + ResultsSection + CardStatusPanel wiring) — Wave 1, shipped 2026-04-26 — see `phases/09-renderer-registry/09-01-SUMMARY.md`
+
+### Phase 10: Card Canvas (Tiptap-direct block editor)
+**Goal**: Replace the structured-sections Card-page (Phase 8) with a single flowing Notion-like canvas built on Tiptap directly (no BlockNote dependency). Typed governance blocks (Intent / Input / KPI / Method / Run / Result / Evidence / Gate / EmbedCard / EmbedRecord / AiAssist) compose freely with text/heading/list/callout/divider blocks. Validates the user's "page-feel, not card-stack-feel" feedback after seeing Phase 8. Long-term ownership of the block + UI layers; ProseMirror underneath handles cursor/selection/IME/paste/undo.
+**Depends on**: Phase 8 (data plumbing — useCardRunState, useCardModeRules, hooks), Phase 9 (renderer registry — drives Result block content)
+**Requirements**: REQ-01, REQ-04, NFR-04
+**Success Criteria** (what must be TRUE):
+  1. `/cards/:cardId?canvas=1` route renders the Tiptap canvas with auto-migrated body_blocks for any existing Card
+  2. All 11 typed governance block kinds render with live data from their bound entities (real NodeViews land 10-02 onward)
+  3. Slash menu inserts text + typed blocks per Mode rules
+  4. Right palette drags into canvas, creating typed blocks at drop position
+  5. `body_blocks` persists with optimistic concurrency; reload restores exact state; 409 on stale-version save
+  6. Mode-rule edit locks visually applied (🔒 + tooltip) per typed block
+  7. Board canvas mirrors Card canvas with Board-specific block kinds (cardsGrid, cardsGraph, gatesRollup, evidenceRollup, artifactPool)
+  8. Editor chunk lazy-loaded; main bundle delta < 5 KB
+  9. All gates green (frontend tsc default + strict, vitest, npm build; kernel go build, go test -short)
+  10. Phase 10-07 removes the Phase 8 structured page after canvas is verified
+**Plans**:
+  - [x] 10-01 — Editor framework (Tiptap install + block schema + persistence + auto-migration + feature-flagged route) — Wave 1, shipped 2026-04-27 — see `phases/10-card-canvas/10-01-SUMMARY.md`
+  - [ ] 10-02 — Real NodeViews for Intent / Input / Result + minimal slash menu — Wave 1 sub-2 (~3-4 dev-days)
+  - [ ] 10-03 — Real NodeViews for KPI / Method / Run + full slash menu (Run uses useCardRunState) — Wave 2 (~3-4 dev-days)
+  - [ ] 10-04 — Evidence / Gate / Embed NodeViews + drag-drop palette — Wave 3 (~4-5 dev-days)
+  - [ ] 10-05 — Board canvas migration with Board-specific block kinds — Wave 4 (~5-6 dev-days)
+  - [ ] 10-06 — Mode-rule per-block locks + perf pass (NodeView memoization, IntersectionObserver lazy-mount) + 3-way merge UI — Wave 5 (~3 dev-days)
+  - [ ] 10-07 — Remove structured Phase 8 page; remove `?legacy=1` Board fallback; canvas becomes default — Wave 6 (~2 dev-days)
