@@ -7,6 +7,7 @@ import {
   lockIntent,
   listIntentTypes,
 } from '@api/intents';
+import { listIntentTypePipelines } from '@api/pipelines';
 
 // ---------------------------------------------------------------------------
 // Query keys
@@ -17,6 +18,8 @@ export const intentKeys = {
   list: (boardId: string) => [...intentKeys.all, 'list', boardId] as const,
   detail: (id: string) => [...intentKeys.all, 'detail', id] as const,
   types: (verticalSlug: string) => [...intentKeys.all, 'types', verticalSlug] as const,
+  typePipelines: (intentTypeSlug: string) =>
+    [...intentKeys.all, 'type-pipelines', intentTypeSlug] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -46,6 +49,23 @@ export function useIntentTypes(verticalSlug: string | undefined) {
     queryKey: intentKeys.types(verticalSlug!),
     queryFn: () => listIntentTypes(verticalSlug!),
     enabled: !!verticalSlug,
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * List the pipelines that support a given intent_type.
+ *
+ * Used by AvailableMethodsTable (Phase 8 / 08-02) to show which Methods
+ * the user can pick from for a Card. Returns `[]` while disabled or when
+ * the kernel doesn't recognize the intent_type — see `listIntentTypePipelines`
+ * for the graceful-degradation contract.
+ */
+export function useIntentTypePipelines(intentTypeSlug: string | undefined) {
+  return useQuery({
+    queryKey: intentKeys.typePipelines(intentTypeSlug ?? '__missing__'),
+    queryFn: () => listIntentTypePipelines(intentTypeSlug!),
+    enabled: !!intentTypeSlug,
     staleTime: 60_000,
   });
 }
