@@ -2,7 +2,15 @@ import { create } from 'zustand';
 
 // --- Types ---
 
-export type SidebarContentType = 'navigation' | 'nodePalette' | 'sessions' | 'filters' | 'artifacts' | 'profile' | 'tool-detail';
+export type SidebarContentType =
+  | 'navigation'
+  | 'nodePalette'
+  | 'sessions'
+  | 'filters'
+  | 'artifacts'
+  | 'profile'
+  | 'tool-detail'
+  | 'card-detail';
 
 export interface RightPanelState {
   open: boolean;

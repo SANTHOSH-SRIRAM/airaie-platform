@@ -6,6 +6,7 @@ import FilterSidebar from '@components/tools/FilterSidebar';
 import ArtifactsSidebar from '@components/artifacts/ArtifactsSidebar';
 import ProfileSidebar from '@components/profile/ProfileSidebar';
 import ToolDetailSidebar from '@components/tools/ToolDetailSidebar';
+import CardDetailSidebar from '@components/cards/sidebar/CardDetailSidebar';
 
 /**
  * Routes sidebar content based on uiStore.sidebarContentType.
@@ -50,6 +51,11 @@ export default function SidebarContentRouter() {
       {/* Tool Detail sidebar */}
       <div className={contentType === 'tool-detail' ? 'contents' : 'hidden'}>
         <ToolDetailSidebar />
+      </div>
+
+      {/* Card Detail sidebar — Phase 8 Card-as-page (08-01) */}
+      <div className={contentType === 'card-detail' ? 'contents' : 'hidden'}>
+        <CardDetailSidebar />
       </div>
     </div>
   );

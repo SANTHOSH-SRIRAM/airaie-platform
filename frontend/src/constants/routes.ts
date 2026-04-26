@@ -63,12 +63,13 @@ export const PAGE_TABS = [
 ] as const;
 
 /** Map route prefixes to sidebar content types */
-export const ROUTE_SIDEBAR_MAP: Record<string, 'navigation' | 'nodePalette' | 'sessions' | 'filters' | 'artifacts' | 'profile' | 'tool-detail'> = {
+export const ROUTE_SIDEBAR_MAP: Record<string, 'navigation' | 'nodePalette' | 'sessions' | 'filters' | 'artifacts' | 'profile' | 'tool-detail' | 'card-detail'> = {
   '/dashboard': 'navigation',
   '/workflow-studio': 'nodePalette',
   '/agent-studio': 'sessions',
   '/tools/': 'tool-detail',
   '/tools': 'navigation',
+  '/cards': 'card-detail',
   '/boards/:id/release': 'navigation',
   '/boards': 'navigation',
   '/workflows': 'navigation',
