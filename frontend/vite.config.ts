@@ -43,6 +43,11 @@ export default defineConfig({
           query: ['@tanstack/react-query'],
           ui: ['lucide-react', 'recharts'],
           reactflow: ['@xyflow/react'],
+          // Phase 2a renderer registry — papaparse is dynamically imported
+          // inside the CSV renderers; isolating it here ensures the bytes
+          // are deferred until a Card actually mounts CsvTableRenderer or
+          // CsvChartRenderer.
+          'render-csv': ['papaparse'],
         },
       },
     },
