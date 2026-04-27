@@ -46,7 +46,10 @@ export function computeInitialBoardDoc(
 }
 
 export default function BoardCanvasPage() {
-  const { id: boardId } = useParams<{ id: string }>();
+  // Route param is `boardId` (matches BoardDetailPage and the route
+  // declaration in App.tsx). Earlier draft used `id` and got an empty
+  // boardId → "Could not load board." chrome on smoke.
+  const { boardId } = useParams<{ boardId: string }>();
   const { data: board, isLoading: boardLoading, error: boardError } = useBoard(boardId);
   const updateBody = useUpdateBoardBody(boardId ?? '');
 
@@ -143,7 +146,8 @@ export default function BoardCanvasPage() {
   return (
     <BoardCanvasContext.Provider value={{ boardId: board.id, board }}>
       <div className="px-[24px] py-[16px] max-w-[1100px] mx-auto">
-        <div className="text-[20px] font-semibold text-[#1a1a1a] mb-[12px]">{board.name}</div>
+        {/* The H1 is emitted by generateDefaultBoardBody so the canvas
+            owns the title rendering. We don't duplicate it in chrome. */}
         <EditorContent
           editor={editor}
           className="min-h-[400px] prose-base text-[14px] leading-[1.6] text-[#1a1a1a] focus:outline-none [&_p]:my-[6px] [&_h1]:text-[28px] [&_h1]:font-semibold [&_h1]:mt-[16px] [&_h1]:mb-[8px] [&_h2]:text-[20px] [&_h2]:font-semibold [&_h2]:mt-[12px] [&_h2]:mb-[6px]"

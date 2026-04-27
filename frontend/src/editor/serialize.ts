@@ -13,6 +13,7 @@ import {
   type CardBodyDoc,
   type LayoutBlockType,
 } from '@/types/cardBlocks';
+import { BOARD_BLOCK_KINDS } from '@/types/boardBlocks';
 
 /** All block kinds the editor understands — typed + layout + text + marks. */
 const LAYOUT_KINDS: ReadonlySet<LayoutBlockType> = new Set([
@@ -30,7 +31,13 @@ const LAYOUT_KINDS: ReadonlySet<LayoutBlockType> = new Set([
   'callout',
 ]);
 
-const TYPED_KINDS_SET: ReadonlySet<string> = new Set(TYPED_BLOCK_KINDS);
+const TYPED_KINDS_SET: ReadonlySet<string> = new Set([
+  ...TYPED_BLOCK_KINDS,
+  // Phase 10 / Plan 10-05 — Board-canvas-only kinds. Allowlisted here so
+  // serializeDoc round-trips Board docs without silently dropping the
+  // cardsGrid / rollup blocks.
+  ...BOARD_BLOCK_KINDS,
+]);
 
 /** Returns true for a recognized block kind (layout OR typed). */
 export function isKnownBlockType(kind: unknown): kind is BlockType {

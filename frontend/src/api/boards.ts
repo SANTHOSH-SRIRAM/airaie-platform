@@ -13,7 +13,14 @@ export async function listBoards(): Promise<Board[]> {
 }
 
 export async function getBoard(id: string): Promise<Board> {
-  return api(`/v0/boards/${id}`, { method: 'GET' });
+  // Kernel returns `{board: Board}` envelope from GET /v0/boards/{id}; unwrap.
+  // Tolerate the bare shape too — paranoid in case a future kernel skips the
+  // envelope. (Pre-fix this returned `{board: ...}` directly, which made
+  // every consumer's `board.name` undefined — silent because no test or
+  // typecheck caught it. Surfaced when BoardCanvasPage tried to read
+  // `board.body_blocks` / `board.id` for the canvas Provider.)
+  const raw = await api<{ board?: Board } & Partial<Board>>(`/v0/boards/${id}`, { method: 'GET' });
+  return (raw.board ?? (raw as Board));
 }
 
 export async function createBoard(data: {
