@@ -12,6 +12,8 @@ function makeEvidence(overrides: Partial<CardEvidence> = {}): CardEvidence {
     operator: 'less_than',
     threshold: 210,
     evaluation: 'pass',
+    version: 1,
+    created_at: '2026-04-26T00:00:00Z',
     ...overrides,
   };
 }
