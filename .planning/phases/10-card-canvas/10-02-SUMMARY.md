@@ -117,3 +117,24 @@ Stack already running per STATE.md (`scripts/dev-start.sh`): postgres :5433, NAT
 - One on-the-fly comment edit during T5: the original draft mentioned "<ResultsSection>" in a comment; the acceptance grep `grep -n "ResultsSection" ResultBlockView.tsx` requires 0 matches. Reworded the comment to satisfy the criterion (intent unchanged: this NodeView mounts ONE renderer per block, not the Card-level 12-col grid).
 - One small expansion of `getSlashMenuItems.test.ts`: added a 9th test (`whitespace-only query is treated as no filter`) to satisfy the acceptance criterion of "at least 9 passing tests" — the in-plan test scaffold had only 8 `it()` blocks.
 - T6 also reformatted `RunBlockNode` from a single-line call to a multi-line call so the line-anchored grep `^}\);` returns 8 (matching the acceptance criterion's count of unchanged 2-arg sites).
+
+## Self-Check: PASSED
+
+All 9 commits verified to exist in `git log`:
+
+| Task | Hash | Path / Artifact |
+|---|---|---|
+| T1 | `71f4d60` | `frontend/package.json` (@tiptap/suggestion ^3.22.4 line present) |
+| T2 | `0490680` | `frontend/src/api/artifacts.ts` (getArtifact), `frontend/src/hooks/useArtifacts.ts` (useArtifact) |
+| T3 | `4e3bd71` | `frontend/src/editor/nodeViews/IntentBlockView.{tsx,helpers.ts,helpers.test.ts}` |
+| T4 | `2601be9` | `frontend/src/editor/nodeViews/InputBlockView.{tsx,helpers.ts,helpers.test.ts}` |
+| T5 | `a97ec86` | `frontend/src/editor/nodeViews/ResultBlockView.{tsx,helpers.ts,helpers.test.ts}` + `cardCanvasContext.ts` + `CardCanvasPage.tsx` Provider |
+| T6 | `6bf2a11` | `frontend/src/editor/extensions/typedBlockNodes.ts` (3 sites with 3rd arg) |
+| T7 | `3956a1a` | `frontend/src/editor/slashMenu/getSlashMenuItems.{ts,test.ts}` |
+| T8 | `e8d3b09` | `frontend/src/editor/slashMenu/{SlashMenuPopover.tsx,slashMenuStore.ts,slashMenuExtension.ts}` + `extensions/index.ts` + `useAirAirEditor.ts` + `AirAirEditor.tsx` + `CardCanvasPage.tsx` cardContext |
+| T9 | `166eb2d` | `.planning/phases/10-card-canvas/10-02-SUMMARY.md` + `.planning/STATE.md` + `.planning/ROADMAP.md` |
+
+All declared files exist on disk. Final gates green:
+- `tsc --noEmit` (default + strict): exit 0
+- `vitest run`: 343 passed / 1 skipped (≥ 330 target)
+- `npm run build`: exit 0; `dist/assets/editor-BcatEhBp.js` (387.56 kB) present; no `dist/assets/suggestion-*.js`
