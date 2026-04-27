@@ -8,6 +8,11 @@ import { ResultBlockView } from '../nodeViews/ResultBlockView';
 import { KpiBlockView } from '../nodeViews/KpiBlockView';
 import { MethodBlockView } from '../nodeViews/MethodBlockView';
 import { RunBlockView } from '../nodeViews/RunBlockView';
+import { EvidenceBlockView } from '../nodeViews/EvidenceBlockView';
+import { GateBlockView } from '../nodeViews/GateBlockView';
+import { EmbedCardBlockView } from '../nodeViews/EmbedCardBlockView';
+import { EmbedRecordBlockView } from '../nodeViews/EmbedRecordBlockView';
+import { AiAssistBlockView } from '../nodeViews/AiAssistBlockView';
 import type { TypedBlockType } from '@/types/cardBlocks';
 
 // ---------------------------------------------------------------------------
@@ -26,9 +31,12 @@ import type { TypedBlockType } from '@/types/cardBlocks';
 // Each block exposes a typed `attrs` shape (see cardBlocks.ts). The factory
 // receives an `addAttributes` map describing per-attribute defaults.
 //
-// Wave 10-02 wires real NodeViews for intentBlock / inputBlock / resultBlock;
-// the remaining 8 typed blocks continue to use TypedBlockPlaceholder until
-// 10-03+ ships their components.
+// Wave 10-02 wired real NodeViews for intentBlock / inputBlock / resultBlock;
+// 10-03 added Kpi / Method / Run; 10-04 completes the set with Evidence /
+// Gate / EmbedCard / EmbedRecord / AiAssist. As of Wave 10-04 ALL 11 typed
+// governance blocks render via real per-kind NodeViews. TypedBlockPlaceholder
+// remains as the factory's safety fallback for any future block kind that
+// gets declared without a NodeView yet.
 // ---------------------------------------------------------------------------
 
 type AttrSchema = Record<string, { default: unknown }>;
@@ -101,20 +109,20 @@ export const ResultBlockNode = makeTypedBlockNode('resultBlock', {
 
 export const EvidenceBlockNode = makeTypedBlockNode('evidenceBlock', {
   evidenceId: { default: null },
-});
+}, EvidenceBlockView);
 
 export const GateBlockNode = makeTypedBlockNode('gateBlock', {
   gateId: { default: null },
-});
+}, GateBlockView);
 
 export const EmbedCardBlockNode = makeTypedBlockNode('embedCardBlock', {
   cardId: { default: null },
-});
+}, EmbedCardBlockView);
 
 export const EmbedRecordBlockNode = makeTypedBlockNode('embedRecordBlock', {
   recordId: { default: null },
-});
+}, EmbedRecordBlockView);
 
 export const AiAssistBlockNode = makeTypedBlockNode('aiAssistBlock', {
   conversationId: { default: null },
-});
+}, AiAssistBlockView);
