@@ -5,6 +5,9 @@ import { TypedBlockPlaceholder } from '../typedBlockPlaceholder';
 import { IntentBlockView } from '../nodeViews/IntentBlockView';
 import { InputBlockView } from '../nodeViews/InputBlockView';
 import { ResultBlockView } from '../nodeViews/ResultBlockView';
+import { KpiBlockView } from '../nodeViews/KpiBlockView';
+import { MethodBlockView } from '../nodeViews/MethodBlockView';
+import { RunBlockView } from '../nodeViews/RunBlockView';
 import type { TypedBlockType } from '@/types/cardBlocks';
 
 // ---------------------------------------------------------------------------
@@ -83,14 +86,14 @@ export const KpiBlockNode = makeTypedBlockNode('kpiBlock', {
   metricKey: { default: '' },
   operator: { default: 'eq' }, // 'between' | 'less_than' | 'greater_than' | 'eq'
   threshold: { default: 0 }, // number | [number, number]
-});
+}, KpiBlockView);
 
 export const MethodBlockNode = makeTypedBlockNode('methodBlock', {
   planId: { default: null },
-});
+}, MethodBlockView);
 
 export const RunBlockNode = makeTypedBlockNode('runBlock', {
-});
+}, RunBlockView);
 
 export const ResultBlockNode = makeTypedBlockNode('resultBlock', {
   artifactId: { default: null },
