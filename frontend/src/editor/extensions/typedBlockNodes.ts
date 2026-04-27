@@ -1,6 +1,10 @@
 import { Node, mergeAttributes } from '@tiptap/core';
-import { ReactNodeViewRenderer } from '@tiptap/react';
+import { ReactNodeViewRenderer, type ReactNodeViewProps } from '@tiptap/react';
+import type { ComponentType } from 'react';
 import { TypedBlockPlaceholder } from '../typedBlockPlaceholder';
+import { IntentBlockView } from '../nodeViews/IntentBlockView';
+import { InputBlockView } from '../nodeViews/InputBlockView';
+import { ResultBlockView } from '../nodeViews/ResultBlockView';
 import type { TypedBlockType } from '@/types/cardBlocks';
 
 // ---------------------------------------------------------------------------
@@ -12,19 +16,30 @@ import type { TypedBlockType } from '@/types/cardBlocks';
 //   - selectable + draggable
 //   - parseHTML matches `div[data-block-type="<name>"]` on import
 //   - renderHTML emits the same data-block-type attribute on serialize
-//   - addNodeView returns the shared TypedBlockPlaceholder until 10-02
-//     swaps in the per-kind real component.
+//   - addNodeView returns the per-Node component (passed in as the optional
+//     3rd arg). When omitted, falls back to TypedBlockPlaceholder so the
+//     block kinds without a real NodeView yet still render.
 //
 // Each block exposes a typed `attrs` shape (see cardBlocks.ts). The factory
 // receives an `addAttributes` map describing per-attribute defaults.
 //
-// Wave 10-02 will replace the shared NodeView in three of these calls
-// (intentBlock / inputBlock / resultBlock); the rest follow in 10-03+.
+// Wave 10-02 wires real NodeViews for intentBlock / inputBlock / resultBlock;
+// the remaining 8 typed blocks continue to use TypedBlockPlaceholder until
+// 10-03+ ships their components.
 // ---------------------------------------------------------------------------
 
 type AttrSchema = Record<string, { default: unknown }>;
 
-function makeTypedBlockNode(name: TypedBlockType, attrs: AttrSchema) {
+// The factory's optional `nodeView` argument matches the type
+// `ReactNodeViewRenderer` expects. NodeView components themselves accept the
+// narrower `NodeViewProps` (a structural prefix of ReactNodeViewProps); a
+// safe cast at the call site bridges the two — runtime payload is identical,
+// the difference is only the typed `ref` field that React adds for refs.
+function makeTypedBlockNode(
+  name: TypedBlockType,
+  attrs: AttrSchema,
+  nodeView?: ComponentType<ReactNodeViewProps>,
+) {
   return Node.create({
     name,
     group: 'block',
@@ -48,7 +63,7 @@ function makeTypedBlockNode(name: TypedBlockType, attrs: AttrSchema) {
     },
 
     addNodeView() {
-      return ReactNodeViewRenderer(TypedBlockPlaceholder);
+      return ReactNodeViewRenderer(nodeView ?? TypedBlockPlaceholder);
     },
   });
 }
@@ -57,12 +72,12 @@ function makeTypedBlockNode(name: TypedBlockType, attrs: AttrSchema) {
 
 export const IntentBlockNode = makeTypedBlockNode('intentBlock', {
   intentSpecId: { default: null },
-});
+}, IntentBlockView);
 
 export const InputBlockNode = makeTypedBlockNode('inputBlock', {
   artifactId: { default: null },
   portName: { default: null },
-});
+}, InputBlockView);
 
 export const KpiBlockNode = makeTypedBlockNode('kpiBlock', {
   metricKey: { default: '' },
@@ -74,11 +89,12 @@ export const MethodBlockNode = makeTypedBlockNode('methodBlock', {
   planId: { default: null },
 });
 
-export const RunBlockNode = makeTypedBlockNode('runBlock', {});
+export const RunBlockNode = makeTypedBlockNode('runBlock', {
+});
 
 export const ResultBlockNode = makeTypedBlockNode('resultBlock', {
   artifactId: { default: null },
-});
+}, ResultBlockView);
 
 export const EvidenceBlockNode = makeTypedBlockNode('evidenceBlock', {
   evidenceId: { default: null },
