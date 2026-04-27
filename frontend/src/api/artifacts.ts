@@ -32,7 +32,14 @@ export interface BoardArtifact {
 }
 
 export async function listBoardArtifacts(boardId: string): Promise<BoardArtifact[]> {
-  const raw = await api<unknown>(`/v0/boards/${boardId}/artifacts`, { method: 'GET' });
+  // Kernel exposes `GET /v0/artifacts?board_id=...` (not /v0/boards/{id}/artifacts).
+  // The latter doesn't exist — verified via handler/handler.go route map. Pre-fix
+  // listBoardArtifacts called the missing path and 404'd; surfaced when 10-05c
+  // ArtifactPoolBlockView mounted on the Board canvas.
+  const raw = await api<unknown>(
+    `/v0/artifacts?board_id=${encodeURIComponent(boardId)}`,
+    { method: 'GET' },
+  );
   return unwrapList<BoardArtifact>(raw, 'artifacts');
 }
 
