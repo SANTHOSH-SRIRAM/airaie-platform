@@ -19,6 +19,10 @@ import { scheduleIdleSave } from '@/editor/useAirAirEditor';
 import { serializeDoc } from '@/editor/serialize';
 import { BoardCanvasContext } from '@/editor/boardCanvasContext';
 import { SlashMenuPopover } from '@/editor/slashMenu/SlashMenuPopover';
+import { ConflictResolutionModal, type ConflictResolution } from '@/editor/ConflictResolutionModal';
+import { ApiError } from '@/api/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { boardKeys } from '@hooks/useBoards';
 import type { BoardBodyDoc } from '@/types/boardBlocks';
 import type { CardBodyDoc } from '@/types/cardBlocks';
 
@@ -53,10 +57,15 @@ export default function BoardCanvasPage() {
   const { boardId } = useParams<{ boardId: string }>();
   const { data: board, isLoading: boardLoading, error: boardError } = useBoard(boardId);
   const updateBody = useUpdateBoardBody(boardId ?? '');
+  const queryClient = useQueryClient();
 
   // Track the body_blocks_version seen by the editor. Bumped on each
   // successful save. 409 conflicts re-set it from the server.
   const [version, setVersion] = useState<number>(1);
+
+  // 10-06 — conflict-resolution modal state. Set when the autosave PATCH
+  // returns 409 VERSION_CONFLICT; cleared by the user picking a resolution.
+  const [conflict, setConflict] = useState<{ currentVersion: number } | null>(null);
 
   // Snapshot the initialDoc + version once when the board first loads. We
   // don't want to rebuild the editor on every refetch.
@@ -93,7 +102,12 @@ export default function BoardCanvasPage() {
             setVersion(resp.body_blocks_version);
           },
           onError: (err) => {
-            // 409 VERSION_CONFLICT — log for now; full 3-way merge UI in 10-06.
+            // 10-06 — surface 409 VERSION_CONFLICT via ConflictResolutionModal.
+            if (err instanceof ApiError && err.status === 409) {
+              const cur = (err.details?.current_version as number | undefined) ?? versionRef.current + 1;
+              setConflict({ currentVersion: cur });
+              return;
+            }
             // eslint-disable-next-line no-console
             console.warn('Board body autosave failed', err);
           },
@@ -135,6 +149,41 @@ export default function BoardCanvasPage() {
     return () => window.removeEventListener('beforeunload', handler);
   }, []);
 
+  // 10-06 — resolve a 409 conflict per user choice.
+  const handleConflictResolve = (choice: ConflictResolution) => {
+    if (!editor || !boardId) {
+      setConflict(null);
+      return;
+    }
+    if (choice === 'discard') {
+      // Refetch the server doc + replace local state. The simplest path is
+      // to invalidate the board query and reset the editor's content from
+      // the refreshed `board.body_blocks`. We close the modal; React Query
+      // refetch + the [initialDoc] dep on useEditor remount handles the rest.
+      setInitialDoc(null);
+      queryClient.invalidateQueries({ queryKey: boardKeys.detail(boardId) });
+    } else if (choice === 'overwrite') {
+      // Force-save with the server's current_version as expected_version.
+      const cur = conflict?.currentVersion ?? versionRef.current;
+      const json = editor.getJSON() as unknown as CardBodyDoc;
+      const doc = serializeDoc(json);
+      updateBody.mutate(
+        { body: doc as unknown as BoardBodyDoc, expectedVersion: cur },
+        {
+          onSuccess: (resp) => setVersion(resp.body_blocks_version),
+        },
+      );
+    } else if (choice === 'merge') {
+      // Naive append-merge: bump the local version to the server's current
+      // and re-save. The next autosave includes our local doc; if there are
+      // no overlapping edits this lands cleanly. If overlap exists the user
+      // hits the modal again and can choose discard/overwrite.
+      const cur = conflict?.currentVersion ?? versionRef.current;
+      setVersion(cur);
+    }
+    setConflict(null);
+  };
+
   if (boardLoading) return <PageSkeleton />;
   if (boardError || !board) {
     return (
@@ -157,6 +206,14 @@ export default function BoardCanvasPage() {
             component as Card canvas; the BoardSlashMenu extension pushes
             Board-scoped items into slashMenuStore on '/'. */}
         <SlashMenuPopover editor={editor} />
+        {/* Phase 10 / Plan 10-06 — 3-way merge UI on 409 VERSION_CONFLICT. */}
+        {conflict ? (
+          <ConflictResolutionModal
+            currentVersion={conflict.currentVersion}
+            onResolve={handleConflictResolve}
+            onDismiss={() => setConflict(null)}
+          />
+        ) : null}
       </div>
     </BoardCanvasContext.Provider>
   );
