@@ -47,6 +47,7 @@ export function generateDefaultBoardBody(
 
   blocks.push({ type: 'paragraph' });
 
+  blocks.push({ type: 'cardsGraphBlock' });
   blocks.push({ type: 'gatesRollupBlock' });
   blocks.push({ type: 'evidenceRollupBlock' });
   blocks.push({ type: 'artifactPoolBlock' });

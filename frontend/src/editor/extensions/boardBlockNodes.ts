@@ -3,6 +3,7 @@ import { ReactNodeViewRenderer, type ReactNodeViewProps } from '@tiptap/react';
 import type { ComponentType } from 'react';
 import { BoardBlockPlaceholder } from '../nodeViews/BoardBlockPlaceholder';
 import { CardsGridBlockView } from '../nodeViews/CardsGridBlockView';
+import { CardsGraphBlockView } from '../nodeViews/CardsGraphBlockView';
 import { GatesRollupBlockView } from '../nodeViews/GatesRollupBlockView';
 import { EvidenceRollupBlockView } from '../nodeViews/EvidenceRollupBlockView';
 import { ArtifactPoolBlockView } from '../nodeViews/ArtifactPoolBlockView';
@@ -64,9 +65,7 @@ export const CardsGridBlockNode = makeBoardBlockNode('cardsGridBlock', {
   filter: { default: null },
 }, CardsGridBlockView);
 
-// CardsGraph stays on the placeholder until 10-05c-rest (it needs xyflow
-// integration and a separate, heavier render path).
-export const CardsGraphBlockNode = makeBoardBlockNode('cardsGraphBlock', {});
+export const CardsGraphBlockNode = makeBoardBlockNode('cardsGraphBlock', {}, CardsGraphBlockView);
 
 export const GatesRollupBlockNode = makeBoardBlockNode('gatesRollupBlock', {}, GatesRollupBlockView);
 
