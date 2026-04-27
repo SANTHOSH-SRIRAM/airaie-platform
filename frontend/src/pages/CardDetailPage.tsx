@@ -112,12 +112,16 @@ export default function CardDetailPage() {
   const setSidebarContentType = useUiStore((s) => s.setSidebarContentType);
   const hideBottomBar = useUiStore((s) => s.hideBottomBar);
 
-  // Phase 10 — `?canvas=1` opts the user into the Tiptap canvas. The chunk
-  // is lazy-imported so non-canvas Card opens don't pay for the editor.
-  // NOTE: this dispatch must happen as a *render-tree* delegation, not an
-  // early return before the other hooks, otherwise React's rules-of-hooks
-  // breaks (different hook count per render).
-  const onCanvas = searchParams.get('canvas') === '1';
+  // Phase 10 / 10-07-flip — Card Canvas is the DEFAULT for /cards/:id.
+  // The structured-sections page is still reachable via `?legacy=1` (escape
+  // hatch for one release window before final removal in 10-07-cleanup).
+  // `?canvas=0` also routes to legacy for explicit opt-out parity with the
+  // old `?canvas=1` opt-in semantic.
+  // NOTE: dispatch must happen as a *render-tree* delegation, not an early
+  // return before the other hooks, otherwise React's rules-of-hooks breaks.
+  const canvasParam = searchParams.get('canvas');
+  const legacyParam = searchParams.get('legacy');
+  const onCanvas = canvasParam !== '0' && legacyParam !== '1';
 
   const { data: card, isLoading: cardLoading, error: cardError, refetch: refetchCard } = useCard(cardId);
   const { data: board, isLoading: boardLoading } = useBoard(card?.board_id);

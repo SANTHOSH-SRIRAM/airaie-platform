@@ -139,12 +139,13 @@ export default function BoardDetailPage() {
     [location.search],
   );
 
-  // Phase 10 / Plan 10-05b — `?canvas=1` opts the user into the Tiptap Board
-  // canvas. The chunk is lazy-imported so non-canvas Board opens don't pay.
-  const onCanvas = useMemo(
-    () => new URLSearchParams(location.search).get('canvas') === '1',
-    [location.search],
-  );
+  // Phase 10 / 10-07-flip — Board Canvas is the DEFAULT for /boards/:id.
+  // Legacy structured page reachable via `?legacy=1` for one release window;
+  // `?canvas=0` also routes to legacy for explicit opt-out.
+  const onCanvas = useMemo(() => {
+    const sp = new URLSearchParams(location.search);
+    return sp.get('canvas') !== '0' && sp.get('legacy') !== '1';
+  }, [location.search]);
 
   useEffect(() => {
     setSidebarContentType('navigation');

@@ -302,11 +302,15 @@ export default function CardTopBar({ card, board }: CardTopBarProps) {
         {!onCanvas && (
           <button
             type="button"
-            onClick={() => setSearchParams({ canvas: '1' })}
-            title="Open this card in the canvas (Tiptap editor)"
+            // 10-07-flip: canvas is now the default route. Clearing both the
+            // `legacy` and `canvas` params returns to the canvas. (The button
+            // is only rendered while the user is on the legacy structured
+            // page via ?legacy=1.)
+            onClick={() => setSearchParams({})}
+            title="Back to the canvas view"
             className="text-[11px] text-[#9b978f] hover:text-[#1a1a1a] hover:underline"
           >
-            Try canvas →
+            Back to canvas →
           </button>
         )}
         {isDirty && (
