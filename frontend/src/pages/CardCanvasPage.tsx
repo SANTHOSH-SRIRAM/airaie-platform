@@ -44,6 +44,7 @@ import CardTopBar from '@components/cards/CardTopBar';
 import CardActionBar from '@components/cards/CardActionBar';
 
 import { generateDefaultBody, type MigrationRun } from '@/editor/migration';
+import { ConflictResolutionModal, type ConflictResolution } from '@/editor/ConflictResolutionModal';
 import { useAirAirEditor } from '@/editor/useAirAirEditor';
 import { AirAirEditor } from '@/editor/AirAirEditor';
 import { CardCanvasContext } from '@/editor/cardCanvasContext';
@@ -129,6 +130,8 @@ export default function CardCanvasPage() {
   const [initialDoc, setInitialDoc] = useState<CardBodyDoc | null>(null);
   const [version, setVersion] = useState<number>(1);
   const [snapshotted, setSnapshotted] = useState<boolean>(false);
+  // 10-06 — 409 conflict state, set by autosave onError; cleared by user choice.
+  const [conflict, setConflict] = useState<{ currentVersion: number } | null>(null);
 
   useEffect(() => {
     if (!card || snapshotted) return;
@@ -165,17 +168,12 @@ export default function CardCanvasPage() {
             setVersion(data.body_blocks_version);
           },
           onError: (err) => {
-            // 409 VERSION_CONFLICT — full 3-way merge UI lands in 10e.
-            // For Wave 1 we log the conflict and let the user keep
-            // editing. The next save will conflict again until they
-            // refresh; that's an acceptable Wave-1 trade.
+            // 10-06 — surface 409 VERSION_CONFLICT via ConflictResolutionModal
+            // (mounted below). Other errors flow through the existing log path.
             const status = (err as { status?: number })?.status;
             if (status === 409) {
-              // eslint-disable-next-line no-console
-              console.warn(
-                '[card-canvas] body save 409 VERSION_CONFLICT — refresh to load latest',
-                err,
-              );
+              const cur = ((err as { details?: { current_version?: number } })?.details?.current_version) ?? version + 1;
+              setConflict({ currentVersion: cur });
               return;
             }
             // Other errors — surface to the user via the same alert
@@ -247,6 +245,24 @@ export default function CardCanvasPage() {
           <div className="bg-white rounded-[12px] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)]">
             <AirAirEditor editor={editor} />
           </div>
+          {/* 10-06 — 3-way merge UI on 409 VERSION_CONFLICT. */}
+          {conflict ? (
+            <ConflictResolutionModal
+              currentVersion={conflict.currentVersion}
+              onResolve={(choice: ConflictResolution) => {
+                if (choice === 'discard') {
+                  setInitialDoc(null);
+                  setSnapshotted(false);
+                } else if (choice === 'overwrite') {
+                  setVersion(conflict.currentVersion);
+                } else if (choice === 'merge') {
+                  setVersion(conflict.currentVersion);
+                }
+                setConflict(null);
+              }}
+              onDismiss={() => setConflict(null)}
+            />
+          ) : null}
         </CardCanvasContext.Provider>
 
         <div aria-hidden="true" className="h-[80px]" />
