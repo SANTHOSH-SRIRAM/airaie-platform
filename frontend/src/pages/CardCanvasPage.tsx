@@ -46,6 +46,7 @@ import CardActionBar from '@components/cards/CardActionBar';
 import { generateDefaultBody, type MigrationRun } from '@/editor/migration';
 import { useAirAirEditor } from '@/editor/useAirAirEditor';
 import { AirAirEditor } from '@/editor/AirAirEditor';
+import { CardCanvasContext } from '@/editor/cardCanvasContext';
 import type { CardBodyDoc } from '@/types/cardBlocks';
 
 // ---------------------------------------------------------------------------
@@ -225,10 +226,21 @@ export default function CardCanvasPage() {
         <CardTopBar card={card} board={board} boardLoading={boardLoading} />
 
         {/* Canvas — the editor lives in a single white card so the typed
-            block placeholders read as inline elements within a document. */}
-        <div className="bg-white rounded-[12px] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)]">
-          <AirAirEditor editor={editor} />
-        </div>
+            block placeholders read as inline elements within a document.
+            CardCanvasContext.Provider threads the Card's intent_spec_id
+            (and ids) down to NodeViews so ResultBlockView can scope its
+            renderer pick by intent. */}
+        <CardCanvasContext.Provider
+          value={{
+            cardId: card.id,
+            boardId: card.board_id ?? null,
+            intentSpecId: card.intent_spec_id ?? null,
+          }}
+        >
+          <div className="bg-white rounded-[12px] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)]">
+            <AirAirEditor editor={editor} />
+          </div>
+        </CardCanvasContext.Provider>
 
         <div aria-hidden="true" className="h-[80px]" />
       </CardDetailLayout>
