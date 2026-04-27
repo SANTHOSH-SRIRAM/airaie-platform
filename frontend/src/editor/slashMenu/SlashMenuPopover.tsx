@@ -4,6 +4,8 @@ import type { Editor } from '@tiptap/react';
 import {
   getSlashMenuItems,
   docHasIntentBlock,
+  docHasMethodBlock,
+  docHasRunBlock,
   type SlashMenuItem,
 } from './getSlashMenuItems';
 import { slashMenuStore, type SlashMenuState } from './slashMenuStore';
@@ -14,8 +16,15 @@ import { slashMenuStore, type SlashMenuState } from './slashMenuStore';
 // the store reports `open: true`, we render the items list at the cursor
 // coordinates the plugin published.
 //
-// Keyboard: arrow up/down moves selection; Enter inserts selected; Escape
-// closes. The plugin's onKeyDown forwards events to us via the store.
+// Wave 10-03 expands the popover to:
+//   - thread all 3 cardinality flags (intent/method/run) into
+//     getSlashMenuItems
+//   - render two visual sections (Governance / Layout) with a thin divider
+//
+// Keyboard navigation continues to walk the flat `items[]` array (arrow
+// up/down moves selection across the section break; Enter inserts the
+// selected item; Escape closes). The visual grouping is purely a render
+// concern — selection logic is unchanged.
 // ---------------------------------------------------------------------------
 
 interface SlashMenuPopoverProps {
@@ -60,6 +69,9 @@ export function SlashMenuPopover({ editor }: SlashMenuPopoverProps) {
 
   if (!state.open || items.length === 0) return null;
 
+  const governance = items.filter((i) => i.group === 'governance');
+  const layout = items.filter((i) => i.group === 'layout');
+
   const popover = (
     <div
       className="fixed z-[1000] min-w-[240px] rounded-[8px] border border-[#e8e8e8] bg-white shadow-[0px_4px_16px_0px_rgba(0,0,0,0.12)] p-[4px]"
@@ -67,43 +79,80 @@ export function SlashMenuPopover({ editor }: SlashMenuPopoverProps) {
       role="listbox"
       aria-label="Slash menu"
     >
-      {items.map((it, i) => (
-        <button
-          key={it.id}
-          type="button"
-          role="option"
-          aria-selected={i === selectedIndex}
-          className={
-            'w-full text-left flex items-center gap-[8px] px-[8px] py-[6px] rounded-[6px] text-[12px] ' +
-            (i === selectedIndex ? 'bg-[#f0f0ec]' : 'hover:bg-[#fafafa]')
-          }
-          onMouseEnter={() => setSelectedIndex(i)}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            state.command(it);
-          }}
-        >
-          <span aria-hidden="true">{it.emoji}</span>
-          <div className="flex-1">
-            <div className="font-semibold text-[#1a1a1a]">{it.label}</div>
-            <div className="text-[10px] text-[#6b6b6b]">{it.description}</div>
+      {governance.length > 0 ? (
+        <>
+          <div className="px-[8px] py-[4px] text-[9px] uppercase tracking-wide text-[#9b978f]">
+            Governance
           </div>
-        </button>
-      ))}
+          {governance.map((it) => {
+            const i = items.indexOf(it);
+            return renderItem(it, i, selectedIndex, setSelectedIndex, state.command);
+          })}
+        </>
+      ) : null}
+      {layout.length > 0 ? (
+        <>
+          {governance.length > 0 ? (
+            <div className="my-[4px] border-t border-[#f0f0ec]" aria-hidden="true" />
+          ) : null}
+          <div className="px-[8px] py-[4px] text-[9px] uppercase tracking-wide text-[#9b978f]">
+            Layout
+          </div>
+          {layout.map((it) => {
+            const i = items.indexOf(it);
+            return renderItem(it, i, selectedIndex, setSelectedIndex, state.command);
+          })}
+        </>
+      ) : null}
     </div>
   );
 
   return createPortal(popover, document.body);
 }
 
+function renderItem(
+  it: SlashMenuItem,
+  i: number,
+  selectedIndex: number,
+  setSelectedIndex: (n: number) => void,
+  command: (item: SlashMenuItem) => void,
+) {
+  return (
+    <button
+      key={it.id}
+      type="button"
+      role="option"
+      aria-selected={i === selectedIndex}
+      className={
+        'w-full text-left flex items-center gap-[8px] px-[8px] py-[6px] rounded-[6px] text-[12px] ' +
+        (i === selectedIndex ? 'bg-[#f0f0ec]' : 'hover:bg-[#fafafa]')
+      }
+      onMouseEnter={() => setSelectedIndex(i)}
+      onMouseDown={(e) => {
+        e.preventDefault();
+        command(it);
+      }}
+    >
+      <span aria-hidden="true" className="w-[20px] text-center">{it.emoji}</span>
+      <div className="flex-1">
+        <div className="font-semibold text-[#1a1a1a]">{it.label}</div>
+        <div className="text-[10px] text-[#6b6b6b]">{it.description}</div>
+      </div>
+    </button>
+  );
+}
+
 function computeItems(state: SlashMenuState, editor: Editor | null): SlashMenuItem[] {
   if (!editor) return [];
   const docJson = editor.getJSON();
+  const docLike = {
+    content: (docJson.content ?? []).map((n: { type?: string }) => ({
+      type: n.type ?? '',
+    })),
+  };
   return getSlashMenuItems(state.query, {
-    docHasIntentBlock: docHasIntentBlock({
-      content: (docJson.content ?? []).map((n: { type?: string }) => ({
-        type: n.type ?? '',
-      })),
-    }),
+    docHasIntentBlock: docHasIntentBlock(docLike),
+    docHasMethodBlock: docHasMethodBlock(docLike),
+    docHasRunBlock: docHasRunBlock(docLike),
   });
 }
