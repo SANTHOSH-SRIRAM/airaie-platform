@@ -1,7 +1,7 @@
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useExecutePlan, useGeneratePlan } from '@hooks/usePlans';
 import { useCancelRun } from '@hooks/useRuns';
-import { listCardRuns } from '@api/cards';
+import { listCardRuns, type RunSummary } from '@api/cards';
 import { cardKeys } from '@hooks/useCards';
 import type { Card } from '@/types/card';
 import type { ExecutionPlan } from '@/types/plan';
@@ -99,6 +99,23 @@ export function deriveCardRunStage(
 // lift it then" — 08-01-SUMMARY decision #2). Now we have a second caller.
 // ---------------------------------------------------------------------------
 
+/**
+ * Pure selector — given the card's run-link summaries, return the latest
+ * underlying **workflow-run** id (`run_*`), NOT the card-run **link** id
+ * (`crun_*`). `useRunDetail` and `cancelRun` both target `/v0/runs/{id}`;
+ * passing the link id 404s. Exported so the same logic can be unit-tested
+ * AND shared by `CardDetailPage`'s memoized selector.
+ */
+export function pickLatestRunId(runs: RunSummary[] | undefined | null): string | null {
+  if (!runs || runs.length === 0) return null;
+  const sorted = [...runs].sort((a, b) => {
+    const ta = new Date(a.started_at).getTime();
+    const tb = new Date(b.started_at).getTime();
+    return tb - ta;
+  });
+  return sorted[0]?.run_id ?? null;
+}
+
 function useLatestCardRunId(cardId: string, enabled: boolean): string | null {
   const { data } = useQuery({
     queryKey: [...cardKeys.detail(cardId), 'runs'] as const,
@@ -107,13 +124,7 @@ function useLatestCardRunId(cardId: string, enabled: boolean): string | null {
     staleTime: 5_000,
     refetchInterval: enabled ? 5_000 : false,
   });
-  if (!data || data.length === 0) return null;
-  const sorted = [...data].sort((a, b) => {
-    const ta = new Date(a.started_at).getTime();
-    const tb = new Date(b.started_at).getTime();
-    return tb - ta;
-  });
-  return sorted[0]?.id ?? null;
+  return pickLatestRunId(data);
 }
 
 // ---------------------------------------------------------------------------

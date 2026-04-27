@@ -40,6 +40,7 @@ import { useUiStore } from '@store/uiStore';
 import { useQuery } from '@tanstack/react-query';
 import { useRunDetail } from '@hooks/useRuns';
 import { listCardRuns } from '@api/cards';
+import { pickLatestRunId } from '@hooks/useCardRunState';
 import { cardKeys } from '@hooks/useCards';
 import PageSkeleton from '@components/ui/PageSkeleton';
 import ErrorState from '@components/ui/ErrorState';
@@ -132,13 +133,10 @@ export default function CardDetailPage() {
     staleTime: 5_000,
     refetchInterval: 5_000,
   });
-  const latestRunId = useMemo(() => {
-    if (!runs || runs.length === 0) return null;
-    const sorted = [...runs].sort(
-      (a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime(),
-    );
-    return sorted[0]?.id ?? null;
-  }, [runs]);
+  // pickLatestRunId returns the workflow-run id (`run_*`), not the card-run
+  // link id (`crun_*`). useRunDetail/cancelRun target /v0/runs/{id}; passing
+  // a crun_* 404s. Shared with useLatestCardRunId.
+  const latestRunId = useMemo(() => pickLatestRunId(runs), [runs]);
   const { data: runDetail } = useRunDetail(latestRunId);
 
   // Mode-driven rules — computed once at the page level and threaded down.

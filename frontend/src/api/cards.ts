@@ -15,9 +15,16 @@ interface CardGraph {
   edges: { from: string; to: string; type: string }[];
 }
 
-interface RunSummary {
+// Card→Run link row returned by `GET /v0/cards/{id}/runs`. The kernel models
+// this as `model.CardRun{ ID: 'crun_*', CardID: 'card_*', RunID: 'run_*' }` —
+// `id` is the LINK row id, `run_id` is the underlying workflow-run id that
+// `/v0/runs/{id}` and `/v0/runs/{id}/cancel` accept. Surfaces that need to
+// fetch the run detail or cancel the run MUST use `run_id`, not `id` —
+// passing `crun_*` to `/v0/runs/{id}` returns 404 RUN_NOT_FOUND.
+export interface RunSummary {
   id: string;
   card_id: string;
+  run_id: string;
   status: string;
   started_at: string;
   completed_at?: string;

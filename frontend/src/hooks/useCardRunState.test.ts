@@ -15,10 +15,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { deriveCardRunStage } from './useCardRunState';
+import { deriveCardRunStage, pickLatestRunId } from './useCardRunState';
 import type { Card, CardStatus } from '@/types/card';
 import type { ExecutionPlan } from '@/types/plan';
 import type { IntentSpec } from '@/types/intent';
+import type { RunSummary } from '@api/cards';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -189,5 +190,64 @@ describe('cross-surface sync', () => {
     const b = deriveCardRunStage(card, intent, STUB_PLAN);
     expect(a).toBe('completed');
     expect(b).toBe('completed');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pickLatestRunId — workflow-run id selector (NOT the card-run link id)
+//
+// Regression test for the `crun_*` → 404 bug. The kernel's GET /v0/cards/{id}/runs
+// returns a list of `model.CardRun` link rows where `id = crun_*` and
+// `run_id = run_*`. Surfaces that fetch the run detail or cancel the run
+// MUST use `run_id` — passing `crun_*` to /v0/runs/{id} returns 404.
+// ---------------------------------------------------------------------------
+
+function makeRunSummary(overrides: Partial<RunSummary> = {}): RunSummary {
+  return {
+    id: 'crun_1',
+    card_id: 'card_1',
+    run_id: 'run_1',
+    status: 'completed',
+    started_at: '2026-04-26T10:00:00Z',
+    completed_at: '2026-04-26T10:05:00Z',
+    ...overrides,
+  };
+}
+
+describe('pickLatestRunId — workflow-run id selector', () => {
+  it('returns run_id (workflow-run, run_*) — NOT id (card-run link, crun_*)', () => {
+    const runs = [makeRunSummary({ id: 'crun_xyz', run_id: 'run_abc' })];
+    expect(pickLatestRunId(runs)).toBe('run_abc');
+  });
+
+  it('returns null for empty input', () => {
+    expect(pickLatestRunId([])).toBeNull();
+  });
+
+  it('returns null for undefined input', () => {
+    expect(pickLatestRunId(undefined)).toBeNull();
+  });
+
+  it('returns null for null input', () => {
+    expect(pickLatestRunId(null)).toBeNull();
+  });
+
+  it('returns latest by started_at (descending sort)', () => {
+    const runs = [
+      makeRunSummary({ id: 'crun_old', run_id: 'run_old', started_at: '2026-04-25T10:00:00Z' }),
+      makeRunSummary({ id: 'crun_new', run_id: 'run_new', started_at: '2026-04-27T10:00:00Z' }),
+      makeRunSummary({ id: 'crun_mid', run_id: 'run_mid', started_at: '2026-04-26T10:00:00Z' }),
+    ];
+    expect(pickLatestRunId(runs)).toBe('run_new');
+  });
+
+  it('does not mutate the input array', () => {
+    const runs = [
+      makeRunSummary({ id: 'crun_a', run_id: 'run_a', started_at: '2026-04-25T10:00:00Z' }),
+      makeRunSummary({ id: 'crun_b', run_id: 'run_b', started_at: '2026-04-27T10:00:00Z' }),
+    ];
+    const before = runs.map((r) => r.id);
+    pickLatestRunId(runs);
+    expect(runs.map((r) => r.id)).toEqual(before);
   });
 });
