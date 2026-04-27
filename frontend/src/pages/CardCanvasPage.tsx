@@ -155,6 +155,7 @@ export default function CardCanvasPage() {
   const editor = useAirAirEditor({
     initialDoc,
     editable: true, // Mode-aware editing lands in 10-05.
+    cardContext: { intentSpecId: card?.intent_spec_id ?? null },
     onIdle: (doc) => {
       if (!cardId) return;
       updateBody.mutate(

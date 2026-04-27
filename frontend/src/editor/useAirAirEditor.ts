@@ -8,7 +8,7 @@
 
 import { useEditor, type Editor } from '@tiptap/react';
 import { useEffect, useRef } from 'react';
-import { airAirExtensions } from './extensions';
+import { buildAirAirExtensions } from './extensions';
 import { serializeDoc } from './serialize';
 import type { CardBodyDoc } from '@/types/cardBlocks';
 
@@ -27,6 +27,14 @@ export interface UseAirAirEditorOptions {
   /** Fired 1500ms after the last change — the autosave trigger. The page is
    *  expected to mutate `PATCH /v0/cards/:id/body` from this callback. */
   onIdle?: (doc: CardBodyDoc) => void;
+
+  /**
+   * Card context threaded into extensions (currently used by SlashMenu
+   * to default `intentBlock.intentSpecId`). When omitted, defaults to
+   * `{ intentSpecId: null }` — the inserted intentBlock will be empty
+   * and the user fills it via the structured page.
+   */
+  cardContext?: { intentSpecId: string | null };
 }
 
 export const IDLE_DEBOUNCE_MS = 1500;
@@ -89,7 +97,7 @@ export function scheduleIdleSave(
 }
 
 export function useAirAirEditor(opts: UseAirAirEditorOptions): Editor | null {
-  const { initialDoc, editable = true, onChange, onIdle } = opts;
+  const { initialDoc, editable = true, onChange, onIdle, cardContext } = opts;
 
   // Stash the latest callbacks in refs so the editor's onUpdate closure
   // doesn't capture stale references between renders.
@@ -111,7 +119,7 @@ export function useAirAirEditor(opts: UseAirAirEditorOptions): Editor | null {
 
   const editor = useEditor(
     {
-      extensions: airAirExtensions,
+      extensions: buildAirAirExtensions({ cardContext }),
       content: initialDoc ?? { type: 'doc', content: [{ type: 'paragraph' }] },
       editable,
       autofocus: false,
@@ -123,10 +131,10 @@ export function useAirAirEditor(opts: UseAirAirEditorOptions): Editor | null {
     },
     // Re-create the editor only when the *identity* of `initialDoc` flips
     // (e.g. when auto-migration computes the first doc, or the user reloads
-    // the page after a 409 conflict). This is the deliberate behavior — a
-    // mid-session prop swap of `initialDoc` is rare and means the page
-    // wants a fresh editor; in-line edits don't trigger a re-instantiation.
-    [initialDoc],
+    // the page after a 409 conflict) OR when the bound IntentSpec changes
+    // so the SlashMenu default attrs reflect the new card context. Both
+    // are rare; in-line edits don't trigger a re-instantiation.
+    [initialDoc, cardContext?.intentSpecId],
   );
 
   // Sync editable flag — recreating the editor isn't needed for this.

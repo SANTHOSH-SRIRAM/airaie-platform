@@ -1,14 +1,19 @@
-// AirAIE editor extension bundle — Phase 10 / Plan 10-01.
+// AirAIE editor extension bundle — Phase 10 / Plans 10-01 + 10-02.
 //
-// Exposes a single `airAirExtensions` array consumed by `useAirAirEditor`.
+// Exposes a `buildAirAirExtensions(opts)` factory consumed by
+// `useAirAirEditor`, plus a backwards-compatible `airAirExtensions` default.
+//
 // Includes:
 //   - StarterKit (paragraph, heading, lists, blockquote, codeBlock,
 //     horizontalRule, hardBreak, history, dropcursor, gapcursor, marks)
 //   - Placeholder (only on empty top-level paragraphs — for the "Type / for
-//     commands…" prompt; the slash menu itself ships in 10-02)
+//     commands…" prompt)
 //   - CalloutNode (custom info/warning/success block)
-//   - 11 typed governance block Nodes that all share the placeholder NodeView
-//     until 10-02 swaps in real components.
+//   - 11 typed governance block Nodes — IntentBlockNode, InputBlockNode,
+//     ResultBlockNode mount their real Wave 10-02 NodeViews; the other 8
+//     keep TypedBlockPlaceholder until 10-03+
+//   - SlashMenu — wraps @tiptap/suggestion to surface the 3-item Wave 10-02
+//     slash menu on `/` at start of an empty paragraph
 
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -26,35 +31,55 @@ import {
   EmbedRecordBlockNode,
   AiAssistBlockNode,
 } from './typedBlockNodes';
+import { SlashMenu } from '../slashMenu/slashMenuExtension';
 
-export const airAirExtensions = [
-  StarterKit.configure({
-    // StarterKit defaults are good for Wave 1; finer-grained config (e.g.,
-    // disabling `codeBlock` once we ship a custom one) is a 10-04 follow-up.
-  }),
+export interface AirAirExtensionsOptions {
+  /**
+   * Threaded into the SlashMenu extension; used to default
+   * `intentBlock.intentSpecId` when the user inserts an Intent via `/`.
+   */
+  cardContext?: { intentSpecId: string | null };
+}
 
-  Placeholder.configure({
-    // Only show the prompt on a single empty paragraph at the top level — the
-    // slash-menu itself ships in 10-02; the prompt copy is forward-looking.
-    placeholder: ({ node }) => {
-      if (node.type.name === 'paragraph') return 'Type / for commands…';
-      return '';
-    },
-    showOnlyWhenEditable: true,
-    showOnlyCurrent: true,
-  }),
+export function buildAirAirExtensions(opts: AirAirExtensionsOptions = {}) {
+  return [
+    StarterKit.configure({
+      // StarterKit defaults are good; finer-grained config (e.g.,
+      // disabling `codeBlock` once we ship a custom one) is a 10-04 follow-up.
+    }),
 
-  CalloutNode,
+    Placeholder.configure({
+      placeholder: ({ node }) => {
+        if (node.type.name === 'paragraph') return 'Type / for commands…';
+        return '';
+      },
+      showOnlyWhenEditable: true,
+      showOnlyCurrent: true,
+    }),
 
-  IntentBlockNode,
-  InputBlockNode,
-  KpiBlockNode,
-  MethodBlockNode,
-  RunBlockNode,
-  ResultBlockNode,
-  EvidenceBlockNode,
-  GateBlockNode,
-  EmbedCardBlockNode,
-  EmbedRecordBlockNode,
-  AiAssistBlockNode,
-];
+    CalloutNode,
+
+    IntentBlockNode,
+    InputBlockNode,
+    KpiBlockNode,
+    MethodBlockNode,
+    RunBlockNode,
+    ResultBlockNode,
+    EvidenceBlockNode,
+    GateBlockNode,
+    EmbedCardBlockNode,
+    EmbedRecordBlockNode,
+    AiAssistBlockNode,
+
+    SlashMenu.configure({
+      cardContext: opts.cardContext ?? { intentSpecId: null },
+    }),
+  ];
+}
+
+/**
+ * Backwards-compatible default — used by callers that don't yet pass a
+ * cardContext. SlashMenu's intentBlock insertion will default
+ * `intentSpecId: null`. Keep this export so existing imports still resolve.
+ */
+export const airAirExtensions = buildAirAirExtensions();

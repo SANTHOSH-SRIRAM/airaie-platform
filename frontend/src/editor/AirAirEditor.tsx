@@ -1,5 +1,6 @@
 import { EditorContent, type Editor } from '@tiptap/react';
 import { cn } from '@utils/cn';
+import { SlashMenuPopover } from './slashMenu/SlashMenuPopover';
 
 // ---------------------------------------------------------------------------
 // AirAirEditor — the React glue layer that mounts a Tiptap `<EditorContent>`
@@ -117,6 +118,7 @@ export function AirAirEditor({ editor, className }: AirAirEditorProps) {
           '[&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0',
         )}
       />
+      <SlashMenuPopover editor={editor} />
     </div>
   );
 }
