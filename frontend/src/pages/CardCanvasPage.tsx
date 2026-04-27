@@ -236,6 +236,12 @@ export default function CardCanvasPage() {
             cardId: card.id,
             boardId: card.board_id ?? null,
             intentSpecId: card.intent_spec_id ?? null,
+            // Wave 10-03 — pass the already-fetched query data straight through.
+            // No new round trips. NodeViews (Method, Run) read these to avoid
+            // each calling its own hook chain.
+            card,
+            intent,
+            plan,
           }}
         >
           <div className="bg-white rounded-[12px] shadow-[0px_2px_12px_0px_rgba(0,0,0,0.08)]">
