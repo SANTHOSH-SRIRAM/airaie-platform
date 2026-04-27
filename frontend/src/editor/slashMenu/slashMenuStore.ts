@@ -15,6 +15,10 @@ export interface SlashMenuState {
   coords: { top: number; left: number };
   /** Inserts the selected item at the suggestion range. Set by the plugin's onStart. */
   command: (item: SlashMenuItem) => void;
+  /** Filtered items list — pushed by the active extension on open/update. The
+   *  popover renders these directly (no per-popover filter logic) so the same
+   *  popover serves Card and Board scopes. Phase 10 / Plan 10-05c-final. */
+  items: SlashMenuItem[];
 }
 
 const NOOP = () => {};
@@ -24,6 +28,7 @@ let state: SlashMenuState = {
   query: '',
   coords: { top: 0, left: 0 },
   command: NOOP,
+  items: [],
 };
 const listeners = new Set<() => void>();
 let keyHandler: ((key: string) => void) | null = null;
@@ -44,16 +49,17 @@ export const slashMenuStore = {
     query: string,
     coords: { top: number; left: number },
     command: SlashMenuState['command'],
+    items: SlashMenuItem[] = [],
   ) {
-    state = { open: true, query, coords, command };
+    state = { open: true, query, coords, command, items };
     emit();
   },
-  update(query: string, coords: { top: number; left: number }) {
-    state = { ...state, query, coords };
+  update(query: string, coords: { top: number; left: number }, items?: SlashMenuItem[]) {
+    state = { ...state, query, coords, items: items ?? state.items };
     emit();
   },
   close() {
-    state = { ...state, open: false, command: NOOP };
+    state = { ...state, open: false, command: NOOP, items: [] };
     emit();
   },
   setKeyHandler(h: ((key: string) => void) | null) {

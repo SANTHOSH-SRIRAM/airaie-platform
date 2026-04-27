@@ -1,14 +1,8 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import type { Editor } from '@tiptap/react';
-import {
-  getSlashMenuItems,
-  docHasIntentBlock,
-  docHasMethodBlock,
-  docHasRunBlock,
-  type SlashMenuItem,
-} from './getSlashMenuItems';
-import { slashMenuStore, type SlashMenuState } from './slashMenuStore';
+import type { SlashMenuItem } from './getSlashMenuItems';
+import { slashMenuStore } from './slashMenuStore';
 
 // ---------------------------------------------------------------------------
 // SlashMenuPopover — renders the floating menu. Subscribes to slashMenuStore
@@ -28,10 +22,13 @@ import { slashMenuStore, type SlashMenuState } from './slashMenuStore';
 // ---------------------------------------------------------------------------
 
 interface SlashMenuPopoverProps {
-  editor: Editor | null;
+  /** Editor prop kept for API stability; popover now reads items from the
+   *  store (set by the active Tiptap suggestion plugin) so the same popover
+   *  serves both Card and Board scopes. Phase 10 / Plan 10-05c-final. */
+  editor?: Editor | null;
 }
 
-export function SlashMenuPopover({ editor }: SlashMenuPopoverProps) {
+export function SlashMenuPopover(_props: SlashMenuPopoverProps = {}) {
   const state = useSyncExternalStore(
     slashMenuStore.subscribe,
     slashMenuStore.getState,
@@ -39,7 +36,7 @@ export function SlashMenuPopover({ editor }: SlashMenuPopoverProps) {
   );
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const items = computeItems(state, editor);
+  const items: SlashMenuItem[] = state.items;
 
   // Reset selection when the items list shrinks below the index.
   useEffect(() => {
@@ -142,17 +139,8 @@ function renderItem(
   );
 }
 
-function computeItems(state: SlashMenuState, editor: Editor | null): SlashMenuItem[] {
-  if (!editor) return [];
-  const docJson = editor.getJSON();
-  const docLike = {
-    content: (docJson.content ?? []).map((n: { type?: string }) => ({
-      type: n.type ?? '',
-    })),
-  };
-  return getSlashMenuItems(state.query, {
-    docHasIntentBlock: docHasIntentBlock(docLike),
-    docHasMethodBlock: docHasMethodBlock(docLike),
-    docHasRunBlock: docHasRunBlock(docLike),
-  });
-}
+// Note: per-extension item filtering now happens in the suggestion plugin
+// (slashMenuExtension.ts / boardSlashMenuExtension.ts), which pushes the
+// computed items into slashMenuStore on open/update. The popover reads
+// state.items directly. This decoupling lets the same popover serve both
+// Card and Board canvases without scope-aware logic in the UI layer.

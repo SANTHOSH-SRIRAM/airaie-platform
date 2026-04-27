@@ -18,6 +18,7 @@ import { generateDefaultBoardBody } from '@/editor/boardMigration';
 import { scheduleIdleSave } from '@/editor/useAirAirEditor';
 import { serializeDoc } from '@/editor/serialize';
 import { BoardCanvasContext } from '@/editor/boardCanvasContext';
+import { SlashMenuPopover } from '@/editor/slashMenu/SlashMenuPopover';
 import type { BoardBodyDoc } from '@/types/boardBlocks';
 import type { CardBodyDoc } from '@/types/cardBlocks';
 
@@ -152,6 +153,10 @@ export default function BoardCanvasPage() {
           editor={editor}
           className="min-h-[400px] prose-base text-[14px] leading-[1.6] text-[#1a1a1a] focus:outline-none [&_p]:my-[6px] [&_h1]:text-[28px] [&_h1]:font-semibold [&_h1]:mt-[16px] [&_h1]:mb-[8px] [&_h2]:text-[20px] [&_h2]:font-semibold [&_h2]:mt-[12px] [&_h2]:mb-[6px]"
         />
+        {/* Phase 10 / Plan 10-05c-final — Board slash menu. Same popover
+            component as Card canvas; the BoardSlashMenu extension pushes
+            Board-scoped items into slashMenuStore on '/'. */}
+        <SlashMenuPopover editor={editor} />
       </div>
     </BoardCanvasContext.Provider>
   );

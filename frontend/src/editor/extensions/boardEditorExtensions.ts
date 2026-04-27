@@ -17,6 +17,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import { CalloutNode } from './CalloutNode';
 import { boardTypedBlockNodes } from './boardBlockNodes';
+import { BoardSlashMenu } from '../slashMenu/boardSlashMenuExtension';
 
 export function buildBoardEditorExtensions() {
   return [
@@ -24,7 +25,7 @@ export function buildBoardEditorExtensions() {
 
     Placeholder.configure({
       placeholder: ({ node }) => {
-        if (node.type.name === 'paragraph') return 'Press / to insert a block (slash menu lands in 10-05c)';
+        if (node.type.name === 'paragraph') return 'Type / for commands…';
         return '';
       },
       showOnlyWhenEditable: true,
@@ -34,5 +35,10 @@ export function buildBoardEditorExtensions() {
     CalloutNode,
 
     ...boardTypedBlockNodes,
+
+    // Phase 10 / Plan 10-05c-final — Board-scoped slash menu. Reuses the
+    // shared SlashMenuPopover via slashMenuStore; surfaces 5 Board kinds
+    // + 5 layout kinds.
+    BoardSlashMenu,
   ];
 }

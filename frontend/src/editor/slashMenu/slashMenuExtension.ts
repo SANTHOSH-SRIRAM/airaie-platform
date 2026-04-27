@@ -63,11 +63,19 @@ export const SlashMenu = Extension.create<SlashMenuOptions>({
               type: n.type ?? '',
             })),
           };
-          return getSlashMenuItems(query, {
+          const filtered = getSlashMenuItems(query, {
             docHasIntentBlock: docHasIntentBlock(docLike),
             docHasMethodBlock: docHasMethodBlock(docLike),
             docHasRunBlock: docHasRunBlock(docLike),
           });
+          // Phase 10 / 10-05c-final — push items into the store so the popover
+          // (now scope-agnostic) can render them. This Suggestion `items`
+          // callback runs on every keystroke, ahead of `render.onUpdate` so
+          // the store is in sync with what's about to render.
+          if (slashMenuStore.getState().open) {
+            slashMenuStore.update(query, slashMenuStore.getState().coords, filtered);
+          }
+          return filtered;
         },
         command: ({ editor, range, props }) => {
           const item = props as SlashMenuItem;
@@ -93,14 +101,16 @@ export const SlashMenu = Extension.create<SlashMenuOptions>({
               props.query,
               { top: rect?.top ?? 0, left: rect?.left ?? 0 },
               (it) => props.command(it),
+              props.items, // initial items for the first paint
             );
           },
           onUpdate: (props) => {
             const rect = props.clientRect?.();
-            slashMenuStore.update(props.query, {
-              top: rect?.top ?? 0,
-              left: rect?.left ?? 0,
-            });
+            slashMenuStore.update(
+              props.query,
+              { top: rect?.top ?? 0, left: rect?.left ?? 0 },
+              props.items,
+            );
           },
           onKeyDown: (props) => {
             const handled = slashMenuStore.fireKey(props.event.key);
