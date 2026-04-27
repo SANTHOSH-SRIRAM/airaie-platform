@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { listBoardArtifacts, getArtifactDownloadUrl } from '@api/artifacts';
+import { listBoardArtifacts, getArtifactDownloadUrl, getArtifact } from '@api/artifacts';
 
 // ---------------------------------------------------------------------------
 // Query keys
@@ -8,6 +8,7 @@ import { listBoardArtifacts, getArtifactDownloadUrl } from '@api/artifacts';
 export const artifactKeys = {
   all: ['artifacts'] as const,
   forBoard: (boardId: string) => [...artifactKeys.all, 'board', boardId] as const,
+  detail: (artifactId: string) => [...artifactKeys.all, 'detail', artifactId] as const,
   downloadUrl: (artifactId: string) =>
     [...artifactKeys.all, 'download-url', artifactId] as const,
 };
@@ -46,5 +47,22 @@ export function useArtifactDownloadUrl(artifactId: string | undefined) {
     enabled: !!artifactId,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
+  });
+}
+
+/**
+ * Fetch a single artifact's metadata. Used by InputBlockView /
+ * ResultBlockView NodeViews — each block fetches its own bound artifact
+ * independently so a refresh on one block does not cascade into siblings.
+ *
+ * `staleTime: 30s` matches `useIntent` (Phase 8); artifacts are append-only
+ * in the kernel so a longer stale window is safe.
+ */
+export function useArtifact(artifactId: string | undefined) {
+  return useQuery({
+    queryKey: artifactKeys.detail(artifactId ?? '__missing__'),
+    queryFn: () => getArtifact(artifactId!),
+    enabled: !!artifactId,
+    staleTime: 30_000,
   });
 }

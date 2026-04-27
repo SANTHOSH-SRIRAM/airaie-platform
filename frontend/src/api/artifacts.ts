@@ -60,3 +60,33 @@ export async function getArtifactDownloadUrl(artifactId: string): Promise<string
   );
   return res.download_url;
 }
+
+// ---------------------------------------------------------------------------
+// Single-artifact fetch — `GET /v0/artifacts/{id}` returns
+//   { artifact: <Artifact>, sha256: <string> }
+// (see airaie-kernel/internal/handler/artifacts.go:213). We unwrap `.artifact`
+// and return the BoardArtifact shape; sha256 is redundant with content_hash
+// and not surfaced here.
+// ---------------------------------------------------------------------------
+
+interface ArtifactEnvelope {
+  artifact: BoardArtifact;
+  sha256?: string;
+}
+
+/**
+ * Fetch a single artifact's metadata. Used by InputBlockView and
+ * ResultBlockView to render an artifact bound to a typed governance block.
+ *
+ * Returns the unwrapped BoardArtifact. Throws if the kernel returns a
+ * malformed envelope (missing `.artifact`).
+ */
+export async function getArtifact(artifactId: string): Promise<BoardArtifact> {
+  const res = await api<ArtifactEnvelope>(`/v0/artifacts/${artifactId}`, {
+    method: 'GET',
+  });
+  if (!res || !res.artifact) {
+    throw new Error('Malformed artifact response: missing `.artifact`');
+  }
+  return res.artifact;
+}
