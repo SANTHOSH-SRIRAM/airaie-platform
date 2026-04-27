@@ -42,7 +42,18 @@ export type TypedBlockType =
   | 'embedRecordBlock'
   | 'aiAssistBlock';
 
-export type BlockType = LayoutBlockType | TypedBlockType;
+/** Phase 10 / Plan 10-05 — Board-canvas-only typed kinds. Co-located here
+ *  so `BaseBlockNode.type` accepts them too (Tiptap docs the canvas
+ *  editor emits include these). The Card-canvas factory does NOT mount
+ *  them; the Board factory does. */
+export type BoardOnlyBlockType =
+  | 'cardsGridBlock'
+  | 'cardsGraphBlock'
+  | 'gatesRollupBlock'
+  | 'evidenceRollupBlock'
+  | 'artifactPoolBlock';
+
+export type BlockType = LayoutBlockType | TypedBlockType | BoardOnlyBlockType;
 
 /** Mark on a text node (bold, italic, code, link, …). */
 export interface BlockMark {

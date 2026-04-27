@@ -1,5 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
+
+// Phase 10 / Plan 10-05b — Board Canvas, behind `?canvas=1`. Lazy-loaded
+// so the Tiptap editor chunk only enters the bundle when the user opens
+// the canvas.
+const BoardCanvasPage = lazy(() => import('./BoardCanvasPage'));
 import { cardDetailPath } from '@constants/routes';
 import {
   ArrowLeft,
@@ -134,6 +139,13 @@ export default function BoardDetailPage() {
     [location.search],
   );
 
+  // Phase 10 / Plan 10-05b — `?canvas=1` opts the user into the Tiptap Board
+  // canvas. The chunk is lazy-imported so non-canvas Board opens don't pay.
+  const onCanvas = useMemo(
+    () => new URLSearchParams(location.search).get('canvas') === '1',
+    [location.search],
+  );
+
   useEffect(() => {
     setSidebarContentType('navigation');
   }, [setSidebarContentType]);
@@ -196,6 +208,19 @@ export default function BoardDetailPage() {
           Back to Boards
         </button>
       </div>
+    );
+  }
+
+  // Phase 10 / Plan 10-05b — `?canvas=1` opts the user into the Tiptap Board
+  // canvas. Placed AFTER all hooks/effects above to preserve rules-of-hooks
+  // (consistent hook count per render). See CardDetailPage:160 for the same
+  // pattern. The canvas-page itself uses useBoard internally and reuses the
+  // React Query cache populated above.
+  if (onCanvas) {
+    return (
+      <Suspense fallback={null}>
+        <BoardCanvasPage />
+      </Suspense>
     );
   }
 

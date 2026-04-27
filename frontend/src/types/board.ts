@@ -16,6 +16,12 @@ export interface Board {
   archived_at?: string;
   created_at: string;
   updated_at: string;
+  /** Phase 10 / Plan 10-05 — Tiptap doc persisted by the Board Canvas.
+   *  Nullable until first save; the page computes a default tree from
+   *  the board's cards/gates/evidence on first canvas open. */
+  body_blocks?: unknown;
+  /** Optimistic-concurrency counter. Server defaults to 1. */
+  body_blocks_version?: number;
 }
 
 export interface BoardSummary {

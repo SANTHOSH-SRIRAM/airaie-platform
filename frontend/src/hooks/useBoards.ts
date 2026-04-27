@@ -12,6 +12,7 @@ import {
   listRecords,
   createRecord,
   getRecord,
+  updateBoardBody,
 } from '@api/boards';
 
 // ---------------------------------------------------------------------------
@@ -163,6 +164,25 @@ export function useCreateRecord(boardId: string) {
     mutationFn: (data: Parameters<typeof createRecord>[1]) => createRecord(boardId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: boardKeys.records(boardId) });
+    },
+  });
+}
+
+/**
+ * Phase 10 / Plan 10-05 — Board Canvas autosave mutation. Mirror of
+ * `useUpdateCardBody`. Caller passes the current body_blocks_version as
+ * `expectedVersion`; on 409 the fetch wrapper throws `ApiError` with
+ * `code === 'VERSION_CONFLICT'` and the page can refetch + merge.
+ */
+export function useUpdateBoardBody(boardId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (args: {
+      body: import('@/types/boardBlocks').BoardBodyDoc;
+      expectedVersion: number;
+    }) => updateBoardBody(boardId, args.body, args.expectedVersion),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: boardKeys.detail(boardId) });
     },
   });
 }

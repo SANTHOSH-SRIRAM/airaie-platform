@@ -94,6 +94,24 @@ export async function getRecord(boardId: string, recordId: string): Promise<Boar
   return apiClient.get<BoardRecord>(`/v0/boards/${boardId}/records/${recordId}`);
 }
 
+/**
+ * PATCH /v0/boards/{id}/body — persist the Board Canvas Tiptap doc.
+ * Phase 10 / Plan 10-05 (mirror of updateCardBody). Optimistic concurrency:
+ * 409 VERSION_CONFLICT when expected_version no longer matches the row's
+ * body_blocks_version. The fetch wrapper turns this into an `ApiError` with
+ * `status === 409` and `code === 'VERSION_CONFLICT'`.
+ */
+export async function updateBoardBody(
+  boardId: string,
+  bodyBlocks: import('@/types/boardBlocks').BoardBodyDoc,
+  expectedVersion: number,
+): Promise<{ body_blocks_version: number }> {
+  return apiClient.patch(`/v0/boards/${boardId}/body`, {
+    body_blocks: bodyBlocks,
+    expected_version: expectedVersion,
+  });
+}
+
 export async function createRecord(
   boardId: string,
   data: { record_type: string; content: string; title?: string },
