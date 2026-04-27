@@ -90,6 +90,10 @@ export async function listRecords(boardId: string): Promise<BoardRecord[]> {
   return (res as any).records ?? res ?? [];
 }
 
+export async function getRecord(boardId: string, recordId: string): Promise<BoardRecord> {
+  return apiClient.get<BoardRecord>(`/v0/boards/${boardId}/records/${recordId}`);
+}
+
 export async function createRecord(
   boardId: string,
   data: { record_type: string; content: string; title?: string },

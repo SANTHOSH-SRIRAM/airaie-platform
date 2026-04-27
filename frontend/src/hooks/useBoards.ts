@@ -11,6 +11,7 @@ import {
   createCard,
   listRecords,
   createRecord,
+  getRecord,
 } from '@api/boards';
 
 // ---------------------------------------------------------------------------
@@ -24,6 +25,8 @@ export const boardKeys = {
   summary: (id: string) => [...boardKeys.all, 'summary', id] as const,
   cards: (id: string) => [...boardKeys.all, 'cards', id] as const,
   records: (id: string) => [...boardKeys.all, 'records', id] as const,
+  record: (boardId: string, recordId: string) =>
+    [...boardKeys.all, boardId, 'record', recordId] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -136,6 +139,20 @@ export function useRecords(boardId: string) {
     queryKey: boardKeys.records(boardId),
     queryFn: () => listRecords(boardId),
     enabled: !!boardId,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Fetch a single Board record by id. Used by `EmbedRecordBlockView` (Phase 10
+ * Wave 4) to render a record reference inline in the canvas. Kernel route:
+ * `GET /v0/boards/{boardId}/records/{recordId}`.
+ */
+export function useRecord(boardId: string | undefined, recordId: string | undefined) {
+  return useQuery({
+    queryKey: boardKeys.record(boardId ?? '__missing__', recordId ?? '__missing__'),
+    queryFn: () => getRecord(boardId!, recordId!),
+    enabled: !!boardId && !!recordId,
     staleTime: 30_000,
   });
 }
