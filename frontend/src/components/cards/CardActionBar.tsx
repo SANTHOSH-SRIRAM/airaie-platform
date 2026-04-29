@@ -18,7 +18,7 @@ import type { CardModeRules } from '@hooks/useCardModeRules';
 // same `useCardRunState` hook (so a Run started from either surface flips
 // both within one render cycle), but exposes the full Wave 2 vocabulary:
 //   - no-intent  → "✨ Draft Intent first" (disabled)
-//   - no-inputs  → "📌 Pin Inputs first"   (scrolls to AvailableInputsTable)
+//   - no-inputs  → "📌 Pin Inputs first"   (disabled until inputs are pinned)
 //   - no-plan    → "⚙ Generate Plan"
 //   - ready      → "▶ Run Card"
 //   - running    → "⏸ Cancel"
@@ -38,6 +38,10 @@ interface CardActionBarProps {
   intent: IntentSpec | undefined;
   plan: ExecutionPlan | null | undefined;
   rules: CardModeRules;
+  /** Optional handler for the secondary Chat CTA. When provided, replaces the
+   *  legacy "shipping in a later phase" toast — Phase 11 Wave D wires this to
+   *  open the persistent CardChatDrawer. */
+  onChatClick?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -55,8 +59,7 @@ interface ActionView {
   onClick?: () => void;
   /** Style key — drives the button's color treatment. */
   variant: 'primary' | 'cancel' | 'sparkle' | 'settings' | 'pin' | 'rerun';
-  /** Tag the stage so consumers can branch on richer states (e.g. for
-   *  scroll-to-section behavior in no-inputs). */
+  /** Tag the stage so consumers can branch on richer states. */
   stage: CardRunState['stage'];
 }
 
@@ -77,12 +80,10 @@ export function runStateToActionView(state: CardRunState): ActionView {
         label: 'Pin Inputs first',
         icon: MapPin,
         pending: false,
-        disabled: false,
-        title: 'Pin at least one artifact from the Board pool',
+        disabled: true,
+        title: 'Pin at least one input block on the canvas before generating a plan',
         variant: 'pin',
         stage: 'no-inputs',
-        // No onClick: the parent supplies a scroll-to-table handler so the
-        // bar can be a single source of truth without coupling to DOM ids.
       };
     case 'no-plan':
       return {
@@ -199,7 +200,7 @@ function variantClasses(v: ActionView['variant']): string {
 // CardActionBar — main render
 // ---------------------------------------------------------------------------
 
-export default function CardActionBar({ card, intent, plan, rules: _rules }: CardActionBarProps) {
+export default function CardActionBar({ card, intent, plan, rules: _rules, onChatClick }: CardActionBarProps) {
   const runState = useCardRunState(card, intent, plan);
   const view = runStateToActionView(runState);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -232,23 +233,6 @@ export default function CardActionBar({ card, intent, plan, rules: _rules }: Car
   const handlePrimary = async () => {
     setActionError(null);
     if (view.disabled) return;
-    if (view.stage === 'no-inputs') {
-      // Scroll to the Inputs table so the user can pin something. The
-      // parent renders the section with aria-label="Available Inputs"; we
-      // resolve via querySelector rather than a hard-coded ref so we stay
-      // decoupled from CardDetailPage's internal ref tree.
-      const target = document.querySelector('section[aria-label="Available Inputs"]');
-      if (target instanceof HTMLElement) {
-        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Briefly highlight to draw the eye.
-        target.style.transition = 'box-shadow 0.4s ease-out';
-        target.style.boxShadow = '0 0 0 2px #f57c00';
-        window.setTimeout(() => {
-          target.style.boxShadow = '';
-        }, 1200);
-      }
-      return;
-    }
     if (!view.onClick) return;
     try {
       await view.onClick();
@@ -259,9 +243,12 @@ export default function CardActionBar({ card, intent, plan, rules: _rules }: Car
   };
 
   const handleChat = () => {
-    // AI Assist drawer wiring is a separate phase; the secondary CTA is
-    // intentionally a no-op stub that surfaces a transient toast. Wave 2
-    // explicitly forbids log-statement stubs in this component.
+    if (onChatClick) {
+      onChatClick();
+      return;
+    }
+    // Legacy stub when no handler wired (e.g. surfaces still transitioning
+    // to Phase 11). The Wave D CardChatDrawer is the canonical home now.
     setActionError('AI Assist drawer is shipping in a later phase');
   };
 

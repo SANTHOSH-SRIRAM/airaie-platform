@@ -19,6 +19,7 @@ import CardDetailLayout from '@components/cards/CardDetailLayout';
 import CardTopBar from '@components/cards/CardTopBar';
 import CardActionBar from '@components/cards/CardActionBar';
 import ArtifactPickerDrawer from '@components/cards/ArtifactPickerDrawer';
+import CardChatDrawer from '@components/cards/CardChatDrawer';
 
 import {
   StagePanel,
@@ -956,6 +957,9 @@ export default function CardPhase11Page() {
   // Stage 2 input picker state — which input port the user is pinning.
   const [pickerInput, setPickerInput] = useState<IntentInput | null>(null);
 
+  // Wave D — Card chat drawer.
+  const [chatOpen, setChatOpen] = useState(false);
+
   const handlePinSelect = async (artifactId: string) => {
     if (!intent || !pickerInput) return;
     const nextInputs = intent.inputs.map((inp) =>
@@ -1030,7 +1034,19 @@ export default function CardPhase11Page() {
         intent={intent}
         canAddEvidence={rules.canAddManualEvidence}
       />
-      <CardActionBar card={card} intent={intent} plan={plan} rules={rules} />
+      <CardActionBar
+        card={card}
+        intent={intent}
+        plan={plan}
+        rules={rules}
+        onChatClick={() => setChatOpen((v) => !v)}
+      />
+      <CardChatDrawer
+        open={chatOpen}
+        card={card}
+        intent={intent}
+        onClose={() => setChatOpen(false)}
+      />
       <ArtifactPickerDrawer
         open={pickerInput !== null}
         boardId={card.board_id}
