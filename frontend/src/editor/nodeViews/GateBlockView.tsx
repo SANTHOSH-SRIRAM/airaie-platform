@@ -2,8 +2,15 @@ import { memo, useState } from 'react';
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { Loader2, AlertCircle, ShieldCheck, CheckCircle2, XCircle } from 'lucide-react';
 import { useGate, useApproveGate, useRejectGate } from '@hooks/useGates';
+import { useFeatureFlagPhase11A } from '@hooks/useFeatureFlags';
+import { GateBadge } from '@/components/cards/primitives';
 import { useCardCanvasContext } from '@/editor/cardCanvasContext';
-import { formatGateBadge, canSignOffGate, badgeColorTokens } from './GateBlockView.helpers';
+import {
+  badgeColorTokens,
+  canSignOffGate,
+  formatGateBadge,
+  toPrimitiveGateStatus,
+} from './GateBlockView.helpers';
 
 // ---------------------------------------------------------------------------
 // GateBlockView — Wave 10-04 NodeView for the `gateBlock` Tiptap node.
@@ -16,6 +23,8 @@ import { formatGateBadge, canSignOffGate, badgeColorTokens } from './GateBlockVi
 // ---------------------------------------------------------------------------
 
 function GateBlockViewImpl({ node }: NodeViewProps) {
+  // Hooks first — must be called unconditionally on every render (rules of hooks).
+  const phase11 = useFeatureFlagPhase11A();
   const gateId = (node.attrs as { gateId: string | null }).gateId;
   const ctx = useCardCanvasContext();
   const { data: gate, isLoading, error } = useGate(gateId ?? undefined);
@@ -75,6 +84,18 @@ function GateBlockViewImpl({ node }: NodeViewProps) {
   }
 
   // Loaded.
+  // Phase 11 Wave A — render via the GateBadge primitive (status-only by
+  // design). Approve/Reject sign-off is intentionally deferred to a follow-up;
+  // the new chrome treats GateBadge as a pure status pill. Legacy chrome
+  // below retains full sign-off capability when the flag is off.
+  if (phase11) {
+    return (
+      <NodeViewWrapper data-block-type="gateBlock" contentEditable={false}>
+        <GateBadge name={gate.name} status={toPrimitiveGateStatus(gate.status)} />
+      </NodeViewWrapper>
+    );
+  }
+
   const badge = formatGateBadge(gate);
   const tokens = badgeColorTokens(badge.color);
   const showSignOff = canSignOffGate(gate);

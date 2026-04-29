@@ -1,4 +1,5 @@
 import type { Gate, GateStatus } from '@/types/gate';
+import type { GateStatus as PrimitiveGateStatus } from '@/components/cards/primitives';
 
 // ---------------------------------------------------------------------------
 // GateBlockView helpers — pure functions extracted for testability.
@@ -54,4 +55,21 @@ const COLOR_TOKENS: Record<GateBadgeColor, { bg: string; fg: string }> = {
 /** Color tokens for a given badge color. Pure — no React. */
 export function badgeColorTokens(color: GateBadgeColor): { bg: string; fg: string } {
   return COLOR_TOKENS[color];
+}
+
+/**
+ * Collapse the kernel's `GateStatus` (5 values, includes EVALUATING) onto
+ * the `GateBadge` primitive's `GateStatus` (4 values). EVALUATING surfaces
+ * as PENDING in the new chrome — the primitive's design intentionally
+ * folds intermediate evaluation into the pending state.
+ */
+export function toPrimitiveGateStatus(status: GateStatus): PrimitiveGateStatus {
+  switch (status) {
+    case 'PASSED':     return 'PASSED';
+    case 'FAILED':     return 'FAILED';
+    case 'WAIVED':     return 'WAIVED';
+    case 'PENDING':
+    case 'EVALUATING':
+    default:           return 'PENDING';
+  }
 }
