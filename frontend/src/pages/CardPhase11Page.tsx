@@ -1,10 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 
 import { useCard, useCardEvidence, cardKeys } from '@hooks/useCards';
 import { useBoard } from '@hooks/useBoards';
-import { useIntent } from '@hooks/useIntents';
+import { useIntent, useUpdateIntent } from '@hooks/useIntents';
 import { usePlan } from '@hooks/usePlans';
 import { useCardGates } from '@hooks/useGates';
 import { useRunDetail } from '@hooks/useRuns';
@@ -17,6 +17,7 @@ import ErrorState from '@components/ui/ErrorState';
 import CardDetailLayout from '@components/cards/CardDetailLayout';
 import CardTopBar from '@components/cards/CardTopBar';
 import CardActionBar from '@components/cards/CardActionBar';
+import ArtifactPickerDrawer from '@components/cards/ArtifactPickerDrawer';
 
 import {
   StagePanel,
@@ -159,7 +160,17 @@ function inputsStatus(intent: IntentSpec | undefined): { label: string; tone: St
     : { label: 'INCOMPLETE', tone: 'warning' };
 }
 
-function InputsStage({ intent }: { intent: IntentSpec | undefined }) {
+function InputsStage({
+  intent,
+  boardId,
+  onPinClick,
+  pinningPort,
+}: {
+  intent: IntentSpec | undefined;
+  boardId: string | undefined;
+  onPinClick: (input: IntentInput) => void;
+  pinningPort: string | null;
+}) {
   const status = inputsStatus(intent);
   const inputs = intent?.inputs ?? [];
 
@@ -174,12 +185,14 @@ function InputsStage({ intent }: { intent: IntentSpec | undefined }) {
   }
 
   const pinnedCount = inputs.filter(isPinned).length;
+  const canPin = Boolean(boardId);
 
   return (
     <StagePanel number={2} title="Inputs" status={status.label} statusTone={status.tone}>
       <div className="flex flex-col gap-[8px]">
         {inputs.map((input) => {
           const pinned = isPinned(input);
+          const isPinning = pinningPort === input.name;
           return (
             <div
               key={input.name}
@@ -203,13 +216,24 @@ function InputsStage({ intent }: { intent: IntentSpec | undefined }) {
                     {truncateArtifactId(input.artifact_ref)}
                   </span>
                 ) : null}
+                <button
+                  type="button"
+                  disabled={!canPin || isPinning}
+                  onClick={() => onPinClick(input)}
+                  className="rounded-[6px] border border-[#ff9800]/30 bg-white px-[10px] py-[5px] font-sans text-[11px] font-medium text-[#c14110] transition-colors hover:bg-[#ff9800]/10 disabled:cursor-not-allowed disabled:border-[#554433]/15 disabled:text-[#554433]/40"
+                >
+                  {isPinning ? 'Pinning…' : pinned ? 'Replace' : 'Pin artifact'}
+                </button>
               </div>
             </div>
           );
         })}
       </div>
       <span className="font-sans text-[12px] text-[#554433]/70">
-        {pinnedCount} of {inputs.length} pinned · {pinnedCount === inputs.length ? 'ready to compile' : 'pin remaining inputs to continue'}
+        {pinnedCount} of {inputs.length} pinned ·{' '}
+        {pinnedCount === inputs.length
+          ? 'ready to compile'
+          : 'pin remaining inputs to continue'}
       </span>
     </StagePanel>
   );
@@ -509,6 +533,26 @@ export default function CardPhase11Page() {
   const { data: evidence } = useCardEvidence(card?.id);
   const { data: gates } = useCardGates(card?.id, card?.board_id);
   const rules = useCardModeRules(card, board);
+  const updateIntent = useUpdateIntent(intent?.id ?? '', card?.board_id);
+
+  // Stage 2 input picker state — which input port the user is pinning.
+  const [pickerInput, setPickerInput] = useState<IntentInput | null>(null);
+
+  const handlePinSelect = async (artifactId: string) => {
+    if (!intent || !pickerInput) return;
+    const nextInputs = intent.inputs.map((inp) =>
+      inp.name === pickerInput.name ? { ...inp, artifact_ref: artifactId } : inp,
+    );
+    try {
+      await updateIntent.mutateAsync({ inputs: nextInputs });
+      setPickerInput(null);
+    } catch (err) {
+      // Mutation onError isn't surfaced here yet — keep drawer open so the
+      // user can retry. A toast component would be the proper home for this.
+      // eslint-disable-next-line no-console
+      console.error('Failed to pin artifact:', err);
+    }
+  };
 
   const { data: cardRuns } = useQuery({
     queryKey: cardId ? ([...cardKeys.detail(cardId), 'runs'] as const) : (['cards', 'runs'] as const),
@@ -552,11 +596,24 @@ export default function CardPhase11Page() {
     <CardDetailLayout>
       <CardTopBar card={card} board={board} boardLoading={boardLoading} />
       <IntentStage intent={intent} />
-      <InputsStage intent={intent} />
+      <InputsStage
+        intent={intent}
+        boardId={card.board_id}
+        onPinClick={(input) => setPickerInput(input)}
+        pinningPort={updateIntent.isPending ? pickerInput?.name ?? null : null}
+      />
       <MethodStage plan={plan} />
       <RunStage run={minimalRun} runCount={cardRuns?.length ?? 0} />
       <ReadStage evidence={evidence} gates={gates} />
       <CardActionBar card={card} intent={intent} plan={plan} rules={rules} />
+      <ArtifactPickerDrawer
+        open={pickerInput !== null}
+        boardId={card.board_id}
+        portName={pickerInput?.name ?? ''}
+        expectedKind={pickerInput?.type}
+        onSelect={handlePinSelect}
+        onClose={() => setPickerInput(null)}
+      />
     </CardDetailLayout>
   );
 }
