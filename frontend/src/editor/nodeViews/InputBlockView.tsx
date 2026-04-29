@@ -2,6 +2,8 @@ import { memo } from 'react';
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { Loader2, AlertCircle, Pin } from 'lucide-react';
 import { useArtifact } from '@hooks/useArtifacts';
+import { useFeatureFlagPhase11A } from '@hooks/useFeatureFlags';
+import { StatusBadge } from '@/components/cards/primitives';
 import { formatArtifactSummary } from './InputBlockView.helpers';
 
 // ---------------------------------------------------------------------------
@@ -14,11 +16,21 @@ import { formatArtifactSummary } from './InputBlockView.helpers';
 // ---------------------------------------------------------------------------
 
 function InputBlockViewImpl({ node }: NodeViewProps) {
+  // Hooks first — must be called unconditionally on every render (rules of hooks).
+  const phase11 = useFeatureFlagPhase11A();
   const attrs = node.attrs as { artifactId: string | null; portName?: string | null };
-  const { data: artifact, isLoading, error } = useArtifact(attrs.artifactId ?? undefined);
+  // Treat anything that isn't a real `art_*` id as "not yet pinned" — the
+  // IntentSpec migration faithfully passes through whatever `artifact_ref` is
+  // stored on the IntentInput, including legacy placeholders like "pending"
+  // or empty strings. Without this guard those would 404 against /v0/artifacts
+  // and surface a scary "Could not load" error to the user.
+  const isRealArtifactId =
+    typeof attrs.artifactId === 'string' && attrs.artifactId.startsWith('art_');
+  const lookupId = isRealArtifactId ? attrs.artifactId! : undefined;
+  const { data: artifact, isLoading, error } = useArtifact(lookupId);
 
-  // Empty — artifact not yet pinned.
-  if (!attrs.artifactId) {
+  // Empty — artifact not yet pinned (or only a placeholder ref is stored).
+  if (!isRealArtifactId) {
     return (
       <NodeViewWrapper
         data-block-type="inputBlock"
@@ -74,6 +86,32 @@ function InputBlockViewImpl({ node }: NodeViewProps) {
   }
 
   // Loaded.
+  // Phase 11 Wave A — single row matching demo's InputsStage row pattern.
+  if (phase11) {
+    const idShort =
+      attrs.artifactId!.length > 11
+        ? `${attrs.artifactId!.slice(0, 11)}…`
+        : attrs.artifactId!;
+    const displayName =
+      artifact.name && artifact.name.length > 0 ? artifact.name : artifact.id;
+    return (
+      <NodeViewWrapper data-block-type="inputBlock" contentEditable={false}>
+        <div className="flex items-center justify-between rounded-[10px] bg-[#f5f5f0] px-[14px] py-[12px]">
+          <div className="flex items-center gap-[14px]">
+            <StatusBadge tone="warning">{attrs.portName ?? 'input'}</StatusBadge>
+            <span className="font-sans text-[13px] font-medium text-[#1a1c19]">{displayName}</span>
+          </div>
+          <div className="flex items-center gap-[10px]">
+            {artifact.type ? (
+              <span className="font-mono text-[11px] text-[#554433]">{artifact.type}</span>
+            ) : null}
+            <span className="font-mono text-[11px] text-[#554433]/55">{idShort}</span>
+          </div>
+        </div>
+      </NodeViewWrapper>
+    );
+  }
+
   return (
     <NodeViewWrapper
       data-block-type="inputBlock"

@@ -3,6 +3,8 @@ import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { Loader2, AlertCircle, BarChart2 } from 'lucide-react';
 import { useArtifact, useArtifactDownloadUrl } from '@hooks/useArtifacts';
 import { useIntent } from '@hooks/useIntents';
+import { useFeatureFlagPhase11A } from '@hooks/useFeatureFlags';
+import { StagePanel } from '@/components/cards/primitives';
 import { pickRenderer } from '@/renderers/registry';
 import { boardArtifactToRunArtifact } from './ResultBlockView.helpers';
 import { useCardCanvasContext } from '@/editor/cardCanvasContext';
@@ -23,6 +25,8 @@ import { useCardCanvasContext } from '@/editor/cardCanvasContext';
 // ---------------------------------------------------------------------------
 
 function ResultBlockViewImpl({ node }: NodeViewProps) {
+  // Hooks first — must be called unconditionally on every render (rules of hooks).
+  const phase11 = useFeatureFlagPhase11A();
   const attrs = node.attrs as { artifactId: string | null };
   const { intentSpecId } = useCardCanvasContext();
   const {
@@ -112,6 +116,42 @@ function ResultBlockViewImpl({ node }: NodeViewProps) {
   }
 
   const RendererComponent = renderer.component;
+
+  // Phase 11 Wave A — wrap renderer output in StagePanel #5 ("Read"). Gated
+  // behind ?phase11=A. Status is conservatively neutral/BOUND — this NodeView
+  // doesn't aggregate evidence/gate state.
+  if (phase11) {
+    return (
+      <NodeViewWrapper data-block-type="resultBlock" contentEditable={false}>
+        <StagePanel number={5} title="Read" status="BOUND" statusTone="neutral">
+          <div className="flex items-center gap-[12px]">
+            <span className="font-sans text-[12px] font-medium text-[#554433]">Artifact</span>
+            <span className="font-mono text-[11px] text-[#554433]/70 truncate max-w-[360px]">
+              {artifact.name ?? artifact.id}
+            </span>
+          </div>
+          <Suspense
+            fallback={
+              <div
+                className="rounded-[8px] bg-[#f5f5f0] p-[16px] flex items-center gap-[8px] text-[11px] text-[#554433]/70"
+                role="status"
+              >
+                <Loader2 size={14} className="animate-spin text-[#acacac]" />
+                Loading renderer…
+              </div>
+            }
+          >
+            <RendererComponent
+              artifact={runArtifact}
+              downloadUrl={downloadUrl}
+              intent={intent ?? undefined}
+            />
+          </Suspense>
+        </StagePanel>
+      </NodeViewWrapper>
+    );
+  }
+
   return (
     <NodeViewWrapper data-block-type="resultBlock" className={wrapperBase} contentEditable={false}>
       <div className="flex items-center gap-[8px] mb-[8px]">
