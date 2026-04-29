@@ -34,6 +34,11 @@ interface CardChatDrawerProps {
   card: Card;
   intent: IntentSpec | undefined;
   onClose: () => void;
+  /** Optional pre-filled message to seed the composer. When set, the
+   *  composer takes this value the next time the drawer opens — letting
+   *  callers (e.g. "Diagnose this failure" button) prime a structured
+   *  prompt the user can edit before sending. */
+  initialDraft?: string;
 }
 
 function storageKeyFor(cardId: string): string {
@@ -109,7 +114,13 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   );
 }
 
-function CardChatDrawerImpl({ open, card, intent, onClose }: CardChatDrawerProps) {
+function CardChatDrawerImpl({
+  open,
+  card,
+  intent,
+  onClose,
+  initialDraft,
+}: CardChatDrawerProps) {
   // Pick first agent. Fail gracefully if project has none.
   const { data: agents } = useAgentList();
   const agentId = useMemo(() => agents?.[0]?.id ?? null, [agents]);
@@ -117,6 +128,16 @@ function CardChatDrawerImpl({ open, card, intent, onClose }: CardChatDrawerProps
   // Persisted session id — lazy-created on first send.
   const [sessionId, setSessionId] = useState<string | null>(() => readSessionId(card.id));
   const [draft, setDraft] = useState('');
+
+  // When the drawer opens with a fresh initialDraft, seed the composer.
+  // The empty-string sentinel is intentionally ignored so reopening with
+  // no seed doesn't wipe an in-progress draft.
+  useEffect(() => {
+    if (open && initialDraft && initialDraft !== draft) {
+      setDraft(initialDraft);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialDraft]);
 
   const session = useSession(agentId ?? '', sessionId);
   const createSession = useCreateSession(agentId ?? '');

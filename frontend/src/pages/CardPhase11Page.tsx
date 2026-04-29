@@ -482,14 +482,33 @@ function cleanStepName(name: string | undefined, fallback: string): string {
   return name.replace(/^node_\d+_/, '');
 }
 
+function buildDiagnosePrompt(run: MinimalRunDetail): string {
+  const failedSteps = (run.nodes ?? [])
+    .filter((n) => n.status === 'failed')
+    .map((n) => n.nodeName ?? n.nodeId ?? 'unknown')
+    .map((n) => n.replace(/^node_\d+_/, ''));
+  const stepsLine = failedSteps.length > 0
+    ? `Failed step(s): ${failedSteps.join(', ')}.`
+    : 'No specific step is marked failed — likely an early-execution failure.';
+  return [
+    `My run \`${run.id}\` failed.`,
+    stepsLine,
+    `Duration: ${run.duration ?? 0}s.`,
+    '',
+    'Walk me through the most likely cause and the smallest possible fix. If you need stderr or input artifacts, say which.',
+  ].join('\n');
+}
+
 function RunStage({
   run,
   runs,
   latestRunId,
+  onDiagnose,
 }: {
   run: MinimalRunDetail | null;
   runs: RunSummary[] | undefined;
   latestRunId: string | null;
+  onDiagnose: (prompt: string) => void;
 }) {
   const status = runTone(run?.status);
   const allRuns = runs ?? [];
@@ -518,6 +537,8 @@ function RunStage({
       .slice(0, 10);
   }, [allRuns]);
 
+  const failed = run.status === 'failed';
+
   return (
     <StagePanel number={4} title="Run" status={status.label} statusTone={status.tone}>
       <div className="flex flex-wrap items-center gap-[28px] rounded-[10px] bg-[#f5f5f0] px-[16px] py-[14px]">
@@ -530,6 +551,23 @@ function RunStage({
           </div>
         ))}
       </div>
+      {failed ? (
+        <div className="flex flex-wrap items-center gap-[10px] rounded-[10px] border-l-[3px] border-[#cc3326]/50 bg-[#cc3326]/[0.04] px-[14px] py-[10px]">
+          <span className="font-sans text-[12px] text-[#1a1c19]">
+            This run failed.
+          </span>
+          <button
+            type="button"
+            onClick={() => onDiagnose(buildDiagnosePrompt(run))}
+            className="rounded-[6px] bg-[#1a1c19] px-[10px] py-[5px] font-sans text-[11px] font-medium text-white transition-colors hover:bg-[#1a1c19]/90"
+          >
+            💡 Diagnose with chat
+          </button>
+          <span className="font-sans text-[11px] text-[#554433]/55">
+            opens the Card chat drawer with a structured prompt — edit before sending
+          </span>
+        </div>
+      ) : null}
       {run.nodes && run.nodes.length > 0 ? (
         <div className="flex flex-col gap-[8px]">
           <span className="font-sans text-[12px] font-medium text-[#554433]">Pipeline Steps</span>
@@ -957,8 +995,15 @@ export default function CardPhase11Page() {
   // Stage 2 input picker state — which input port the user is pinning.
   const [pickerInput, setPickerInput] = useState<IntentInput | null>(null);
 
-  // Wave D — Card chat drawer.
+  // Wave D — Card chat drawer + optional pre-filled draft (e.g. from a
+  // "diagnose this failure" button on Stage 4).
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatDraft, setChatDraft] = useState<string>('');
+
+  const openChatWith = (prompt: string) => {
+    setChatDraft(prompt);
+    setChatOpen(true);
+  };
 
   const handlePinSelect = async (artifactId: string) => {
     if (!intent || !pickerInput) return;
@@ -1025,7 +1070,12 @@ export default function CardPhase11Page() {
         pinningPort={updateIntent.isPending ? pickerInput?.name ?? null : null}
       />
       <MethodStage plan={plan} intent={intent} cardId={card.id} latestRunId={latestRunId} />
-      <RunStage run={minimalRun} runs={cardRuns} latestRunId={latestRunId} />
+      <RunStage
+        run={minimalRun}
+        runs={cardRuns}
+        latestRunId={latestRunId}
+        onDiagnose={openChatWith}
+      />
       <ReadStage
         evidence={evidence}
         gates={gates}
@@ -1045,7 +1095,11 @@ export default function CardPhase11Page() {
         open={chatOpen}
         card={card}
         intent={intent}
-        onClose={() => setChatOpen(false)}
+        onClose={() => {
+          setChatOpen(false);
+          setChatDraft('');
+        }}
+        initialDraft={chatDraft}
       />
       <ArtifactPickerDrawer
         open={pickerInput !== null}
