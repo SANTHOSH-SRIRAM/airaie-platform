@@ -219,11 +219,27 @@ function InputsStage({ intent }: { intent: IntentSpec | undefined }) {
 
 function methodStatus(plan: ExecutionPlan | undefined): { label: string; tone: StatusBadgeTone } {
   if (!plan) return { label: 'NO PLAN', tone: 'neutral' };
+  // Kernel sometimes leaves plan.status='executing' after a run is cancelled
+  // or fails. If pipeline_id is empty in that state, the plan didn't actually
+  // compile — surface as PARTIAL (warning) instead of misleading EXECUTING.
+  // See doc/CARD_LIFECYCLE.md §6.4 stale-state guard.
+  const hasPipeline = Boolean(plan.pipeline_id);
   if (plan.status === 'validated') return { label: 'COMPILED', tone: 'success' };
   if (plan.status === 'completed') return { label: 'COMPLETED', tone: 'success' };
-  if (plan.status === 'executing') return { label: 'EXECUTING', tone: 'warning' };
+  if (plan.status === 'executing') {
+    return hasPipeline
+      ? { label: 'EXECUTING', tone: 'warning' }
+      : { label: 'PARTIAL', tone: 'warning' };
+  }
   if (plan.status === 'failed') return { label: 'FAILED', tone: 'danger' };
   return { label: 'DRAFT', tone: 'neutral' };
+}
+
+function formatTimeEstimate(estimate: string | undefined): string | null {
+  if (!estimate) return null;
+  const trimmed = estimate.trim();
+  if (!trimmed || trimmed === '0h0m' || trimmed === '0h' || trimmed === '0m') return null;
+  return trimmed;
 }
 
 function planNodesToToolChain(plan: ExecutionPlan): ToolChainItem[] {
@@ -248,14 +264,20 @@ function MethodStage({ plan }: { plan: ExecutionPlan | undefined }) {
   }
 
   const tools = planNodesToToolChain(plan);
+  const estimate = formatTimeEstimate(plan.time_estimate);
 
   return (
     <StagePanel number={3} title="Method" status={status.label} statusTone={status.tone}>
       <div className="flex flex-wrap items-center gap-[12px]">
         <span className="font-sans text-[12px] font-medium text-[#554433]">Pipeline</span>
-        <StatusBadge tone="warning">{plan.pipeline_id}</StatusBadge>
+        {plan.pipeline_id ? (
+          <StatusBadge tone="warning">{plan.pipeline_id}</StatusBadge>
+        ) : (
+          <span className="font-mono text-[11px] text-[#554433]/55">(no pipeline_id)</span>
+        )}
         <span className="font-sans text-[12px] text-[#554433]/70">
-          · {plan.nodes.length} steps · est. {plan.time_estimate || '—'}
+          · {plan.nodes.length} step{plan.nodes.length === 1 ? '' : 's'}
+          {estimate ? ` · est. ${estimate}` : ''}
         </span>
       </div>
       {tools.length > 0 ? (
