@@ -6,7 +6,7 @@ import { useCard, useCardEvidence, cardKeys } from '@hooks/useCards';
 import { useBoard } from '@hooks/useBoards';
 import { useIntent, useIntentTypePipelines, useUpdateIntent } from '@hooks/useIntents';
 import { useGeneratePlan, usePlan } from '@hooks/usePlans';
-import { useApproveGate, useCardGates, useRejectGate } from '@hooks/useGates';
+import { useAddCardEvidence, useApproveGate, useCardGates, useRejectGate } from '@hooks/useGates';
 import { useRunDetail } from '@hooks/useRuns';
 import { pickLatestRunId } from '@hooks/useCardRunState';
 import { useCardModeRules } from '@hooks/useCardModeRules';
@@ -702,14 +702,165 @@ function GateSignoffRow({ gate, boardId }: { gate: Gate; boardId: string | undef
   );
 }
 
+function AddEvidenceForm({
+  cardId,
+  acceptanceCriteria,
+  canAdd,
+}: {
+  cardId: string;
+  acceptanceCriteria: AcceptanceCriterion[];
+  canAdd: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [metricName, setMetricName] = useState('');
+  const [metricValue, setMetricValue] = useState('');
+  const [rationale, setRationale] = useState('');
+  const addEvidence = useAddCardEvidence(cardId);
+
+  if (!canAdd) return null;
+
+  const reset = () => {
+    setOpen(false);
+    setMetricName('');
+    setMetricValue('');
+    setRationale('');
+  };
+
+  const submit = async () => {
+    const trimmedName = metricName.trim();
+    const trimmedValue = metricValue.trim();
+    if (!trimmedName || !trimmedValue) return;
+    const numeric = Number(trimmedValue);
+    if (!Number.isFinite(numeric)) {
+      // eslint-disable-next-line no-console
+      console.warn('metric_value must be numeric (got non-finite):', trimmedValue);
+      return;
+    }
+    try {
+      await addEvidence.mutateAsync({
+        metric_name: trimmedName,
+        metric_value: numeric,
+        rationale: rationale.trim() || undefined,
+      });
+      reset();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Add evidence failed:', err);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="self-start rounded-[6px] border border-[#1a1c19]/15 bg-white px-[10px] py-[5px] font-sans text-[11px] font-medium text-[#1a1c19] transition-colors hover:bg-[#f5f5f0]"
+      >
+        + Add evidence manually
+      </button>
+    );
+  }
+
+  const submitting = addEvidence.isPending;
+  const ready = metricName.trim() && metricValue.trim() && !submitting;
+
+  return (
+    <div className="flex flex-col gap-[10px] rounded-[10px] bg-[#f5f5f0] px-[14px] py-[12px]">
+      <div className="flex flex-wrap items-center gap-[10px]">
+        <span className="font-sans text-[12px] font-medium text-[#554433]">Add evidence</span>
+        <span className="font-sans text-[11px] text-[#554433]/55">
+          manual rows are recorded with attribution + timestamp
+        </span>
+      </div>
+      <div className="grid grid-cols-1 gap-[10px] md:grid-cols-2">
+        <div className="flex flex-col gap-[4px]">
+          <label className="font-sans text-[11px] uppercase tracking-wide text-[#554433]/70">
+            Metric
+          </label>
+          {acceptanceCriteria.length > 0 ? (
+            <select
+              value={metricName}
+              onChange={(e) => setMetricName(e.target.value)}
+              disabled={submitting}
+              className="rounded-[8px] border border-[#1a1c19]/10 bg-white px-[10px] py-[7px] font-mono text-[12px] text-[#1a1c19] focus:outline-none focus:ring-2 focus:ring-[#ff9800]/20"
+            >
+              <option value="">— pick a declared KPI —</option>
+              {acceptanceCriteria.map((c) => (
+                <option key={c.id} value={c.metric}>
+                  {c.metric}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              value={metricName}
+              onChange={(e) => setMetricName(e.target.value)}
+              disabled={submitting}
+              placeholder="e.g. lift_coefficient"
+              className="rounded-[8px] border border-[#1a1c19]/10 bg-white px-[10px] py-[7px] font-mono text-[12px] text-[#1a1c19] placeholder:text-[#554433]/40 focus:outline-none focus:ring-2 focus:ring-[#ff9800]/20"
+            />
+          )}
+        </div>
+        <div className="flex flex-col gap-[4px]">
+          <label className="font-sans text-[11px] uppercase tracking-wide text-[#554433]/70">
+            Value (numeric)
+          </label>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={metricValue}
+            onChange={(e) => setMetricValue(e.target.value)}
+            disabled={submitting}
+            placeholder="e.g. 1.28"
+            className="rounded-[8px] border border-[#1a1c19]/10 bg-white px-[10px] py-[7px] font-mono text-[12px] text-[#1a1c19] placeholder:text-[#554433]/40 focus:outline-none focus:ring-2 focus:ring-[#ff9800]/20"
+          />
+        </div>
+      </div>
+      <textarea
+        value={rationale}
+        onChange={(e) => setRationale(e.target.value)}
+        placeholder="Rationale (optional) — where did this number come from?"
+        rows={2}
+        disabled={submitting}
+        className="w-full resize-none rounded-[8px] border border-[#1a1c19]/10 bg-white px-[10px] py-[7px] font-sans text-[12px] text-[#1a1c19] placeholder:text-[#554433]/45 focus:outline-none focus:ring-2 focus:ring-[#ff9800]/20"
+      />
+      <div className="flex flex-wrap gap-[8px]">
+        <button
+          type="button"
+          disabled={!ready}
+          onClick={submit}
+          className="rounded-[6px] bg-[#1a1c19] px-[12px] py-[6px] font-sans text-[12px] font-medium text-white transition-colors hover:bg-[#1a1c19]/90 disabled:cursor-not-allowed disabled:bg-[#554433]/30"
+        >
+          {submitting ? 'Saving…' : '✓ Save evidence'}
+        </button>
+        <button
+          type="button"
+          onClick={reset}
+          disabled={submitting}
+          className="rounded-[6px] border border-[#1a1c19]/15 bg-white px-[12px] py-[6px] font-sans text-[12px] font-medium text-[#1a1c19] transition-colors hover:bg-[#f5f5f0] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ReadStage({
   evidence,
   gates,
   boardId,
+  cardId,
+  intent,
+  canAddEvidence,
 }: {
   evidence: CardEvidence[] | undefined;
   gates: Gate[] | undefined;
   boardId: string | undefined;
+  cardId: string | undefined;
+  intent: IntentSpec | undefined;
+  canAddEvidence: boolean;
 }) {
   const status = readStatus(evidence, gates);
   const evs = evidence ?? [];
@@ -720,8 +871,15 @@ function ReadStage({
     return (
       <StagePanel number={5} title="Read" status={status.label} statusTone={status.tone}>
         <p className="font-sans text-[13px] text-[#554433]/70">
-          No evidence collected and no gates evaluated yet. Run the card to populate KPI evidence and gate status.
+          No evidence collected and no gates evaluated yet. Run the card to populate KPI evidence and gate status — or add evidence manually if you have an out-of-band measurement to record.
         </p>
+        {cardId ? (
+          <AddEvidenceForm
+            cardId={cardId}
+            acceptanceCriteria={intent?.acceptance_criteria ?? []}
+            canAdd={canAddEvidence}
+          />
+        ) : null}
       </StagePanel>
     );
   }
@@ -770,6 +928,13 @@ function ReadStage({
             ))}
           </div>
         </div>
+      ) : null}
+      {cardId ? (
+        <AddEvidenceForm
+          cardId={cardId}
+          acceptanceCriteria={intent?.acceptance_criteria ?? []}
+          canAdd={canAddEvidence}
+        />
       ) : null}
     </StagePanel>
   );
@@ -857,7 +1022,14 @@ export default function CardPhase11Page() {
       />
       <MethodStage plan={plan} intent={intent} cardId={card.id} latestRunId={latestRunId} />
       <RunStage run={minimalRun} runs={cardRuns} latestRunId={latestRunId} />
-      <ReadStage evidence={evidence} gates={gates} boardId={card.board_id} />
+      <ReadStage
+        evidence={evidence}
+        gates={gates}
+        boardId={card.board_id}
+        cardId={card.id}
+        intent={intent}
+        canAddEvidence={rules.canAddManualEvidence}
+      />
       <CardActionBar card={card} intent={intent} plan={plan} rules={rules} />
       <ArtifactPickerDrawer
         open={pickerInput !== null}
