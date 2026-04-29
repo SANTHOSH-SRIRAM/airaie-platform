@@ -2,6 +2,8 @@ import { memo } from 'react';
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { Loader2, AlertCircle, Target } from 'lucide-react';
 import { useIntent } from '@hooks/useIntents';
+import { useFeatureFlagPhase11A } from '@hooks/useFeatureFlags';
+import { StagePanel } from '@/components/cards/primitives';
 import { formatIntentSummary, formatIntentStatus } from './IntentBlockView.helpers';
 
 // ---------------------------------------------------------------------------
@@ -19,6 +21,8 @@ import { formatIntentSummary, formatIntentStatus } from './IntentBlockView.helpe
 // ---------------------------------------------------------------------------
 
 function IntentBlockViewImpl({ node }: NodeViewProps) {
+  // Hooks first — must be called unconditionally on every render (rules of hooks).
+  const phase11 = useFeatureFlagPhase11A();
   const intentSpecId = (node.attrs as { intentSpecId: string | null }).intentSpecId;
   const { data: intent, isLoading, error } = useIntent(intentSpecId ?? undefined);
 
@@ -78,6 +82,30 @@ function IntentBlockViewImpl({ node }: NodeViewProps) {
 
   // Loaded.
   const status = formatIntentStatus(intent);
+
+  // Phase 11 Wave A — StagePanel-based layout. Gated behind ?phase11=A.
+  if (phase11) {
+    return (
+      <NodeViewWrapper data-block-type="intentBlock" contentEditable={false}>
+        <StagePanel
+          number={1}
+          title="Intent Definition"
+          status={status?.label}
+          statusTone="neutral"
+        >
+          <div className="flex flex-col gap-[8px]">
+            <span className="font-sans text-[12px] font-medium text-[#554433]">
+              Core Objective
+            </span>
+            <p className="rounded-[12px] bg-[#f5f5f0] px-[16px] py-[16px] font-sans text-[14px] leading-[1.55] text-[#554433]">
+              {formatIntentSummary(intent)}
+            </p>
+          </div>
+        </StagePanel>
+      </NodeViewWrapper>
+    );
+  }
+
   return (
     <NodeViewWrapper
       data-block-type="intentBlock"

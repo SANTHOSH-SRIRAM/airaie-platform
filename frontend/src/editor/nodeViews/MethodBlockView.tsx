@@ -3,7 +3,15 @@ import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { Loader2, AlertCircle, Settings2, Cog } from 'lucide-react';
 import { useCardCanvasContext } from '@/editor/cardCanvasContext';
 import { usePlan, useGeneratePlan } from '@hooks/usePlans';
-import { formatPlanSummary } from './MethodBlockView.helpers';
+import { useFeatureFlagPhase11A } from '@hooks/useFeatureFlags';
+import {
+  StagePanel,
+  StatusBadge,
+  ToolChainCard,
+  type ToolChainItem,
+} from '@/components/cards/primitives';
+import { cn } from '@utils/cn';
+import { formatPlanSummary, METHOD_BADGE_DISPLAY } from './MethodBlockView.helpers';
 
 // ---------------------------------------------------------------------------
 // MethodBlockView — Wave 10-03 NodeView for the `methodBlock` Tiptap node.
@@ -20,6 +28,8 @@ import { formatPlanSummary } from './MethodBlockView.helpers';
 // ---------------------------------------------------------------------------
 
 function MethodBlockViewImpl(_props: NodeViewProps) {
+  // Hooks first — must be called unconditionally on every render (rules of hooks).
+  const phase11 = useFeatureFlagPhase11A();
   const { cardId } = useCardCanvasContext();
   const { data: plan, isLoading, error } = usePlan(cardId ?? undefined);
   const generatePlan = useGeneratePlan(cardId ?? '');
@@ -105,13 +115,61 @@ function MethodBlockViewImpl(_props: NodeViewProps) {
     return null;
   }
 
+  // Phase 11 Wave A — StagePanel-based layout. Gated behind ?phase11=A.
+  if (phase11) {
+    return (
+      <NodeViewWrapper data-block-type="methodBlock" contentEditable={false}>
+        <StagePanel
+          number={3}
+          title="Method"
+          status={summary.badge.toUpperCase()}
+          statusTone="neutral"
+        >
+          <div className="flex items-center gap-[12px]">
+            <span className="font-sans text-[12px] font-medium text-[#554433]">Pipeline</span>
+            <StatusBadge tone="warning">{summary.pipelineId || '(no pipeline)'}</StatusBadge>
+            <span className="font-sans text-[12px] text-[#554433]/70">
+              · {summary.stepCount} step{summary.stepCount === 1 ? '' : 's'}
+            </span>
+          </div>
+          {plan.nodes && plan.nodes.length > 0 ? (
+            <div className="flex flex-col gap-[8px]">
+              <span className="font-sans text-[12px] font-medium text-[#554433]">
+                Resolved Tool Chain
+              </span>
+              <ToolChainCard
+                tools={plan.nodes.map(
+                  (n): ToolChainItem => ({
+                    name: n.tool_id,
+                    // Backend doesn't surface a per-node version on plan nodes yet;
+                    // use an em-dash placeholder. Real version lookup is a later wave.
+                    version: '—',
+                    // Safe default — real per-tool trust lookup ships in a later wave.
+                    trust: 'tested',
+                  }),
+                )}
+              />
+            </div>
+          ) : null}
+        </StagePanel>
+      </NodeViewWrapper>
+    );
+  }
+
+  const badge = METHOD_BADGE_DISPLAY[summary.badge];
   return (
     <NodeViewWrapper data-block-type="methodBlock" className={wrapperBase} contentEditable={false}>
       <div className="flex items-center gap-[8px]">
         <Cog size={14} className="text-[#1976d2] shrink-0" aria-hidden="true" />
         <span className="text-[12px] font-semibold text-[#1a1a1a]">Method</span>
-        <span className="ml-auto text-[10px] uppercase tracking-wide text-[#6b6b6b] bg-[#f0f0ec] px-[6px] py-[1px] rounded-[4px]">
-          {summary.status}
+        <span
+          className={cn(
+            'ml-auto text-[10px] font-semibold tracking-wide px-[6px] py-[1px] rounded-[4px]',
+            badge.bg,
+            badge.text,
+          )}
+        >
+          {badge.label}
         </span>
       </div>
       <div className="text-[12px] text-[#1a1a1a] mt-[6px] leading-[1.5]">
