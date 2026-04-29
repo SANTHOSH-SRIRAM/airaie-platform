@@ -4,13 +4,14 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useCard, useCardEvidence, cardKeys } from '@hooks/useCards';
 import { useBoard } from '@hooks/useBoards';
-import { useIntent, useUpdateIntent } from '@hooks/useIntents';
-import { usePlan } from '@hooks/usePlans';
+import { useIntent, useIntentTypePipelines, useUpdateIntent } from '@hooks/useIntents';
+import { useGeneratePlan, usePlan } from '@hooks/usePlans';
 import { useCardGates } from '@hooks/useGates';
 import { useRunDetail } from '@hooks/useRuns';
 import { pickLatestRunId } from '@hooks/useCardRunState';
 import { useCardModeRules } from '@hooks/useCardModeRules';
 import { listCardRuns } from '@api/cards';
+import type { Pipeline } from '@api/pipelines';
 
 import PageSkeleton from '@components/ui/PageSkeleton';
 import ErrorState from '@components/ui/ErrorState';
@@ -275,27 +276,89 @@ function planNodesToToolChain(plan: ExecutionPlan): ToolChainItem[] {
   }));
 }
 
-function MethodStage({ plan }: { plan: ExecutionPlan | undefined }) {
+function MethodStage({
+  plan,
+  intent,
+  cardId,
+  latestRunId,
+}: {
+  plan: ExecutionPlan | undefined;
+  intent: IntentSpec | undefined;
+  cardId: string | undefined;
+  latestRunId: string | null;
+}) {
   const status = methodStatus(plan);
+  const { data: pipelineOptions } = useIntentTypePipelines(intent?.intent_type);
+  const generatePlan = useGeneratePlan(cardId ?? '');
 
+  // Selected pipeline for (re)generation. Default to the plan's current
+  // pipeline_id when one exists, otherwise the first option.
+  const defaultPipeline = plan?.pipeline_id || pipelineOptions?.[0]?.slug || '';
+  const [selectedPipeline, setSelectedPipeline] = useState<string>('');
+  const effectiveSelected = selectedPipeline || defaultPipeline;
+
+  const handleGenerate = async () => {
+    if (!cardId) return;
+    try {
+      await generatePlan.mutateAsync(
+        effectiveSelected ? { pipeline_id: effectiveSelected } : undefined,
+      );
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to generate plan:', err);
+    }
+  };
+
+  const pipelines: Pipeline[] = pipelineOptions ?? [];
+  const generating = generatePlan.isPending;
+
+  // ─── No plan yet — bare picker + generate ─────────────────────────────
   if (!plan) {
     return (
       <StagePanel number={3} title="Method" status={status.label} statusTone={status.tone}>
         <p className="font-sans text-[13px] text-[#554433]/70">
-          No execution plan generated yet. Generate a plan from the Intent stage to compile a tool chain.
+          No execution plan generated yet.{' '}
+          {intent ? 'Pick a pipeline and generate.' : 'Card needs an Intent first.'}
         </p>
+        {intent ? (
+          <div className="flex flex-wrap items-center gap-[12px]">
+            <PipelinePicker
+              options={pipelines}
+              value={effectiveSelected}
+              onChange={setSelectedPipeline}
+              disabled={generating}
+            />
+            <button
+              type="button"
+              disabled={generating || !cardId}
+              onClick={handleGenerate}
+              className="rounded-[8px] bg-[#1a1c19] px-[14px] py-[8px] font-sans text-[12px] font-medium text-white transition-colors hover:bg-[#1a1c19]/90 disabled:cursor-not-allowed disabled:bg-[#554433]/30"
+            >
+              {generating ? 'Generating…' : '⚙ Generate Plan'}
+            </button>
+          </div>
+        ) : null}
       </StagePanel>
     );
   }
 
   const tools = planNodesToToolChain(plan);
   const estimate = formatTimeEstimate(plan.time_estimate);
+  const canRegenerate =
+    pipelines.length > 0 && (effectiveSelected !== plan.pipeline_id || !plan.pipeline_id);
 
   return (
     <StagePanel number={3} title="Method" status={status.label} statusTone={status.tone}>
       <div className="flex flex-wrap items-center gap-[12px]">
         <span className="font-sans text-[12px] font-medium text-[#554433]">Pipeline</span>
-        {plan.pipeline_id ? (
+        {pipelines.length > 0 ? (
+          <PipelinePicker
+            options={pipelines}
+            value={effectiveSelected}
+            onChange={setSelectedPipeline}
+            disabled={generating}
+          />
+        ) : plan.pipeline_id ? (
           <StatusBadge tone="warning">{plan.pipeline_id}</StatusBadge>
         ) : (
           <span className="font-mono text-[11px] text-[#554433]/55">(no pipeline_id)</span>
@@ -304,6 +367,16 @@ function MethodStage({ plan }: { plan: ExecutionPlan | undefined }) {
           · {plan.nodes.length} step{plan.nodes.length === 1 ? '' : 's'}
           {estimate ? ` · est. ${estimate}` : ''}
         </span>
+        {canRegenerate ? (
+          <button
+            type="button"
+            disabled={generating}
+            onClick={handleGenerate}
+            className="ml-auto rounded-[6px] border border-[#1a1c19]/15 bg-white px-[10px] py-[5px] font-sans text-[11px] font-medium text-[#1a1c19] transition-colors hover:bg-[#f5f5f0] disabled:cursor-not-allowed disabled:text-[#554433]/40"
+          >
+            {generating ? 'Regenerating…' : effectiveSelected !== plan.pipeline_id ? '⚙ Switch + regenerate' : '↻ Regenerate'}
+          </button>
+        ) : null}
       </div>
       {tools.length > 0 ? (
         <div className="flex flex-col gap-[8px]">
@@ -311,7 +384,50 @@ function MethodStage({ plan }: { plan: ExecutionPlan | undefined }) {
           <ToolChainCard tools={tools} />
         </div>
       ) : null}
+      {latestRunId ? (
+        <Link
+          to={`/workflow-runs/${latestRunId}`}
+          className="self-start font-sans text-[12px] font-medium text-[#c14110] hover:underline"
+        >
+          🔍 Inspect compiled DAG
+        </Link>
+      ) : null}
     </StagePanel>
+  );
+}
+
+function PipelinePicker({
+  options,
+  value,
+  onChange,
+  disabled,
+}: {
+  options: Pipeline[];
+  value: string;
+  onChange: (slug: string) => void;
+  disabled?: boolean;
+}) {
+  if (options.length === 0) {
+    return (
+      <span className="font-mono text-[11px] text-[#554433]/55">
+        (no pipelines for this intent type)
+      </span>
+    );
+  }
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      className="rounded-[6px] border border-[#ff9800]/30 bg-[#ff9800]/[0.08] px-[10px] py-[5px] font-mono text-[11px] text-[#8b5000] focus:outline-none focus:ring-2 focus:ring-[#ff9800]/30 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {options.map((p) => (
+        <option key={p.id ?? p.slug} value={p.slug}>
+          {p.slug}
+          {p.name && p.name !== p.slug ? ` — ${p.name}` : ''}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -658,7 +774,7 @@ export default function CardPhase11Page() {
         onPinClick={(input) => setPickerInput(input)}
         pinningPort={updateIntent.isPending ? pickerInput?.name ?? null : null}
       />
-      <MethodStage plan={plan} />
+      <MethodStage plan={plan} intent={intent} cardId={card.id} latestRunId={latestRunId} />
       <RunStage run={minimalRun} runs={cardRuns} latestRunId={latestRunId} />
       <ReadStage evidence={evidence} gates={gates} />
       <CardActionBar card={card} intent={intent} plan={plan} rules={rules} />
