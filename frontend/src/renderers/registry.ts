@@ -28,6 +28,7 @@ import type { Renderer, RendererCtx } from './types';
 // ---------------------------------------------------------------------------
 
 const IMAGE_KINDS = new Set(['png', 'jpg', 'jpeg', 'svg', 'webp', 'gif']);
+const CAD_3D_KINDS = new Set(['stl', 'obj', 'gltf', 'glb']);
 const CHART_FRIENDLY_INTENTS = new Set([
   'parameter_sweep',
   'cfd_analysis',
@@ -71,6 +72,14 @@ export const registry: Renderer[] = [
     id: 'pdf',
     match: (c) => c.artifact_kind.toLowerCase() === 'pdf',
     component: lazy(() => import('./PdfRenderer')),
+  },
+  // Phase 11 Wave C Pass 2 — three.js-based 3D viewer for STL / OBJ / GLTF /
+  // GLB. ~700 KB chunk (three core + R3F + drei selective) lives in the
+  // `render-3d` Vite chunk; only ships when a Card mounts a 3D artifact.
+  {
+    id: 'cad-3d',
+    match: (c) => CAD_3D_KINDS.has(c.artifact_kind.toLowerCase()),
+    component: lazy(() => import('./Cad3DViewer')),
   },
   // Task 7 — always-last fallback (download link + metadata). MUST be last
   // and `match: () => true` so the lookup never returns null.

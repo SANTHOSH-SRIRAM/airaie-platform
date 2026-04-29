@@ -2,13 +2,14 @@ import { useNavigate } from 'react-router-dom';
 import {
   Wrench, FlaskConical, Wind, Grid2X2, Database, BarChart3, Box,
   Paperclip, Thermometer, Calculator, Scale, BrainCircuit, Archive,
-  Combine, ShieldCheck, Plus
+  Combine, ShieldCheck, Plus,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import { useToolList } from '@hooks/useTools';
 import type { Tool, ToolStatus, ToolAdapter } from '@/types/tool';
 
-const TOOL_ICONS: Record<string, React.ElementType> = {
+const TOOL_ICONS: Record<string, LucideIcon> = {
   FlaskConical, Wind, Grid2X2, Database, BarChart3, Box, Paperclip,
   Thermometer, Calculator, Scale, BrainCircuit, Archive, Combine,
   ShieldCheck, Wrench,

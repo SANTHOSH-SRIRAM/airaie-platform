@@ -61,6 +61,15 @@ export default defineConfig({
           if (id.includes('node_modules/papaparse/')) {
             return 'render-csv';
           }
+          // Phase 11 Wave C Pass 2 — three.js stack for STL/GLTF/OBJ.
+          // Cad3DViewer is React.lazy-imported, so this chunk only ships
+          // when a Card actually renders a 3D geometry artifact.
+          if (
+            id.includes('node_modules/three/') ||
+            id.includes('node_modules/@react-three/')
+          ) {
+            return 'render-3d';
+          }
           if (
             id.includes('node_modules/react/') ||
             id.includes('node_modules/react-dom/') ||
