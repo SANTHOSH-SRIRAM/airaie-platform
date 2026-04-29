@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 
 import { useCard, useCardEvidence, cardKeys } from '@hooks/useCards';
@@ -39,6 +39,7 @@ import type { IntentSpec, IntentInput, AcceptanceCriterion } from '@/types/inten
 import type { ExecutionPlan } from '@/types/plan';
 import type { CardEvidence } from '@/types/card';
 import type { Gate, GateStatus as KernelGateStatus } from '@/types/gate';
+import type { RunSummary } from '@api/cards';
 
 // ---------------------------------------------------------------------------
 // CardPhase11Page — replaces the Tiptap-driven CardCanvasPage.
@@ -357,8 +358,24 @@ function formatTimestamp(iso: string | undefined): string {
   }
 }
 
-function RunStage({ run, runCount }: { run: MinimalRunDetail | null; runCount: number }) {
+/** Strip the `node_NNN_` ordinal prefix some pipelines emit so the user
+ *  sees the meaningful tool path, not a step counter. */
+function cleanStepName(name: string | undefined, fallback: string): string {
+  if (!name) return fallback;
+  return name.replace(/^node_\d+_/, '');
+}
+
+function RunStage({
+  run,
+  runs,
+  latestRunId,
+}: {
+  run: MinimalRunDetail | null;
+  runs: RunSummary[] | undefined;
+  latestRunId: string | null;
+}) {
   const status = runTone(run?.status);
+  const allRuns = runs ?? [];
 
   if (!run) {
     return (
@@ -376,6 +393,13 @@ function RunStage({ run, runCount }: { run: MinimalRunDetail | null; runCount: n
     { label: 'STARTED', value: formatTimestamp(run.startedAt) },
     { label: 'STEPS', value: String(run.nodes?.length ?? 0) },
   ];
+
+  // Sort run history newest-first; trim to last 10 to keep the section short.
+  const history = useMemo(() => {
+    return [...allRuns]
+      .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
+      .slice(0, 10);
+  }, [allRuns]);
 
   return (
     <StagePanel number={4} title="Run" status={status.label} statusTone={status.tone}>
@@ -396,6 +420,8 @@ function RunStage({ run, runCount }: { run: MinimalRunDetail | null; runCount: n
             {run.nodes.map((step, idx) => {
               const ok = step.status === 'completed' || step.status === 'succeeded';
               const failed = step.status === 'failed';
+              const skipped = step.status === 'skipped' || step.status === 'pending';
+              const hasDuration = (step.duration ?? 0) > 0;
               return (
                 <div
                   key={step.nodeId ?? `step-${idx}`}
@@ -411,22 +437,52 @@ function RunStage({ run, runCount }: { run: MinimalRunDetail | null; runCount: n
                       {ok ? '✓' : failed ? '✗' : '◆'}
                     </span>
                     <span className="font-mono text-[12px] text-[#1a1c19]">
-                      {step.nodeName ?? step.nodeId ?? `step ${idx + 1}`}
+                      {cleanStepName(step.nodeName ?? step.nodeId, `step ${idx + 1}`)}
                     </span>
                   </div>
-                  <span className="font-mono text-[11px] text-[#554433]/70">
-                    {formatDuration(step.duration)}
-                  </span>
+                  {hasDuration ? (
+                    <span className="font-mono text-[11px] text-[#554433]/70">
+                      {formatDuration(step.duration)}
+                    </span>
+                  ) : skipped ? (
+                    <span className="font-mono text-[10px] uppercase text-[#554433]/45">
+                      skipped
+                    </span>
+                  ) : null}
                 </div>
               );
             })}
           </div>
         </div>
       ) : null}
-      {runCount > 1 ? (
-        <span className="font-sans text-[12px] text-[#554433]/70">
-          {runCount - 1} prior run{runCount - 1 === 1 ? '' : 's'} on this card
-        </span>
+      {history.length > 1 ? (
+        <div className="flex flex-col gap-[8px]">
+          <span className="font-sans text-[12px] font-medium text-[#554433]">Run History</span>
+          <div className="flex flex-col gap-[2px]">
+            {history.map((r) => {
+              const isCurrent = r.run_id === latestRunId;
+              const t = runTone(r.status);
+              return (
+                <Link
+                  key={r.id}
+                  to={`/workflow-runs/${r.run_id}`}
+                  className={`flex items-center justify-between rounded-[6px] px-[14px] py-[8px] font-mono text-[11px] transition-colors hover:bg-[#f5f5f0] ${
+                    isCurrent ? 'bg-[#f5f5f0]/80' : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-[10px]">
+                    <StatusBadge tone={t.tone}>{t.label}</StatusBadge>
+                    <span className="text-[#1a1c19]">{r.run_id}</span>
+                    {isCurrent ? (
+                      <span className="text-[10px] uppercase text-[#8b5000]">current</span>
+                    ) : null}
+                  </div>
+                  <span className="text-[#554433]/70">{formatTimestamp(r.started_at)}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
       ) : null}
     </StagePanel>
   );
@@ -603,7 +659,7 @@ export default function CardPhase11Page() {
         pinningPort={updateIntent.isPending ? pickerInput?.name ?? null : null}
       />
       <MethodStage plan={plan} />
-      <RunStage run={minimalRun} runCount={cardRuns?.length ?? 0} />
+      <RunStage run={minimalRun} runs={cardRuns} latestRunId={latestRunId} />
       <ReadStage evidence={evidence} gates={gates} />
       <CardActionBar card={card} intent={intent} plan={plan} rules={rules} />
       <ArtifactPickerDrawer
