@@ -3,10 +3,28 @@ import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { Play, Pause, Sparkles, Settings2, RotateCcw, MapPin, Loader2 } from 'lucide-react';
 import { useCardCanvasContext } from '@/editor/cardCanvasContext';
 import { useCardRunState, type CardRunState } from '@hooks/useCardRunState';
+import { useFeatureFlagPhase11A } from '@hooks/useFeatureFlags';
+import { StagePanel, type StatusBadgeTone } from '@/components/cards/primitives';
 import { runStageToButtonLabel } from './RunBlockView.helpers';
 import type { Card } from '@/types/card';
 import type { IntentSpec } from '@/types/intent';
 import type { ExecutionPlan } from '@/types/plan';
+
+// Phase 11 Wave A — display map: CardRunStage -> {label, statusTone}.
+// Exhaustive over all 7 `CardRunState['stage']` values; if a new stage is
+// added the `Record<...>` type forces a compile error here.
+const PHASE11_RUN_DISPLAY: Record<
+  CardRunState['stage'],
+  { label: string; tone: StatusBadgeTone }
+> = {
+  'no-intent': { label: 'BLOCKED', tone: 'neutral' },
+  'no-inputs': { label: 'BLOCKED', tone: 'neutral' },
+  'no-plan':   { label: 'PENDING', tone: 'neutral' },
+  'ready':     { label: 'READY',   tone: 'neutral' },
+  'running':   { label: 'RUNNING', tone: 'warning' },
+  'completed': { label: 'SUCCEEDED', tone: 'success' },
+  'failed':    { label: 'FAILED',  tone: 'danger' },
+};
 
 // ---------------------------------------------------------------------------
 // RunBlockView — Wave 10-03 NodeView for the `runBlock` Tiptap node.
@@ -57,8 +75,27 @@ interface RunBlockViewBoundProps {
 }
 
 function RunBlockViewBound({ card, intent, plan }: RunBlockViewBoundProps) {
+  // Hooks first — must be called unconditionally on every render.
+  const phase11 = useFeatureFlagPhase11A();
   const state = useCardRunState(card, intent, plan);
   const label = runStageToButtonLabel(state.stage);
+
+  // Phase 11 Wave A — StagePanel layout. Reuses the per-stage button JSX via
+  // `renderPhase11Action`. Legacy switch below stays intact for flag-off.
+  if (phase11) {
+    const display = PHASE11_RUN_DISPLAY[state.stage];
+    return (
+      <NodeViewWrapper data-block-type="runBlock" contentEditable={false}>
+        <StagePanel number={4} title="Run" status={display.label} statusTone={display.tone}>
+          <div className="flex items-center gap-[12px]">
+            <span className="font-sans text-[12px] text-[#554433]/70">Stage:</span>
+            <span className="font-mono text-[12px] text-[#1a1c19]">{state.stage}</span>
+          </div>
+          {renderPhase11Action(state, label)}
+        </StagePanel>
+      </NodeViewWrapper>
+    );
+  }
 
   // Each branch renders its own button + secondary chrome. Order matches
   // the `CardRunStage` enum.
@@ -204,6 +241,96 @@ function RunBlockViewBound({ card, intent, plan }: RunBlockViewBoundProps) {
             Last run failed. Re-run to retry.
           </p>
         </NodeViewWrapper>
+      );
+  }
+}
+
+/**
+ * Phase 11 Wave A — render only the per-stage action button (no surrounding
+ * NodeViewWrapper / RunHeader / explanatory paragraph). Mirrors the button
+ * JSX from each `case` in the legacy switch so onClick handlers and
+ * pending behavior remain identical across both flag-on and flag-off paths.
+ */
+function renderPhase11Action(state: CardRunState, label: string) {
+  switch (state.stage) {
+    case 'no-intent':
+      return (
+        <button type="button" disabled className={btnClass('sparkle', true)}>
+          <Sparkles size={12} aria-hidden="true" />
+          {label}
+        </button>
+      );
+    case 'no-inputs':
+      return (
+        <button type="button" className={btnClass('pin', false)}>
+          <MapPin size={12} aria-hidden="true" />
+          {label}
+        </button>
+      );
+    case 'no-plan':
+      return (
+        <button
+          type="button"
+          className={btnClass('settings', state.isPending)}
+          onClick={() => state.generate()}
+          disabled={state.isPending}
+        >
+          {state.isPending ? (
+            <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+          ) : (
+            <Settings2 size={12} aria-hidden="true" />
+          )}
+          {state.isPending ? 'Generating…' : label}
+        </button>
+      );
+    case 'ready':
+      return (
+        <button
+          type="button"
+          className={btnClass('primary', state.isPending)}
+          onClick={() => state.run()}
+          disabled={state.isPending}
+        >
+          {state.isPending ? (
+            <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+          ) : (
+            <Play size={12} aria-hidden="true" />
+          )}
+          {state.isPending ? 'Starting…' : label}
+        </button>
+      );
+    case 'running':
+      return (
+        <button
+          type="button"
+          className={btnClass('cancel', state.isPending)}
+          onClick={() => state.cancel()}
+          disabled={state.isPending}
+        >
+          {state.isPending ? (
+            <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+          ) : (
+            <Pause size={12} aria-hidden="true" />
+          )}
+          {state.isPending ? 'Cancelling…' : label}
+        </button>
+      );
+    case 'completed':
+    case 'failed':
+      return (
+        <button
+          type="button"
+          className={btnClass('rerun', state.isPending)}
+          onClick={() => state.rerun()}
+          disabled={state.isPending}
+        >
+          {state.isPending ? (
+            <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+          ) : (
+            <RotateCcw size={12} aria-hidden="true" />
+          )}
+          {state.isPending ? 'Starting…' : label}
+        </button>
       );
   }
 }
