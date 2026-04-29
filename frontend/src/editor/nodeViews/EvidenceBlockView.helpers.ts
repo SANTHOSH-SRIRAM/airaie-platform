@@ -1,4 +1,5 @@
 import type { CardEvidence } from '@/types/card';
+import type { EvidenceEvaluation } from '@/components/cards/primitives';
 
 // ---------------------------------------------------------------------------
 // EvidenceBlockView helpers — pure functions extracted for testability under
@@ -45,4 +46,21 @@ export function formatEvidenceSummary(ev: CardEvidence): {
     line2: ev.run_id ? `From run ${ev.run_id}` : 'Manual evidence',
     chip: ev.evaluation ?? 'pending',
   };
+}
+
+/**
+ * Collapse the helper's `EvidenceChip` (5 values) onto the `EvidenceRow`
+ * primitive's `EvidenceEvaluation` (3 values). 'warning' and 'info' both
+ * surface as 'pending' in the new chrome — the primitive doesn't model
+ * intermediate states, and 'pending' uses the warning/amber tick.
+ */
+export function chipToEvaluation(chip: EvidenceChip): EvidenceEvaluation {
+  switch (chip) {
+    case 'pass': return 'pass';
+    case 'fail': return 'fail';
+    case 'warning':
+    case 'info':
+    case 'pending':
+    default:     return 'pending';
+  }
 }

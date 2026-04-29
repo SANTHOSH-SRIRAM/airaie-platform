@@ -2,8 +2,15 @@ import { memo } from 'react';
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { Loader2, AlertCircle, CheckCircle2, XCircle, Info, MinusCircle, Circle } from 'lucide-react';
 import { useCardEvidence } from '@hooks/useCards';
+import { useFeatureFlagPhase11A } from '@hooks/useFeatureFlags';
+import { EvidenceRow } from '@/components/cards/primitives';
 import { useCardCanvasContext } from '@/editor/cardCanvasContext';
-import { findEvidenceById, formatEvidenceSummary, type EvidenceChip } from './EvidenceBlockView.helpers';
+import {
+  chipToEvaluation,
+  findEvidenceById,
+  formatEvidenceSummary,
+  type EvidenceChip,
+} from './EvidenceBlockView.helpers';
 
 // ---------------------------------------------------------------------------
 // EvidenceBlockView — Wave 10-04 NodeView for the `evidenceBlock` Tiptap node.
@@ -23,6 +30,8 @@ const CHIP_STYLES: Record<EvidenceChip, { bg: string; fg: string; label: string;
 };
 
 function EvidenceBlockViewImpl({ node }: NodeViewProps) {
+  // Hooks first — must be called unconditionally on every render (rules of hooks).
+  const phase11 = useFeatureFlagPhase11A();
   const evidenceId = (node.attrs as { evidenceId: string | null }).evidenceId;
   const ctx = useCardCanvasContext();
   const { data: evidenceList, isLoading, error } = useCardEvidence(ctx.cardId ?? undefined);
@@ -102,6 +111,27 @@ function EvidenceBlockViewImpl({ node }: NodeViewProps) {
   }
 
   // Loaded.
+  // Phase 11 Wave A — render via the EvidenceRow primitive. Gated behind ?phase11=A.
+  if (phase11) {
+    const observed =
+      typeof ev.metric_value === 'number' ? String(ev.metric_value) : '—';
+    const target =
+      typeof ev.threshold === 'number' && ev.operator
+        ? `${ev.operator} ${ev.threshold}`
+        : undefined;
+    return (
+      <NodeViewWrapper data-block-type="evidenceBlock" contentEditable={false}>
+        <EvidenceRow
+          metric={ev.metric_key}
+          observed={observed}
+          unit={ev.metric_unit ?? undefined}
+          target={target}
+          evaluation={chipToEvaluation(ev.evaluation ?? 'pending')}
+        />
+      </NodeViewWrapper>
+    );
+  }
+
   const summary = formatEvidenceSummary(ev);
   const chip = CHIP_STYLES[summary.chip];
   const ChipIcon = chip.Icon;
