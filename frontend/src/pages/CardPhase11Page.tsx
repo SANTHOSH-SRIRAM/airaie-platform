@@ -39,7 +39,7 @@ import type {
 
 import type { IntentSpec, IntentInput, AcceptanceCriterion } from '@/types/intent';
 import type { ExecutionPlan } from '@/types/plan';
-import type { CardEvidence } from '@/types/card';
+import type { Card, CardEvidence } from '@/types/card';
 import type { Gate, GateStatus as KernelGateStatus } from '@/types/gate';
 import type { RunSummary } from '@api/cards';
 
@@ -88,15 +88,38 @@ function thresholdString(threshold: unknown): string {
   return '—';
 }
 
-function IntentStage({ intent }: { intent: IntentSpec | undefined }) {
+function AskAiButton({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-[6px] rounded-[6px] border border-[#ff9800]/30 bg-white px-[10px] py-[5px] font-sans text-[11px] font-medium text-[#c14110] transition-colors hover:bg-[#ff9800]/10"
+    >
+      <span aria-hidden="true">✦</span>
+      {label}
+    </button>
+  );
+}
+
+function IntentStage({
+  intent,
+  onAskAi,
+}: {
+  intent: IntentSpec | undefined;
+  onAskAi: (prompt: string) => void;
+}) {
   const status = intentStatus(intent);
 
   if (!intent) {
     return (
       <StagePanel number={1} title="Intent Definition" status={status.label} statusTone={status.tone}>
         <p className="font-sans text-[13px] text-[#554433]/70">
-          No IntentSpec bound to this card yet. Use the structured page to draft an Intent.
+          No IntentSpec bound to this card yet. Use the structured page to draft an Intent — or ask the agent for a starting point.
         </p>
+        <AskAiButton
+          onClick={() => onAskAi(buildRefineIntentPrompt(undefined))}
+          label="Draft an Intent with AI"
+        />
       </StagePanel>
     );
   }
@@ -139,6 +162,11 @@ function IntentStage({ intent }: { intent: IntentSpec | undefined }) {
           </div>
         </div>
       ) : null}
+
+      <AskAiButton
+        onClick={() => onAskAi(buildRefineIntentPrompt(intent))}
+        label="Refine with AI"
+      />
     </StagePanel>
   );
 }
@@ -168,11 +196,13 @@ function InputsStage({
   boardId,
   onPinClick,
   pinningPort,
+  onAskAi,
 }: {
   intent: IntentSpec | undefined;
   boardId: string | undefined;
   onPinClick: (input: IntentInput) => void;
   pinningPort: string | null;
+  onAskAi: (prompt: string) => void;
 }) {
   const status = inputsStatus(intent);
   const inputs = intent?.inputs ?? [];
@@ -232,12 +262,20 @@ function InputsStage({
           );
         })}
       </div>
-      <span className="font-sans text-[12px] text-[#554433]/70">
-        {pinnedCount} of {inputs.length} pinned ·{' '}
-        {pinnedCount === inputs.length
-          ? 'ready to compile'
-          : 'pin remaining inputs to continue'}
-      </span>
+      <div className="flex flex-wrap items-center gap-[10px]">
+        <span className="font-sans text-[12px] text-[#554433]/70">
+          {pinnedCount} of {inputs.length} pinned ·{' '}
+          {pinnedCount === inputs.length
+            ? 'ready to compile'
+            : 'pin remaining inputs to continue'}
+        </span>
+        {pinnedCount < inputs.length ? (
+          <AskAiButton
+            onClick={() => onAskAi(buildSuggestPinPrompt(intent))}
+            label="Suggest a pin"
+          />
+        ) : null}
+      </div>
     </StagePanel>
   );
 }
@@ -282,11 +320,13 @@ function MethodStage({
   intent,
   cardId,
   latestRunId,
+  onAskAi,
 }: {
   plan: ExecutionPlan | undefined;
   intent: IntentSpec | undefined;
   cardId: string | undefined;
   latestRunId: string | null;
+  onAskAi: (prompt: string) => void;
 }) {
   const status = methodStatus(plan);
   const { data: pipelineOptions } = useIntentTypePipelines(intent?.intent_type);
@@ -337,6 +377,10 @@ function MethodStage({
             >
               {generating ? 'Generating…' : '⚙ Generate Plan'}
             </button>
+            <AskAiButton
+              onClick={() => onAskAi(buildUseAgentPrompt(intent))}
+              label="Use Agent instead"
+            />
           </div>
         ) : null}
       </StagePanel>
@@ -480,6 +524,55 @@ function formatTimestamp(iso: string | undefined): string {
 function cleanStepName(name: string | undefined, fallback: string): string {
   if (!name) return fallback;
   return name.replace(/^node_\d+_/, '');
+}
+
+// ─── Stage-scoped agent prompt builders (Phase 11 §7.3) ───────────────────
+
+function buildRefineIntentPrompt(intent: IntentSpec | undefined): string {
+  if (!intent) {
+    return "Help me draft an IntentSpec for this card. What should I be measuring, and what acceptance criteria would prove the answer?";
+  }
+  const kpiList =
+    intent.acceptance_criteria.length > 0
+      ? intent.acceptance_criteria.map((c) => `- ${c.metric}`).join('\n')
+      : '- (none declared)';
+  return [
+    `My current Intent: "${intent.goal}"`,
+    `Type: ${intent.intent_type}`,
+    'Acceptance KPIs:',
+    kpiList,
+    '',
+    'Critique this Intent. Is the goal sharp enough? Are the KPIs the right ones, with the right thresholds? Suggest specific edits.',
+  ].join('\n');
+}
+
+function buildSuggestPinPrompt(intent: IntentSpec | undefined): string {
+  const unpinned = (intent?.inputs ?? [])
+    .filter((i) => !i.artifact_ref || !i.artifact_ref.startsWith('art_'))
+    .map((i) => `- ${i.name}${i.type ? ` (kind: ${i.type})` : ''}`)
+    .join('\n');
+  return [
+    'Some of my Card inputs are not yet pinned:',
+    unpinned || '- (everything is already pinned)',
+    '',
+    "Look at the board's artifact pool and suggest which artifact should pin to each unfilled port. If you're unsure between two candidates, list trade-offs.",
+  ].join('\n');
+}
+
+function buildUseAgentPrompt(intent: IntentSpec | undefined): string {
+  return [
+    `My Intent type is \`${intent?.intent_type ?? 'unknown'}\` and the auto-picked pipeline either failed to compile or doesn't fit.`,
+    '',
+    'Take over the Method stage as an agent: pick the right tools, fill any missing parameters, and walk me through what you would run before I commit. I want to review your plan, not blank-check it.',
+  ].join('\n');
+}
+
+function buildCompareSiblingsPrompt(card: Card): string {
+  return [
+    `Compare this card (\`${card.id}\` — "${card.title}") against the other completed cards on the same board.`,
+    '',
+    'For each sibling: pull the same KPIs we measured here, surface where the values diverge, and flag any that look anomalous. Prefer concrete numbers over hand-wavy summaries.',
+  ].join('\n');
 }
 
 function buildDiagnosePrompt(run: MinimalRunDetail): string {
@@ -893,6 +986,8 @@ function ReadStage({
   cardId,
   intent,
   canAddEvidence,
+  card,
+  onAskAi,
 }: {
   evidence: CardEvidence[] | undefined;
   gates: Gate[] | undefined;
@@ -900,6 +995,8 @@ function ReadStage({
   cardId: string | undefined;
   intent: IntentSpec | undefined;
   canAddEvidence: boolean;
+  card: Card;
+  onAskAi: (prompt: string) => void;
 }) {
   const status = readStatus(evidence, gates);
   const evs = evidence ?? [];
@@ -968,13 +1065,21 @@ function ReadStage({
           </div>
         </div>
       ) : null}
-      {cardId ? (
-        <AddEvidenceForm
-          cardId={cardId}
-          acceptanceCriteria={intent?.acceptance_criteria ?? []}
-          canAdd={canAddEvidence}
-        />
-      ) : null}
+      <div className="flex flex-wrap items-center gap-[10px]">
+        {cardId ? (
+          <AddEvidenceForm
+            cardId={cardId}
+            acceptanceCriteria={intent?.acceptance_criteria ?? []}
+            canAdd={canAddEvidence}
+          />
+        ) : null}
+        {evs.length > 0 ? (
+          <AskAiButton
+            onClick={() => onAskAi(buildCompareSiblingsPrompt(card))}
+            label="Compare with siblings"
+          />
+        ) : null}
+      </div>
     </StagePanel>
   );
 }
@@ -1062,14 +1167,21 @@ export default function CardPhase11Page() {
   return (
     <CardDetailLayout>
       <CardTopBar card={card} board={board} boardLoading={boardLoading} />
-      <IntentStage intent={intent} />
+      <IntentStage intent={intent} onAskAi={openChatWith} />
       <InputsStage
         intent={intent}
         boardId={card.board_id}
         onPinClick={(input) => setPickerInput(input)}
         pinningPort={updateIntent.isPending ? pickerInput?.name ?? null : null}
+        onAskAi={openChatWith}
       />
-      <MethodStage plan={plan} intent={intent} cardId={card.id} latestRunId={latestRunId} />
+      <MethodStage
+        plan={plan}
+        intent={intent}
+        cardId={card.id}
+        latestRunId={latestRunId}
+        onAskAi={openChatWith}
+      />
       <RunStage
         run={minimalRun}
         runs={cardRuns}
@@ -1083,6 +1195,8 @@ export default function CardPhase11Page() {
         cardId={card.id}
         intent={intent}
         canAddEvidence={rules.canAddManualEvidence}
+        card={card}
+        onAskAi={openChatWith}
       />
       <CardActionBar
         card={card}
