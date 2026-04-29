@@ -6,7 +6,7 @@ import { useCard, useCardEvidence, cardKeys } from '@hooks/useCards';
 import { useBoard } from '@hooks/useBoards';
 import { useIntent, useIntentTypePipelines, useUpdateIntent } from '@hooks/useIntents';
 import { useGeneratePlan, usePlan } from '@hooks/usePlans';
-import { useCardGates } from '@hooks/useGates';
+import { useApproveGate, useCardGates, useRejectGate } from '@hooks/useGates';
 import { useRunDetail } from '@hooks/useRuns';
 import { pickLatestRunId } from '@hooks/useCardRunState';
 import { useCardModeRules } from '@hooks/useCardModeRules';
@@ -636,16 +636,85 @@ function readStatus(
   return { label: 'PENDING', tone: 'warning' };
 }
 
+function GateSignoffRow({ gate, boardId }: { gate: Gate; boardId: string | undefined }) {
+  const [rationale, setRationale] = useState('');
+  const approve = useApproveGate(gate.id, boardId);
+  const reject = useRejectGate(gate.id, boardId);
+  const submitting = approve.isPending || reject.isPending;
+  const ready = rationale.trim().length >= 3 && !submitting;
+
+  const submit = async (action: 'approve' | 'reject') => {
+    if (!ready) return;
+    try {
+      if (action === 'approve') {
+        await approve.mutateAsync({ rationale: rationale.trim() });
+      } else {
+        await reject.mutateAsync({ rationale: rationale.trim() });
+      }
+      setRationale('');
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(`Gate ${action} failed (likely 403 — role not authorized):`, err);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-[10px] rounded-[10px] bg-[#f5f5f0] px-[14px] py-[12px]">
+      <div className="flex flex-wrap items-center gap-[10px]">
+        <GateBadge name={gate.name} status="PENDING" />
+        <span className="font-sans text-[12px] text-[#554433]/70">
+          {gate.gate_type === 'evidence'
+            ? 'awaiting auto evidence'
+            : gate.gate_type === 'review'
+              ? 'awaiting peer review'
+              : 'awaiting compliance sign-off'}
+        </span>
+      </div>
+      <textarea
+        value={rationale}
+        onChange={(e) => setRationale(e.target.value)}
+        placeholder="Rationale (required) — what evidence supports this decision?"
+        rows={2}
+        className="w-full resize-none rounded-[8px] border border-[#1a1c19]/10 bg-white px-[12px] py-[8px] font-sans text-[13px] text-[#1a1c19] placeholder:text-[#554433]/45 focus:border-[#ff9800]/50 focus:outline-none focus:ring-2 focus:ring-[#ff9800]/20"
+      />
+      <div className="flex flex-wrap gap-[8px]">
+        <button
+          type="button"
+          disabled={!ready}
+          onClick={() => submit('approve')}
+          className="rounded-[6px] bg-[#2e8c56] px-[12px] py-[6px] font-sans text-[12px] font-medium text-white transition-colors hover:bg-[#2e8c56]/90 disabled:cursor-not-allowed disabled:bg-[#2e8c56]/30"
+        >
+          {approve.isPending ? 'Approving…' : '✓ Approve'}
+        </button>
+        <button
+          type="button"
+          disabled={!ready}
+          onClick={() => submit('reject')}
+          className="rounded-[6px] border border-[#cc3326]/40 bg-white px-[12px] py-[6px] font-sans text-[12px] font-medium text-[#cc3326] transition-colors hover:bg-[#cc3326]/10 disabled:cursor-not-allowed disabled:border-[#cc3326]/15 disabled:text-[#cc3326]/40"
+        >
+          {reject.isPending ? 'Rejecting…' : '✗ Reject'}
+        </button>
+        <span className="self-center font-sans text-[11px] text-[#554433]/55">
+          your decision is recorded with timestamp + role
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function ReadStage({
   evidence,
   gates,
+  boardId,
 }: {
   evidence: CardEvidence[] | undefined;
   gates: Gate[] | undefined;
+  boardId: string | undefined;
 }) {
   const status = readStatus(evidence, gates);
   const evs = evidence ?? [];
   const gs = gates ?? [];
+  const pendingGates = gs.filter((g) => g.status === 'PENDING' || g.status === 'EVALUATING');
 
   if (evs.length === 0 && gs.length === 0) {
     return (
@@ -686,6 +755,18 @@ function ReadStage({
           <div className="flex flex-wrap gap-[8px]">
             {gs.map((g) => (
               <GateBadge key={g.id} name={g.name} status={gateStatusToBadge(g.status)} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {pendingGates.length > 0 ? (
+        <div className="flex flex-col gap-[8px]">
+          <span className="font-sans text-[12px] font-medium text-[#554433]">
+            Awaiting Sign-off
+          </span>
+          <div className="flex flex-col gap-[8px]">
+            {pendingGates.map((g) => (
+              <GateSignoffRow key={g.id} gate={g} boardId={boardId} />
             ))}
           </div>
         </div>
@@ -776,7 +857,7 @@ export default function CardPhase11Page() {
       />
       <MethodStage plan={plan} intent={intent} cardId={card.id} latestRunId={latestRunId} />
       <RunStage run={minimalRun} runs={cardRuns} latestRunId={latestRunId} />
-      <ReadStage evidence={evidence} gates={gates} />
+      <ReadStage evidence={evidence} gates={gates} boardId={card.board_id} />
       <CardActionBar card={card} intent={intent} plan={plan} rules={rules} />
       <ArtifactPickerDrawer
         open={pickerInput !== null}
