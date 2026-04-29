@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useCard, useCardEvidence, cardKeys } from '@hooks/useCards';
 import { useBoard } from '@hooks/useBoards';
 import { useIntent, useIntentTypePipelines, useUpdateIntent } from '@hooks/useIntents';
 import { useGeneratePlan, usePlan } from '@hooks/usePlans';
 import { useAddCardEvidence, useApproveGate, useCardGates, useRejectGate } from '@hooks/useGates';
-import { useRunArtifacts, useRunDetail } from '@hooks/useRuns';
+import { useRunArtifacts, useRunDetail, runKeys } from '@hooks/useRuns';
+import { useRunSSE } from '@hooks/useSSE';
 import { pickLatestRunId } from '@hooks/useCardRunState';
 import { useCardModeRules } from '@hooks/useCardModeRules';
 import { listCardRuns } from '@api/cards';
@@ -607,11 +608,13 @@ function RunStage({
   runs,
   latestRunId,
   onDiagnose,
+  sseConnected,
 }: {
   run: MinimalRunDetail | null;
   runs: RunSummary[] | undefined;
   latestRunId: string | null;
   onDiagnose: (prompt: string) => void;
+  sseConnected: boolean;
 }) {
   const status = runTone(run?.status);
   const allRuns = runs ?? [];
@@ -641,9 +644,21 @@ function RunStage({
   }, [allRuns]);
 
   const failed = run.status === 'failed';
+  const inFlight = run.status === 'running' || run.status === 'waiting';
 
   return (
     <StagePanel number={4} title="Run" status={status.label} statusTone={status.tone}>
+      {inFlight && sseConnected ? (
+        <div className="flex items-center gap-[8px] rounded-[8px] bg-[#2e8c56]/[0.08] px-[12px] py-[6px]">
+          <span
+            className="inline-block h-[6px] w-[6px] animate-pulse rounded-full bg-[#2e8c56]"
+            aria-hidden="true"
+          />
+          <span className="font-mono text-[11px] uppercase tracking-wide text-[#2e8c56]">
+            Live · streaming events
+          </span>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center gap-[28px] rounded-[10px] bg-[#f5f5f0] px-[16px] py-[14px]">
         {stats.map((s) => (
           <div key={s.label} className="flex flex-col gap-[4px]">
@@ -1157,6 +1172,29 @@ export default function CardPhase11Page() {
   const { data: runDetail } = useRunDetail(latestRunId);
   const { data: runArtifacts } = useRunArtifacts(latestRunId);
 
+  // Wave C — live NodeRun progress via SSE. Subscribe only when the run
+  // is in-flight; on every event invalidate the run detail + artifact
+  // queries so React Query refetches immediately instead of waiting for
+  // its 3s poll. Card status + run history queries also invalidate so
+  // Stage 4 + run-history list flip on terminal events.
+  const queryClient = useQueryClient();
+  const runInFlight =
+    !!latestRunId &&
+    (runDetail?.status === 'running' || runDetail?.status === 'waiting');
+  const { connected: sseConnected } = useRunSSE(
+    runInFlight ? latestRunId : null,
+    {
+      onEvent: () => {
+        if (!latestRunId) return;
+        queryClient.invalidateQueries({ queryKey: runKeys.detail(latestRunId) });
+        queryClient.invalidateQueries({
+          queryKey: [...runKeys.all, 'artifacts', latestRunId] as const,
+        });
+        queryClient.invalidateQueries({ queryKey: cardKeys.detail(card?.id ?? '') });
+      },
+    },
+  );
+
   const minimalRun = useMemo<MinimalRunDetail | null>(() => {
     if (!latestRunId) return null;
     if (runDetail) {
@@ -1210,6 +1248,7 @@ export default function CardPhase11Page() {
         runs={cardRuns}
         latestRunId={latestRunId}
         onDiagnose={openChatWith}
+        sseConnected={sseConnected}
       />
       <ReadStage
         evidence={evidence}
