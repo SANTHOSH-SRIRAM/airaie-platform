@@ -64,6 +64,14 @@ export const registry: Renderer[] = [
     match: (c) => c.artifact_kind.toLowerCase() === 'csv',
     component: lazy(() => import('./CsvTableRenderer')),
   },
+  // Phase 11 Wave C Pass 1 — PDF inline preview via browser's native viewer.
+  // Iframe-based (no react-pdf yet) so it stays cheap; tool authors can hint
+  // an alternative renderer for richer interactions when needed.
+  {
+    id: 'pdf',
+    match: (c) => c.artifact_kind.toLowerCase() === 'pdf',
+    component: lazy(() => import('./PdfRenderer')),
+  },
   // Task 7 — always-last fallback (download link + metadata). MUST be last
   // and `match: () => true` so the lookup never returns null.
   {

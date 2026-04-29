@@ -7,7 +7,7 @@ import { useBoard } from '@hooks/useBoards';
 import { useIntent, useIntentTypePipelines, useUpdateIntent } from '@hooks/useIntents';
 import { useGeneratePlan, usePlan } from '@hooks/usePlans';
 import { useAddCardEvidence, useApproveGate, useCardGates, useRejectGate } from '@hooks/useGates';
-import { useRunDetail } from '@hooks/useRuns';
+import { useRunArtifacts, useRunDetail } from '@hooks/useRuns';
 import { pickLatestRunId } from '@hooks/useCardRunState';
 import { useCardModeRules } from '@hooks/useCardModeRules';
 import { listCardRuns } from '@api/cards';
@@ -21,6 +21,7 @@ import CardActionBar from '@components/cards/CardActionBar';
 import ArtifactPickerDrawer from '@components/cards/ArtifactPickerDrawer';
 import CardChatDrawer from '@components/cards/CardChatDrawer';
 import ToolManifestDrawer from '@components/cards/ToolManifestDrawer';
+import ResultsSection from '@/renderers/ResultsSection';
 
 import {
   StagePanel,
@@ -43,6 +44,7 @@ import type { ExecutionPlan } from '@/types/plan';
 import type { Card, CardEvidence } from '@/types/card';
 import type { Gate, GateStatus as KernelGateStatus } from '@/types/gate';
 import type { RunSummary } from '@api/cards';
+import type { RunArtifact } from '@api/runs';
 
 // ---------------------------------------------------------------------------
 // CardPhase11Page — replaces the Tiptap-driven CardCanvasPage.
@@ -996,6 +998,7 @@ function ReadStage({
   canAddEvidence,
   card,
   onAskAi,
+  runArtifacts,
 }: {
   evidence: CardEvidence[] | undefined;
   gates: Gate[] | undefined;
@@ -1005,13 +1008,14 @@ function ReadStage({
   canAddEvidence: boolean;
   card: Card;
   onAskAi: (prompt: string) => void;
+  runArtifacts: RunArtifact[];
 }) {
   const status = readStatus(evidence, gates);
   const evs = evidence ?? [];
   const gs = gates ?? [];
   const pendingGates = gs.filter((g) => g.status === 'PENDING' || g.status === 'EVALUATING');
 
-  if (evs.length === 0 && gs.length === 0) {
+  if (evs.length === 0 && gs.length === 0 && runArtifacts.length === 0) {
     return (
       <StagePanel number={5} title="Read" status={status.label} statusTone={status.tone}>
         <p className="font-sans text-[13px] text-[#554433]/70">
@@ -1030,6 +1034,12 @@ function ReadStage({
 
   return (
     <StagePanel number={5} title="Read" status={status.label} statusTone={status.tone}>
+      {runArtifacts.length > 0 ? (
+        <div className="flex flex-col gap-[8px]">
+          <span className="font-sans text-[12px] font-medium text-[#554433]">Results</span>
+          <ResultsSection runArtifacts={runArtifacts} intent={intent} />
+        </div>
+      ) : null}
       {evs.length > 0 ? (
         <div className="flex flex-col gap-[8px]">
           <span className="font-sans text-[12px] font-medium text-[#554433]">KPI Evidence</span>
@@ -1145,6 +1155,7 @@ export default function CardPhase11Page() {
   });
   const latestRunId = useMemo(() => pickLatestRunId(cardRuns), [cardRuns]);
   const { data: runDetail } = useRunDetail(latestRunId);
+  const { data: runArtifacts } = useRunArtifacts(latestRunId);
 
   const minimalRun = useMemo<MinimalRunDetail | null>(() => {
     if (!latestRunId) return null;
@@ -1209,6 +1220,7 @@ export default function CardPhase11Page() {
         canAddEvidence={rules.canAddManualEvidence}
         card={card}
         onAskAi={openChatWith}
+        runArtifacts={runArtifacts ?? []}
       />
       <CardActionBar
         card={card}

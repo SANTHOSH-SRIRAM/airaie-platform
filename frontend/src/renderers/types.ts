@@ -50,6 +50,7 @@ export type RendererId =
   | 'json-metrics'
   | 'csv-table'
   | 'csv-chart'
+  | 'pdf'
   | 'fallback';
 
 /**
