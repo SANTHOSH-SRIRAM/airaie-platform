@@ -20,6 +20,7 @@ import CardTopBar from '@components/cards/CardTopBar';
 import CardActionBar from '@components/cards/CardActionBar';
 import ArtifactPickerDrawer from '@components/cards/ArtifactPickerDrawer';
 import CardChatDrawer from '@components/cards/CardChatDrawer';
+import ToolManifestDrawer from '@components/cards/ToolManifestDrawer';
 
 import {
   StagePanel,
@@ -321,12 +322,14 @@ function MethodStage({
   cardId,
   latestRunId,
   onAskAi,
+  onInspectTool,
 }: {
   plan: ExecutionPlan | undefined;
   intent: IntentSpec | undefined;
   cardId: string | undefined;
   latestRunId: string | null;
   onAskAi: (prompt: string) => void;
+  onInspectTool: (toolId: string) => void;
 }) {
   const status = methodStatus(plan);
   const { data: pipelineOptions } = useIntentTypePipelines(intent?.intent_type);
@@ -425,8 +428,13 @@ function MethodStage({
       </div>
       {tools.length > 0 ? (
         <div className="flex flex-col gap-[8px]">
-          <span className="font-sans text-[12px] font-medium text-[#554433]">Resolved Tool Chain</span>
-          <ToolChainCard tools={tools} />
+          <span className="font-sans text-[12px] font-medium text-[#554433]">
+            Resolved Tool Chain
+            <span className="ml-[6px] font-sans text-[11px] font-normal text-[#554433]/55">
+              · click any tool to inspect its manifest
+            </span>
+          </span>
+          <ToolChainCard tools={tools} onToolClick={(t) => onInspectTool(t.name)} />
         </div>
       ) : null}
       {latestRunId ? (
@@ -1110,6 +1118,9 @@ export default function CardPhase11Page() {
     setChatOpen(true);
   };
 
+  // Wave B — Tool manifest drawer (Method stage tool-chip click).
+  const [inspectingTool, setInspectingTool] = useState<string | null>(null);
+
   const handlePinSelect = async (artifactId: string) => {
     if (!intent || !pickerInput) return;
     const nextInputs = intent.inputs.map((inp) =>
@@ -1181,6 +1192,7 @@ export default function CardPhase11Page() {
         cardId={card.id}
         latestRunId={latestRunId}
         onAskAi={openChatWith}
+        onInspectTool={setInspectingTool}
       />
       <RunStage
         run={minimalRun}
@@ -1222,6 +1234,11 @@ export default function CardPhase11Page() {
         expectedKind={pickerInput?.type}
         onSelect={handlePinSelect}
         onClose={() => setPickerInput(null)}
+      />
+      <ToolManifestDrawer
+        open={inspectingTool !== null}
+        toolId={inspectingTool}
+        onClose={() => setInspectingTool(null)}
       />
     </CardDetailLayout>
   );
