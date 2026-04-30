@@ -43,6 +43,20 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   ArrowRightLeft,
 };
 
+// G.4.16 — categories whose underlying node types aren't executed by the
+// kernel runtime today. Per `WORKFLOW_DSL.md:50–54`, only `tool` and
+// `agent` are dispatched; the rest round-trip in the DSL but the
+// scheduler treats them as scaffolding. Hiding them from the palette
+// prevents users from dropping non-functional nodes on the canvas while
+// the kernel work catches up to the architecture spec.
+//
+// Triggers stay visible — they're the workflow entry point per the
+// architecture and are managed via the separate triggers table.
+//
+// Flip to `false` when scheduler dispatch for gate / logic / data lands.
+const HIDE_NON_EXECUTABLE_CATEGORIES = true;
+const NON_EXECUTABLE_CATEGORY_IDS = new Set(['logic', 'governance', 'data']);
+
 function resolveIcon(node: NodeDefinition): LucideIcon {
   return NODE_ICONS[node.icon] ?? Webhook;
 }
@@ -66,19 +80,22 @@ export default function NodePalette() {
     [nodes, selectedNodeId]
   );
 
-  const filtered = useMemo(
-    () =>
-      NODE_CATEGORIES.map((cat) => ({
+  const filtered = useMemo(() => {
+    const visible = HIDE_NON_EXECUTABLE_CATEGORIES
+      ? NODE_CATEGORIES.filter((cat) => !NON_EXECUTABLE_CATEGORY_IDS.has(cat.id))
+      : NODE_CATEGORIES;
+    return visible
+      .map((cat) => ({
         ...cat,
         nodes: cat.nodes.filter(
           (n) =>
             n.label.toLowerCase().includes(query) ||
             n.description.toLowerCase().includes(query) ||
-            n.subtype.toLowerCase().includes(query)
+            n.subtype.toLowerCase().includes(query),
         ),
-      })).filter((cat) => cat.nodes.length > 0),
-    [query]
-  );
+      }))
+      .filter((cat) => cat.nodes.length > 0);
+  }, [query]);
 
   const toggleSection = (id: string) => {
     setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
