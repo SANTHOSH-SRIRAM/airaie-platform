@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchRunList, fetchRunDetail, fetchRunLogs, cancelRun, retryRun, fetchRunArtifacts } from '@api/runs';
-import type { RetryRunResponse } from '@api/runs';
+import { fetchRunList, fetchRunDetail, fetchRunLogs, cancelRun, retryRun, resumeRun, fetchRunArtifacts } from '@api/runs';
+import type { RetryRunResponse, ResumeRunResponse } from '@api/runs';
 
 export const runKeys = {
   all: ['runs'] as const,
@@ -64,6 +64,32 @@ export function useRetryRun() {
       if (resp?.run?.id) {
         qc.invalidateQueries({ queryKey: runKeys.detail(resp.run.id) });
       }
+    },
+  });
+}
+
+/**
+ * Resume a paused (gate-waiting) run (G.4.15a).
+ *
+ * Hits `POST /v0/runs/{id}/resume`. Optional `checkpointId` resumes
+ * from a specific checkpoint; omit to resume from the natural pause
+ * point. The kernel transitions the run from `waiting` → `running`
+ * and returns `{ run_id, status: "resuming", checkpoint_id }`.
+ *
+ * Mutation variables shape: either a bare runId string or
+ * `{ runId, checkpointId }` for the checkpoint case.
+ */
+export function useResumeRun() {
+  const qc = useQueryClient();
+  return useMutation<ResumeRunResponse, Error, string | { runId: string; checkpointId?: string }>({
+    mutationFn: (vars) => {
+      if (typeof vars === 'string') return resumeRun(vars);
+      return resumeRun(vars.runId, vars.checkpointId);
+    },
+    onSuccess: (_, vars) => {
+      const runId = typeof vars === 'string' ? vars : vars.runId;
+      qc.invalidateQueries({ queryKey: runKeys.detail(runId) });
+      qc.invalidateQueries({ queryKey: runKeys.all });
     },
   });
 }

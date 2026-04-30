@@ -281,6 +281,36 @@ export interface RetryRunResponse {
 export const retryRun = (runId: string): Promise<RetryRunResponse> =>
   api(`/v0/runs/${runId}/retry`, { method: 'POST' });
 
+/* ---------- Resume ----------
+ *
+ * POST /v0/runs/{id}/resume — kernel handler at
+ * `airaie-kernel/internal/handler/runs.go:193`. For runs stuck in the
+ * `waiting` state (gate approval pending). Optional `checkpoint_id`
+ * lets a caller resume from a specific checkpoint; omit to resume
+ * from the natural pause point.
+ *
+ * Response shape: `{ run_id, status: "resuming", checkpoint_id }` —
+ * note the server uses bare `run_id` at the root, not nested under
+ * `run`.
+ *
+ * Phase 4B / G.4.15a (2026-05-01) — surfaces a kernel endpoint that
+ * shipped without a UI consumer. Architecture spec
+ * (AIRAIE_TECHNICAL_ARCHITECTURE.md §5.2) lists `PAUSED (gate
+ * waiting)` as a first-class run state but no resume affordance
+ * existed.
+ */
+export interface ResumeRunResponse {
+  run_id: string;
+  status: string;
+  checkpoint_id?: string;
+}
+export const resumeRun = (runId: string, checkpointId?: string): Promise<ResumeRunResponse> =>
+  api(`/v0/runs/${runId}/resume`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(checkpointId ? { checkpoint_id: checkpointId } : {}),
+  });
+
 /* ---------- Real backend run detail (used by playground outputs panel) ---------- */
 // PRESERVED for src/components/agents/InlineToolCallCard.tsx and
 // src/components/agents/execution/RunOutputsPanel.tsx — do not remove.

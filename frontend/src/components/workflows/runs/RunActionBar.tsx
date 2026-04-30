@@ -1,7 +1,7 @@
-import { Play, Square, RotateCcw, Plus, Wifi, WifiOff } from 'lucide-react';
+import { Play, Square, RotateCcw, Plus, PlayCircle, Wifi, WifiOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useRunWorkflow } from '@hooks/useRunWorkflow';
-import { useRetryRun } from '@hooks/useRuns';
+import { useRetryRun, useResumeRun } from '@hooks/useRuns';
 import { useExecutionStore } from '@store/executionStore';
 
 export interface RunActionBarProps {
@@ -34,6 +34,14 @@ export default function RunActionBar({ workflowId = '' }: RunActionBarProps) {
         }
       },
     });
+  };
+
+  // G.4.15a — resume a gate-waiting run (kernel POST /v0/runs/{id}/resume).
+  // Surfaces the existing kernel endpoint that previously had no UI.
+  const resumeMutation = useResumeRun();
+  const onResume = () => {
+    if (!activeRunId) return;
+    resumeMutation.mutate(activeRunId);
   };
 
   // Count completed/total nodes for progress display
@@ -141,13 +149,26 @@ export default function RunActionBar({ workflowId = '' }: RunActionBarProps) {
         </>
       )}
 
-      {/* Paused state */}
+      {/* Paused state — G.4.15a adds Resume button next to the chip */}
       {runStatus === 'PAUSED' && (
         <>
           <span className="rounded-full bg-yellow-50 px-2.5 py-1 text-[11px] font-medium text-yellow-700">
             Paused
           </span>
           <span className="text-[12px] text-[#8f8a83]">Gate approval pending</span>
+          <button
+            type="button"
+            onClick={onResume}
+            disabled={resumeMutation.isPending || !activeRunId}
+            title="Resume this run from its pause point"
+            className="flex h-[36px] items-center gap-2 rounded-[12px] bg-[#2d2d2d] px-4 text-[12px] font-medium text-white transition-colors hover:bg-[#1a1a1a] disabled:opacity-50"
+          >
+            <PlayCircle size={12} />
+            {resumeMutation.isPending ? 'Resuming…' : 'Resume'}
+          </button>
+          {resumeMutation.isError && (
+            <span className="text-[11px] text-red-500">{resumeMutation.error?.message ?? 'Resume failed'}</span>
+          )}
         </>
       )}
 
