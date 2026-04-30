@@ -533,13 +533,6 @@ export default function WorkflowDetailPage() {
           >
             <Play size={12} fill="white" /> {runWorkflowMutation.isPending ? 'Starting…' : 'Start Run'}
           </button>
-          <button
-            disabled
-            title="Deactivate is not yet wired to the backend"
-            className="h-[30px] px-[14px] rounded-[8px] border border-[#e8e8e8] text-[11px] font-medium text-[#6b6b6b] flex items-center gap-[6px] hover:bg-[#f5f5f0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Deactivate
-          </button>
           <div className="w-[28px] h-[28px] rounded-full bg-[#2d2d2d] flex items-center justify-center text-white text-[11px] font-semibold">S</div>
         </div>
       </section>
