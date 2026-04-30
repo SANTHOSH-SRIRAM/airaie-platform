@@ -3,6 +3,8 @@ import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { Loader2, AlertCircle, ShieldCheck, CheckCircle2, XCircle, Circle, Clock, Hand } from 'lucide-react';
 import { useGateList } from '@hooks/useGates';
 import { useBoardCanvasContext } from '@/editor/boardCanvasContext';
+import { useBoardModeRules } from '@hooks/useBoardModeRules';
+import { BlockLockChrome } from '@components/cards/primitives';
 import type { Gate, GateStatus } from '@/types/gate';
 
 // ---------------------------------------------------------------------------
@@ -37,6 +39,8 @@ export function summarizeGateCounts(gates: Gate[] | undefined): Record<GateStatu
 function GatesRollupBlockViewImpl(_props: NodeViewProps) {
   const ctx = useBoardCanvasContext();
   const { data: gates, isLoading, error } = useGateList(ctx.boardId ?? undefined);
+  const modeRules = useBoardModeRules(ctx.board ?? undefined);
+  const locked = !modeRules.canEditBlocks;
 
   if (!ctx.boardId) {
     return (
@@ -93,6 +97,7 @@ function GatesRollupBlockViewImpl(_props: NodeViewProps) {
       className="my-[8px] rounded-[10px] border border-[#e8e8e8] bg-white p-[12px]"
       contentEditable={false}
     >
+      <BlockLockChrome locked={locked} reason={modeRules.lockReason}>
       <div className="flex items-center gap-[8px]">
         <ShieldCheck size={14} className="text-[#1976d2] shrink-0" aria-hidden="true" />
         <span className="text-[12px] font-semibold text-[#1a1a1a]">Gates Rollup</span>
@@ -143,6 +148,7 @@ function GatesRollupBlockViewImpl(_props: NodeViewProps) {
           })}
         </ul>
       )}
+      </BlockLockChrome>
     </NodeViewWrapper>
   );
 }

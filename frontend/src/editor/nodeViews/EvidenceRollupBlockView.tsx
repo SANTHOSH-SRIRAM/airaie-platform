@@ -3,6 +3,8 @@ import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useCards } from '@hooks/useBoards';
 import { useBoardCanvasContext } from '@/editor/boardCanvasContext';
+import { useBoardModeRules } from '@hooks/useBoardModeRules';
+import { BlockLockChrome } from '@components/cards/primitives';
 
 // ---------------------------------------------------------------------------
 // EvidenceRollupBlockView — Wave 10-05c NodeView for the `evidenceRollupBlock`
@@ -37,6 +39,8 @@ export function summarizeCardStatus(
 function EvidenceRollupBlockViewImpl(_props: NodeViewProps) {
   const ctx = useBoardCanvasContext();
   const { data: cards, isLoading, error } = useCards(ctx.boardId ?? '');
+  const modeRules = useBoardModeRules(ctx.board ?? undefined);
+  const locked = !modeRules.canEditBlocks;
 
   if (!ctx.boardId) {
     return (
@@ -92,22 +96,24 @@ function EvidenceRollupBlockViewImpl(_props: NodeViewProps) {
       className="my-[8px] rounded-[10px] border border-[#e8e8e8] bg-white p-[12px]"
       contentEditable={false}
     >
-      <div className="flex items-center gap-[8px]">
-        <CheckCircle2 size={14} className="text-[#1976d2] shrink-0" aria-hidden="true" />
-        <span className="text-[12px] font-semibold text-[#1a1a1a]">Evidence Rollup</span>
-        <span className="ml-auto text-[10px] text-[#6b6b6b]">{summary.total} card{summary.total === 1 ? '' : 's'}</span>
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-[6px] mt-[8px]">
-        <Stat label="Completed" value={summary.completed} bg="#e8f5e9" fg="#2e7d32" />
-        <Stat label="Running" value={summary.running} bg="#fff8e1" fg="#ef6c00" />
-        <Stat label="Failed" value={summary.failed} bg="#ffebee" fg="#c62828" />
-        <Stat label="Draft" value={summary.draft} bg="#f0f0ec" fg="#6b6b6b" />
-      </div>
-      <div className="text-[10px] text-[#acacac] mt-[8px]">
-        Per-card evidence detail: open a card and look at its Evidence blocks.
-        Board-level evidence aggregation arrives when the kernel exposes
-        <code className="font-mono mx-[4px]">GET /v0/boards/&#123;id&#125;/evidence</code>.
-      </div>
+      <BlockLockChrome locked={locked} reason={modeRules.lockReason}>
+        <div className="flex items-center gap-[8px]">
+          <CheckCircle2 size={14} className="text-[#1976d2] shrink-0" aria-hidden="true" />
+          <span className="text-[12px] font-semibold text-[#1a1a1a]">Evidence Rollup</span>
+          <span className="ml-auto text-[10px] text-[#6b6b6b]">{summary.total} card{summary.total === 1 ? '' : 's'}</span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-[6px] mt-[8px]">
+          <Stat label="Completed" value={summary.completed} bg="#e8f5e9" fg="#2e7d32" />
+          <Stat label="Running" value={summary.running} bg="#fff8e1" fg="#ef6c00" />
+          <Stat label="Failed" value={summary.failed} bg="#ffebee" fg="#c62828" />
+          <Stat label="Draft" value={summary.draft} bg="#f0f0ec" fg="#6b6b6b" />
+        </div>
+        <div className="text-[10px] text-[#acacac] mt-[8px]">
+          Per-card evidence detail: open a card and look at its Evidence blocks.
+          Board-level evidence aggregation arrives when the kernel exposes
+          <code className="font-mono mx-[4px]">GET /v0/boards/&#123;id&#125;/evidence</code>.
+        </div>
+      </BlockLockChrome>
     </NodeViewWrapper>
   );
 }
