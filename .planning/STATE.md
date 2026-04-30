@@ -1,6 +1,6 @@
 # Project State
 
-Last activity: 2026-04-28 - Completed Phase 10 Waves 10-05 (full Board canvas) + 10-06-slim (3-way merge UI on 409) + 10-07-flip (canvas is the default route for /cards/:id and /boards/:id). Phase 10 user-facing goal is shipped.
+Last activity: 2026-04-30 - Phase 4A workflow-honesty trio shipped (260430-uy0): G.4.12 Retry endpoint fix + G.4.13 alert→toast + G.4.16 palette hide non-executable categories. Live UAT pending (gateway restart + 3 verifications). Phase 4B triage (G.4.14 stubs, G.4.15 unused endpoints) parked.
 
 ## Active Milestone
 
@@ -44,3 +44,4 @@ v1 unified-platform frontend — Phases 1–4 closed; **Phase 8 fully complete (
 |---|-------------|------|--------|-----------|
 | 260425-f10 | Polish 3 Agent Playground UX bugs (reload session reuse + agent byline + Inspector Messages count) | 2026-04-25 | fe67e4f | [260425-f10-polish-3-visible-bugs-in-agent-playgroun](./quick/260425-f10-polish-3-visible-bugs-in-agent-playgroun/) |
 | 260425-e2a | Fix Phase 4 workflow-runs frontend (mapper + un-hardcode + envelope unwrap) | 2026-04-25 | 72e52f1 | [260425-e2a-fix-phase-4-workflow-runs-frontend-to-wo](./quick/260425-e2a-fix-phase-4-workflow-runs-frontend-to-wo/) |
+| 260430-uy0 | Phase 4A workflow-honesty trio: G.4.12 Retry endpoint + G.4.13 alert→toast + G.4.16 palette hide non-executable | 2026-04-30 | dc8a992 | [research/workflow-audit-2026-04-30.md](./research/workflow-audit-2026-04-30.md) (no quick/ dir — direct edits, planning commit e3991e0) |
