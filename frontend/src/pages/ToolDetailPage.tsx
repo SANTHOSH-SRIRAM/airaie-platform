@@ -1,5 +1,5 @@
 import { useState, useEffect, createElement, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, Wrench, Activity, BarChart3,
   Play,
@@ -106,6 +106,7 @@ function StatusPill({ status }: { status: string }) {
 export default function ToolDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const setSidebarContentType = useUiStore((s) => s.setSidebarContentType);
   const hideBottomBar = useUiStore((s) => s.hideBottomBar);
   const closeRightPanel = useUiStore((s) => s.closeRightPanel);
@@ -167,6 +168,21 @@ export default function ToolDetailPage() {
     closeRightPanel();
     setActiveToolSection('overview');
   }, [closeRightPanel, hideBottomBar, setSidebarContentType, setActiveToolSection]);
+
+  // G.4.19 (2026-05-01) — scroll to anchor when navigated with a hash
+  // (e.g. /tools/:id#test-run from ToolRegistryActionBar's Test Run
+  // button). Defer until after tool data loads so the section exists.
+  useEffect(() => {
+    if (!tool || !location.hash) return;
+    const id = location.hash.slice(1);
+    const el = document.getElementById(id);
+    if (el) {
+      // requestAnimationFrame waits for the layout pass after mount
+      requestAnimationFrame(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  }, [tool, location.hash]);
 
   // Section Visibility tracking
   useEffect(() => {

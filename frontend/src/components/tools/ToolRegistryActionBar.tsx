@@ -3,7 +3,7 @@ import { useToolRegistryStore } from '@store/toolRegistryStore';
 import { useToolList } from '@hooks/useTools';
 import { useUiStore } from '@store/uiStore';
 import Button from '@components/ui/Button';
-import { Workflow, FileText, Play } from 'lucide-react';
+import { FileText, Play } from 'lucide-react';
 
 export default function ToolRegistryActionBar() {
   const navigate = useNavigate();
@@ -21,19 +21,16 @@ export default function ToolRegistryActionBar() {
       data-testid="tool-registry-action-bar"
       className="flex items-center justify-between h-full px-4"
     >
-      {/* Left: Action buttons */}
-      <div className="flex items-center gap-2">
-        <Button
-          data-testid="action-use-in-workflow"
-          variant="primary"
-          size="sm"
-          icon={<Workflow size={14} />}
-          disabled={disabled}
-          onClick={() => navigate(`/workflow-studio?tool=${selectedToolId}`)}
-        >
-          Use in Workflow
-        </Button>
+      {/* Left: Action buttons.
 
+          G.4.18 (2026-05-01) — "Use in Workflow" was navigating to
+          `/workflow-studio?tool=${id}`, but the editor route is
+          `/workflow-studio/:workflowId` (positional) and
+          WorkflowEditorPage doesn't read the `?tool=` query param.
+          Result was a generic "Untitled Pipeline" with no tool placed.
+          Removed until the registry → editor handoff is designed (parked
+          as 999.5). */}
+      <div className="flex items-center gap-2">
         <Button
           data-testid="action-view-contract"
           variant="outline"
@@ -51,8 +48,12 @@ export default function ToolRegistryActionBar() {
           size="sm"
           icon={<Play size={14} />}
           disabled={disabled}
+          // G.4.19 (2026-05-01) — Replaced console.log stub with a deep
+          // link to ToolDetailPage's existing Test Run section. The form
+          // + createRunMutation wiring already exists at
+          // ToolDetailPage:131,668-755; we just navigate + scroll-to-hash.
           onClick={() => {
-            console.log('Test Run:', selectedToolId);
+            if (selectedToolId) navigate(`/tools/${selectedToolId}#test-run`);
           }}
         >
           Test Run
