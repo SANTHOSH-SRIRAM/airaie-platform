@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { useCard, useCardEvidence, cardKeys } from '@hooks/useCards';
+import { useCard, useCardEvidence, useCreateCard, cardKeys } from '@hooks/useCards';
 import { useBoard } from '@hooks/useBoards';
 import { useIntent, useIntentTypePipelines, useUpdateIntent } from '@hooks/useIntents';
 import { useGeneratePlan, usePlan } from '@hooks/usePlans';
@@ -20,6 +20,7 @@ import CardDetailLayout from '@components/cards/CardDetailLayout';
 import CardTopBar from '@components/cards/CardTopBar';
 import CardActionBar from '@components/cards/CardActionBar';
 import ArtifactPickerDrawer from '@components/cards/ArtifactPickerDrawer';
+import BranchSweepDrawer, { type SweepSubmitPayload } from '@components/cards/BranchSweepDrawer';
 import CardChatDrawer from '@components/cards/CardChatDrawer';
 import ToolManifestDrawer from '@components/cards/ToolManifestDrawer';
 import ResultsSection from '@/renderers/ResultsSection';
@@ -31,6 +32,7 @@ import {
   ToolChainCard,
   EvidenceRow,
   GateBadge,
+  SweepSampleRow,
 } from '@components/cards/primitives';
 import type {
   ToolChainItem,
@@ -608,12 +610,16 @@ function RunStage({
   runs,
   latestRunId,
   onDiagnose,
+  onBranchSweep,
+  canBranchSweep,
   sseConnected,
 }: {
   run: MinimalRunDetail | null;
   runs: RunSummary[] | undefined;
   latestRunId: string | null;
   onDiagnose: (prompt: string) => void;
+  onBranchSweep: () => void;
+  canBranchSweep: boolean;
   sseConnected: boolean;
 }) {
   const status = runTone(run?.status);
@@ -625,6 +631,21 @@ function RunStage({
         <p className="font-sans text-[13px] text-[#554433]/70">
           No runs recorded. Click <span className="font-mono text-[#c14110]">Run Card</span> in the top bar to execute the compiled plan.
         </p>
+        {canBranchSweep ? (
+          <div className="flex items-center gap-[10px] pt-[4px]">
+            <button
+              type="button"
+              onClick={onBranchSweep}
+              className="inline-flex items-center gap-[6px] rounded-[6px] border border-[#1976d2]/30 bg-white px-[10px] py-[5px] font-sans text-[11px] font-medium text-[#1976d2] transition-colors hover:bg-[#1976d2]/[0.06]"
+            >
+              <span aria-hidden="true">⤵</span>
+              Branch into sweep
+            </button>
+            <span className="font-sans text-[11px] text-[#554433]/55">
+              fan out a parametric sweep before running this card
+            </span>
+          </div>
+        ) : null}
       </StagePanel>
     );
   }
@@ -726,6 +747,21 @@ function RunStage({
               );
             })}
           </div>
+        </div>
+      ) : null}
+      {canBranchSweep ? (
+        <div className="flex items-center gap-[10px]">
+          <button
+            type="button"
+            onClick={onBranchSweep}
+            className="inline-flex items-center gap-[6px] rounded-[6px] border border-[#1976d2]/30 bg-white px-[10px] py-[5px] font-sans text-[11px] font-medium text-[#1976d2] transition-colors hover:bg-[#1976d2]/[0.06]"
+          >
+            <span aria-hidden="true">⤵</span>
+            Branch into sweep
+          </button>
+          <span className="font-sans text-[11px] text-[#554433]/55">
+            fan out N runs varying one parameter
+          </span>
         </div>
       ) : null}
       {history.length > 1 ? (
@@ -1117,10 +1153,125 @@ function ReadStage({
   );
 }
 
+// ─── Stage 5 — Sweep variant ───────────────────────────────────────────────
+
+interface SweepConfig {
+  sweep_param?: string;
+  sweep_values?: unknown[];
+  parent_card_id?: string;
+}
+
+function readSweepConfig(card: Card): SweepConfig {
+  const cfg = (card.config ?? {}) as Record<string, unknown>;
+  return {
+    sweep_param: typeof cfg.sweep_param === 'string' ? cfg.sweep_param : undefined,
+    sweep_values: Array.isArray(cfg.sweep_values) ? cfg.sweep_values : undefined,
+    parent_card_id:
+      typeof cfg.parent_card_id === 'string' ? cfg.parent_card_id : undefined,
+  };
+}
+
+function paramKeyFromPath(p: string | undefined): string {
+  if (!p) return 'param';
+  const dot = p.lastIndexOf('.');
+  return dot >= 0 ? p.slice(dot + 1) : p;
+}
+
+function SweepReadStage({
+  card,
+  runs,
+}: {
+  card: Card;
+  runs: RunSummary[] | undefined;
+}) {
+  const cfg = readSweepConfig(card);
+  const values = cfg.sweep_values ?? [];
+  const paramKey = paramKeyFromPath(cfg.sweep_param);
+  const sortedRuns = useMemo(() => {
+    return [...(runs ?? [])].sort(
+      (a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime(),
+    );
+  }, [runs]);
+
+  if (values.length === 0) {
+    return (
+      <StagePanel number={5} title="Read" status="NO SAMPLES" statusTone="neutral">
+        <p className="font-sans text-[13px] text-[#554433]/70">
+          This sweep card has no samples in <span className="font-mono">config.sweep_values</span>.
+          Open the parent card and re-create the sweep.
+        </p>
+      </StagePanel>
+    );
+  }
+
+  const completed = sortedRuns.filter(
+    (r) => r.status === 'completed' || r.status === 'succeeded',
+  ).length;
+  const failed = sortedRuns.filter((r) => r.status === 'failed').length;
+  const tone =
+    failed > 0
+      ? 'danger'
+      : completed === values.length
+        ? 'success'
+        : sortedRuns.length === 0
+          ? 'neutral'
+          : 'warning';
+  const label =
+    failed > 0
+      ? 'PARTIAL'
+      : completed === values.length
+        ? 'COMPLETE'
+        : sortedRuns.length === 0
+          ? 'PENDING'
+          : 'RUNNING';
+
+  return (
+    <StagePanel number={5} title="Read" status={label} statusTone={tone}>
+      <div className="flex items-center gap-[20px] rounded-[10px] bg-[#f5f5f0] px-[14px] py-[10px]">
+        <span className="font-mono text-[11px] uppercase tracking-wide text-[#554433]/70">
+          {values.length} samples · {paramKey}
+        </span>
+        <span className="font-mono text-[11px] text-[#554433]/70">
+          {completed} done · {failed} failed · {Math.max(0, values.length - completed - failed)} pending
+        </span>
+        {cfg.parent_card_id ? (
+          <Link
+            to={`/cards/${cfg.parent_card_id}`}
+            className="ml-auto font-sans text-[11px] text-[#1976d2] hover:underline"
+          >
+            ← parent card
+          </Link>
+        ) : null}
+      </div>
+      <div className="flex flex-col gap-[6px]">
+        {values.map((v, i) => {
+          const run = sortedRuns[i];
+          return (
+            <SweepSampleRow
+              key={`${i}-${String(v)}`}
+              paramKey={paramKey}
+              paramValue={v as number | string}
+              runStatus={run?.status}
+              runId={run?.run_id}
+            />
+          );
+        })}
+      </div>
+      {sortedRuns.length === 0 ? (
+        <p className="font-sans text-[12px] text-[#554433]/70">
+          No runs yet. Click <span className="font-mono text-[#c14110]">Run Card</span> in the
+          top bar — the kernel fans out one run per sample value.
+        </p>
+      ) : null}
+    </StagePanel>
+  );
+}
+
 // ─── Page assembly ─────────────────────────────────────────────────────────
 
 export default function CardPhase11Page() {
   const { cardId } = useParams<{ cardId: string }>();
+  const navigate = useNavigate();
   const { data: card, isLoading: cardLoading, error: cardError } = useCard(cardId);
   const { data: board, isLoading: boardLoading } = useBoard(card?.board_id);
   const { data: intent } = useIntent(card?.intent_spec_id);
@@ -1129,9 +1280,14 @@ export default function CardPhase11Page() {
   const { data: gates } = useCardGates(card?.id, card?.board_id);
   const rules = useCardModeRules(card, board);
   const updateIntent = useUpdateIntent(intent?.id ?? '', card?.board_id);
+  const createSweepCard = useCreateCard(card?.board_id ?? '');
 
   // Stage 2 input picker state — which input port the user is pinning.
   const [pickerInput, setPickerInput] = useState<IntentInput | null>(null);
+
+  // Wave D — sweep branching drawer state.
+  const [sweepOpen, setSweepOpen] = useState(false);
+  const [sweepError, setSweepError] = useState<string | null>(null);
 
   // Wave D — Card chat drawer + optional pre-filled draft (e.g. from a
   // "diagnose this failure" button on Stage 4).
@@ -1145,6 +1301,30 @@ export default function CardPhase11Page() {
 
   // Wave B — Tool manifest drawer (Method stage tool-chip click).
   const [inspectingTool, setInspectingTool] = useState<string | null>(null);
+
+  const handleSweepSubmit = async (payload: SweepSubmitPayload) => {
+    if (!card) return;
+    setSweepError(null);
+    try {
+      const newCard = await createSweepCard.mutateAsync({
+        title: payload.title,
+        card_type: 'sweep',
+        intent_type: card.intent_type,
+        intent_spec_id: card.intent_spec_id,
+        config: {
+          sweep_param: payload.sweep_param,
+          sweep_values: payload.sweep_values,
+          parent_card_id: card.id,
+        },
+      });
+      setSweepOpen(false);
+      navigate(`/cards/${newCard.id}`);
+    } catch (err) {
+      const msg =
+        (err as { message?: string })?.message ?? 'Could not create sweep card.';
+      setSweepError(msg);
+    }
+  };
 
   const handlePinSelect = async (artifactId: string) => {
     if (!intent || !pickerInput) return;
@@ -1248,19 +1428,28 @@ export default function CardPhase11Page() {
         runs={cardRuns}
         latestRunId={latestRunId}
         onDiagnose={openChatWith}
+        onBranchSweep={() => {
+          setSweepError(null);
+          setSweepOpen(true);
+        }}
+        canBranchSweep={card.card_type === 'analysis' && !!plan}
         sseConnected={sseConnected}
       />
-      <ReadStage
-        evidence={evidence}
-        gates={gates}
-        boardId={card.board_id}
-        cardId={card.id}
-        intent={intent}
-        canAddEvidence={rules.canAddManualEvidence}
-        card={card}
-        onAskAi={openChatWith}
-        runArtifacts={runArtifacts ?? []}
-      />
+      {card.card_type === 'sweep' ? (
+        <SweepReadStage card={card} runs={cardRuns} />
+      ) : (
+        <ReadStage
+          evidence={evidence}
+          gates={gates}
+          boardId={card.board_id}
+          cardId={card.id}
+          intent={intent}
+          canAddEvidence={rules.canAddManualEvidence}
+          card={card}
+          onAskAi={openChatWith}
+          runArtifacts={runArtifacts ?? []}
+        />
+      )}
       <CardActionBar
         card={card}
         intent={intent}
@@ -1290,6 +1479,18 @@ export default function CardPhase11Page() {
         open={inspectingTool !== null}
         toolId={inspectingTool}
         onClose={() => setInspectingTool(null)}
+      />
+      <BranchSweepDrawer
+        open={sweepOpen}
+        parentCard={card}
+        plan={plan}
+        submitting={createSweepCard.isPending}
+        errorMessage={sweepError}
+        onSubmit={handleSweepSubmit}
+        onClose={() => {
+          setSweepOpen(false);
+          setSweepError(null);
+        }}
       />
     </CardDetailLayout>
   );

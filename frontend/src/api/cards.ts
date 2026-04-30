@@ -54,6 +54,9 @@ export async function createCard(
     // D7: optional link to an IntentSpec at creation time. Backend
     // model.Card has `intent_spec_id` (json:"intent_spec_id,omitempty").
     intent_spec_id?: string;
+    // Free-form JSONB. Sweep cards use this for
+    // `{ sweep_param, sweep_values, parent_card_id }`.
+    config?: Record<string, unknown>;
   },
 ): Promise<Card> {
   return apiClient.post(`/v0/boards/${boardId}/cards`, data);
