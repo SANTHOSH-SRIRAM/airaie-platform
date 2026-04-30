@@ -418,6 +418,43 @@ Clicking "Approve All" doesn't clear the inline card's pending approvals, and vi
 
 ---
 
+### G.4.17 WorkflowDetailPage `actionError` state never commits [HIGH]
+
+**Surfaced:** Live UAT of G.4.13 trio fix on 2026-04-30 (Phase 4A). Documented in `.planning/research/phase-4a-uat-2026-04-30.md`.
+
+**Symptom:** On `/workflows/wf_*`, clicking Start Run when the kernel returns 500 leaves the user with no UI feedback. The `Notification` component never appears.
+
+**Where:** `airaie_platform/frontend/src/pages/WorkflowDetailPage.tsx:385–400, 495–507` (the G.4.13 patch in commit `1135893`).
+
+**What's verified working:**
+- `window.alert` is correctly removed and never fires (Playwright `__alertFired` always `false`)
+- The mutation reaches error state (`status: "error"`, `error.message: "Internal server error"`)
+- The component's `handleStartRun.onError` callback fires (verified by replacing per-call `onError` from a fiber-walked handle)
+- `setActionError({title, subtitle})` is being called — verified via React fiber inspection: after click, `WorkflowDetailPage.alternate.memoizedState[74]` holds the correct error object
+
+**What's broken:**
+- `WorkflowDetailPage.memoizedState[74]` (current tree) stays `null` forever
+- The render-with-actionError-set never commits, so JSX never re-evaluates the `{actionError ? <Notification/> : null}` branch
+- `alternate.lanes: 32` indicates a pending update React hasn't flushed
+- Reproduces on a clean Vite dev server (PID 69199, started 23:14, no HMR thrash) → not a Fast Refresh issue
+- Reproduces with both Playwright synthetic and real clicks → not an event-dispatch issue
+- Forced direct `queue.dispatch({...})` on the useState's queue also does not commit → not an event-handler scoping issue
+
+**Hypotheses ranked:**
+1. **Re-render storm preempting commit** — runWorkflowMutation transitioning to error triggers a parent or sibling component to re-render at higher priority and starve the WorkflowDetailPage commit. Candidate: RunActionBar or the Inspector panel reading shared store state. ⏳ untested
+2. **Suspense boundary above WorkflowDetailPage suspending on a separate query that errors** — would explain why workInProgress fiber accumulates but commit never happens. Candidate: parent has `<Suspense>` and a child query throws. ⏳ untested
+3. **`api/client.ts` 401 path on `/v0/tools` dispatching `auth:unauthorized` mid-render** — possibly scheduling a redirect that gets cancelled but corrupts the render queue. The 401 IS happening throughout the session. ⏳ untested
+4. **React 19 + React Query 5 concurrent-mode interaction** in onError batching — least likely; would have surfaced in many other repos by now. ⏳ untested
+
+**Fix sketch (debugging path, not a code change yet):**
+- Wrap `setActionError` in `flushSync()` from `react-dom` to force a synchronous commit, see if Notification appears. If yes → the value is fine, just being deprioritized; root cause is in the lane scheduler.
+- If `flushSync` doesn't help → set a `componentDidCatch`-style error boundary around WorkflowDetailPage and inspect what's thrown during render.
+- If still nothing → bisect by removing parent wrappers (Suspense, ErrorBoundary, etc) one by one.
+
+**Severity HIGH** because the trio's headline acceptance ("inline notification on run-start failure") is unverifiable until this resolves. The user-visible regression risk is **LOW** because `window.alert` is removed; users see nothing on failure rather than a blocking modal — silent failure is still strictly better UX than the prior baseline.
+
+---
+
 ## G.5 — Workflow-runs lineage parity
 
 ### G.5.1 Workflow runs short-circuit before `recordRunLineage` [HIGH] ✅ [Sprint 1B]
