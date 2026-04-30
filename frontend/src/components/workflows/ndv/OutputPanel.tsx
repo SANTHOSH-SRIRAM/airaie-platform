@@ -1,5 +1,4 @@
-import { useCallback } from 'react';
-import { BoxSelect, Pin } from 'lucide-react';
+import { BoxSelect } from 'lucide-react';
 import { useExecutionStore } from '@store/executionStore';
 import JsonTreeView from './JsonTreeView';
 
@@ -11,10 +10,6 @@ export default function OutputPanel({ nodeId }: OutputPanelProps) {
   const nodeStates = useExecutionStore((s) => s.nodeStates);
   const nodeState = nodeStates.get(nodeId);
   const outputData = nodeState?.outputs;
-
-  const handlePinOutput = useCallback(() => {
-    console.log('[NDV] Pin output for node:', nodeId, outputData);
-  }, [nodeId, outputData]);
 
   // No execution data
   if (!outputData) {
@@ -37,18 +32,8 @@ export default function OutputPanel({ nodeId }: OutputPanelProps) {
 
   return (
     <div className="p-4">
-      {/* Header with pin button */}
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3">
         <span className="text-[11px] font-medium text-[#949494]">Execution Output</span>
-        <button
-          type="button"
-          onClick={handlePinOutput}
-          className="flex items-center gap-1 rounded-md border border-[#eceae4] bg-[#f7f7f5] px-2 py-1 text-[10px] text-[#949494] hover:bg-[#efefef] hover:text-[#1a1a1a]"
-          title="Pin this output (placeholder)"
-        >
-          <Pin size={10} />
-          Pin Output
-        </button>
       </div>
 
       {/* Status badge */}
