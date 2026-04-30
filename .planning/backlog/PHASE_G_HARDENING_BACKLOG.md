@@ -539,6 +539,34 @@ Migrated `actionError` from `WorkflowDetailPage` local `useState` to a `uiStore.
 
 ---
 
+### G.4.18 ToolRegistry "Use in Workflow" navigates to broken URL [MED] ✅ SHIPPED 2026-05-01 (commit `891646e` — HIDE)
+
+**Surfaced:** Phase 5/6 acceptance audit on 2026-05-01.
+
+**What was broken:** `ToolRegistryActionBar.tsx:32` navigated to `/workflow-studio?tool=${selectedToolId}`, but the editor route is `/workflow-studio/:workflowId` (positional) and `WorkflowEditorPage.tsx` has no `useSearchParams` — the `?tool=` query param was silently dropped. Live click landed on a generic "Untitled Pipeline" with no tool placed on the canvas. Phase 6 SC4 ("navigates to editor with tool pre-selected") was not actually delivered, despite the SUMMARY claiming complete.
+
+**Decision:** Hide the button (matches the G.4.14a Deactivate / G.4.14b Compare / G.4.14c Pin Output pattern). The promise is undeliverable without backend/UX work that doesn't exist. Park the real feature as 999.5 below.
+
+**Shipped:** Removed button + `Workflow` lucide import from `ToolRegistryActionBar.tsx`. Action bar now exposes only View Contract + Test Run.
+
+---
+
+### G.4.19 ToolRegistry "Test Run" was a console.log stub [MED] ✅ SHIPPED 2026-05-01 (commit `891646e` — WIRE)
+
+**Surfaced:** Phase 5/6 acceptance audit on 2026-05-01.
+
+**What was broken:** `ToolRegistryActionBar.tsx:54-58` was a `console.log('Test Run:', selectedToolId)` no-op. Identical pattern to the G.4.14c Pin Output stub.
+
+**Discovery:** `ToolDetailPage.tsx:131,668-755` already has a complete working Test Run section — dynamic input form generated from the tool contract (text/number/boolean/json/artifact field types), `createRunMutation.mutateAsync()` wiring, testResult/testRunning/testError states, output panel. The work just wasn't reachable from the registry-level action bar.
+
+**Shipped:**
+- `ToolRegistryActionBar`: replaced `console.log` with `navigate(\`/tools/${id}#test-run\`)`
+- `ToolDetailPage`: added `useEffect` reading `location.hash` on mount, scrolls to matching anchor via `requestAnimationFrame` after `tool` data resolves (so the target section exists before scroll fires)
+
+**Live UAT (Playwright, 2026-05-01):** Navigated to `/tools/tool_7a5e6263#test-run` (OpenFOAM Cavity CFD). Test Run section scrolled into viewport (`rect.top=330` vs `viewport=724`). Dynamic input form rendered with `case_tar` + `end_time` + `start_time` + `mesh_quality` fields from contract; Test Output placeholder visible on right. Screenshot at `airaie_platform/phase4b-uat-test-run-deeplink.png`.
+
+---
+
 ## G.5 — Workflow-runs lineage parity
 
 ### G.5.1 Workflow runs short-circuit before `recordRunLineage` [HIGH] ✅ [Sprint 1B]
@@ -672,6 +700,25 @@ These are real-value features that surfaced during Phase 4B triage but don't jus
 **What:** "Preview plan" affordance before Start Run that calls `POST /v0/workflows/plan` and shows the AST summary (node count, execution order, dependency graph, declared inputs). Useful as both a pre-run sanity check and a building block for the version-diff in 999.1.
 
 **Why parked:** Backend already returns useful structured data; UI work is bite-sized once 999.1's DSL-rendering primitives exist. Treat as a follow-on.
+
+### 999.5 Tool Registry → Workflow Editor handoff [DEFERRED — design needed]
+
+**Source:** G.4.18 (2026-05-01). The "Use in Workflow" button was hidden because the destination wasn't designed.
+
+**What:** When a user is browsing the tool registry and clicks "Use in Workflow", they should land in a workflow editor with the chosen tool ready to place on the canvas. The current implementation navigated to a malformed URL (`/workflow-studio?tool=${id}`) that the editor route didn't accept and that the editor component didn't read.
+
+**Design questions to resolve before implementation:**
+1. **Target workflow** — does "Use in Workflow" mean (a) open an existing workflow they pick from a list, (b) create a new draft workflow with this tool pre-placed, or (c) drop the tool into whichever workflow they last had open?
+2. **Placement semantics** — does the tool auto-place as a node on the canvas (where? what default port wiring?), or just highlight in the palette so the user drags it manually?
+3. **Pre-selection state** — if (b) "new draft", how is the workflow named/saved? Implicit name like `Workflow with {ToolName}`? Save-on-first-edit?
+
+**Implementation sketch (after design lands):**
+- Add a "+ Use this tool" entry-point on `ToolRegistryActionBar` that opens a small picker modal: "New workflow" or list of existing workflows
+- For "New workflow": call `POST /v0/workflows` with a default name, then navigate to `/workflow-studio/${newId}?tool=${toolId}`
+- Modify `WorkflowEditorPage` to consume `?tool=` via `useSearchParams` and either auto-place a node or scroll/highlight the tool in the `NodePalette`
+- ~1-2 days of work depending on placement semantics
+
+**Why parked:** Real product question, not a code-only fix. Cleaner to surface the design conversation than to ship one wrong default.
 
 ---
 
