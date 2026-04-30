@@ -7,6 +7,7 @@ import RightPanel from './RightPanel';
 import StatusBar from './StatusBar';
 import VerticalToolbar from './VerticalToolbar';
 import BottomBar from './BottomBar';
+import GlobalNotification from '@components/ui/GlobalNotification';
 import { useUiStore } from '@store/uiStore';
 import { ROUTE_SIDEBAR_MAP } from '@constants/routes';
 
@@ -66,6 +67,11 @@ export default function AppShell() {
       >
         Skip to main content
       </a>
+
+      {/* G.4.13 / G.4.17 — top-level error notification (subscribes to
+          uiStore.globalNotification). Mounted here so the renderer is
+          decoupled from any single page's local hook commits. */}
+      <GlobalNotification />
 
       {/* Top: Header — floating bar, centered */}
       <div className={hideChrome ? 'hidden' : 'shrink-0 pt-[16px]'}>

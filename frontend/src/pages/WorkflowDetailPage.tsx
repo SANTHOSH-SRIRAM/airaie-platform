@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useMemo, useState } from 'react';
+import { useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ExternalLink, Play, Eye, GitBranch, DollarSign,
@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@utils/cn';
 import { useUiStore } from '@store/uiStore';
-import Notification from '@components/ui/Notification';
 import {
   useWorkflow,
   useWorkflowVersions,
@@ -340,6 +339,7 @@ export default function WorkflowDetailPage() {
   const navigate = useNavigate();
   const setSidebarContentType = useUiStore((s) => s.setSidebarContentType);
   const hideBottomBar = useUiStore((s) => s.hideBottomBar);
+  const setGlobalNotification = useUiStore((s) => s.setGlobalNotification);
 
   // useTriggers/useCreateTrigger... all internally enabled-guard on truthy id.
   const workflowId = id ?? '';
@@ -379,15 +379,11 @@ export default function WorkflowDetailPage() {
   const runWorkflowMutation = useRunWorkflow(workflowId);
   const deleteWorkflowMutation = useDeleteWorkflow();
 
-  // G.4.13 — inline error notification for run-start / delete failures.
-  // Replaces window.alert() with the existing Notification primitive.
-  // Auto-dismisses after 5s; user can also click ✕.
-  const [actionError, setActionError] = useState<{ title: string; subtitle?: string } | null>(null);
-  useEffect(() => {
-    if (!actionError) return;
-    const t = window.setTimeout(() => setActionError(null), 5000);
-    return () => window.clearTimeout(t);
-  }, [actionError]);
+  // G.4.13 / G.4.17 — error notifications routed through uiStore.
+  // Renders via <GlobalNotification/> mounted at AppShell root. Local
+  // useState was set correctly here but never committed (current fiber
+  // stayed null, alternate carried the value); G.4.17 backlog has the
+  // full diagnosis.
 
   const handleStartRun = useCallback(() => {
     if (!workflowId || runWorkflowMutation.isPending) return;
@@ -397,10 +393,10 @@ export default function WorkflowDetailPage() {
       },
       onError: (err: unknown) => {
         const msg = (err as { message?: string })?.message ?? 'Failed to start run';
-        setActionError({ title: 'Could not start run', subtitle: msg });
+        setGlobalNotification({ title: 'Could not start run', subtitle: msg });
       },
     });
-  }, [workflowId, runWorkflowMutation, navigate]);
+  }, [workflowId, runWorkflowMutation, navigate, setGlobalNotification]);
 
   const handleDeleteWorkflow = useCallback(() => {
     if (!workflowId || deleteWorkflowMutation.isPending) return;
@@ -409,10 +405,10 @@ export default function WorkflowDetailPage() {
       onSuccess: () => navigate('/workflows'),
       onError: (err: unknown) => {
         const msg = (err as { message?: string })?.message ?? 'Failed to delete workflow';
-        setActionError({ title: 'Could not delete workflow', subtitle: msg });
+        setGlobalNotification({ title: 'Could not delete workflow', subtitle: msg });
       },
     });
-  }, [workflowId, deleteWorkflowMutation, navigate]);
+  }, [workflowId, deleteWorkflowMutation, navigate, setGlobalNotification]);
 
   // Map API trigger entries to WorkflowTrigger shape for TriggerPanel
   const triggers: WorkflowTrigger[] = (triggerEntries ?? []).map((t) => ({
@@ -494,17 +490,6 @@ export default function WorkflowDetailPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1116px] px-4 pb-16 pt-0 flex flex-col gap-[16px]">
-
-      {/* G.4.13 — inline action-error notification (replaces window.alert
-          for run-start / delete failures). Auto-dismiss 5s. */}
-      {actionError ? (
-        <Notification
-          type="error"
-          title={actionError.title}
-          subtitle={actionError.subtitle}
-          onClose={() => setActionError(null)}
-        />
-      ) : null}
 
       {/* ═══════════════════════════════════════════
           TOP BAR

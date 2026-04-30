@@ -65,6 +65,13 @@ export interface UiStore {
   activeProfileSection: string;
   activeToolSection: string;
 
+  // G.4.13 / G.4.17 — global error notification slot.
+  // Set by mutation onError callbacks; rendered by <GlobalNotification/>
+  // mounted at the AppShell root so the render isn't bound to whichever
+  // page invoked the error (WorkflowDetailPage's local useState was not
+  // committing for unknown reasons; see backlog G.4.17).
+  globalNotification: { title: string; subtitle?: string } | null;
+
   // --- Existing actions ---
   toggleSidebar: () => void;
   collapseSidebar: () => void;
@@ -87,6 +94,7 @@ export interface UiStore {
   setActiveArtifactSection: (section: string) => void;
   setActiveProfileSection: (section: string) => void;
   setActiveToolSection: (section: string) => void;
+  setGlobalNotification: (notif: { title: string; subtitle?: string } | null) => void;
 }
 
 export const useUiStore = create<UiStore>((set) => ({
@@ -117,6 +125,7 @@ export const useUiStore = create<UiStore>((set) => ({
   activeArtifactSection: 'overview',
   activeProfileSection: 'overview',
   activeToolSection: 'overview',
+  globalNotification: null,
 
   // --- Existing actions ---
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
@@ -179,4 +188,5 @@ export const useUiStore = create<UiStore>((set) => ({
 
   setActiveProfileSection: (section) => set({ activeProfileSection: section }),
   setActiveToolSection: (section) => set({ activeToolSection: section }),
+  setGlobalNotification: (notif) => set({ globalNotification: notif }),
 }));
