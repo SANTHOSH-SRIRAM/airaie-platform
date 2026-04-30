@@ -17,7 +17,13 @@
 - ✅ G.3.3 Session `last_active_at` (Sprint 2C — migration 030)
 - ✅ G.4.2 WorkflowDetailPage real data (Sprint 2B)
 
-**26 items remaining** (was 21; +5 from the 2026-04-30 workflow audit: G.4.12 retry regression, G.4.13 alert→toast, G.4.14 stub triage, G.4.15 unused run endpoints, G.4.16 6-vs-2 node-type informational). Completed items carry a `✅ [Sprint X]` tag at the top of their section.
+**Item count, 2026-04-30 end of session:**
+- Phase 4A trio (G.4.12 retry, G.4.13 alert→toast, G.4.16 palette) — shipped, partially UAT'd. G.4.13 acceptance blocked on G.4.17.
+- Phase 4B triage closed G.4.14 (split into 14a/b/c) and G.4.15 (split into 15a–e, with one mislabel resolved).
+- New entries: G.4.17 [HIGH] (actionError commit issue), G.4.14a/b/c, G.4.15a (P1 Resume button), G.4.15b/c/e (deferred to 999.x).
+- Parked features: 999.1–999.4.
+
+Completed items carry a `✅ [Sprint X]` tag at the top of their section.
 
 This is a triage list, not a phase plan. The natural next groupings:
 - **G.1 Security hardening** — CSRF ✅, RBAC roles ✅, WS auth, secret leakage ✅, registration ✅
@@ -371,7 +377,32 @@ Clicking "Approve All" doesn't clear the inline card's pending approvals, and vi
 
 ---
 
-### G.4.14 Three workflow-detail affordances stubbed without plan [MED]
+### G.4.14 Three workflow-detail affordances stubbed without plan [RESOLVED — 2026-04-30, split into G.4.14a/b/c]
+
+**Triage outcome (Phase 4B, 2026-04-30):** Three sub-decisions, each filed below with concrete scope.
+
+#### G.4.14a Hide "Deactivate" button until kernel state machine designed [LOW] ⏳
+- **Where:** `frontend/src/pages/WorkflowDetailPage.tsx:514–520`
+- **Action:** Remove the disabled `<Deactivate>` button and its `title="...not yet wired..."` chrome. Don't hide via CSS — delete the JSX.
+- **Why:** No kernel endpoint, no published state machine, and unclear product semantics (delete + re-publish covers the use case today). Don't ship UI promising a feature we haven't designed.
+- **If/when product wants it:** design `POST /v0/workflows/{id}/deactivate` + state machine first, then re-add the button.
+- **Effort:** ~10 min. Quick task candidate.
+
+#### G.4.14b Hide "Compare with current" version-diff button + file 999.x feature [LOW + DEFERRED] ⏳
+- **Where:** `frontend/src/components/workflows/VersionList.tsx:122–125`
+- **Immediate action:** Remove the disabled "(coming soon)" diff button. Same delete-not-CSS-hide rule.
+- **Deferred feature:** File a 999.x backlog entry "Workflow version structural diff" — DSL graph diff over node/edge sets, ~3-day phase. Real value, just not bite-sized.
+- **Effort (immediate):** ~5 min.
+
+#### G.4.14c Kill "Pin output" stub entirely [LOW] ⏳
+- **Where:** `frontend/src/components/workflows/ndv/OutputPanel.tsx:14–17`
+- **Action:** Delete the `console.log(...)` handler and the button. Don't hide — remove.
+- **Why:** Original "pin to Card input" semantics likely orphaned by Phase 11's card-canvas work. UX intent ambiguous. Cheaper to remove than redefine; if future work needs pin semantics, design fresh.
+- **Effort:** ~5 min.
+
+**Combined effort:** ~20 min. All three are good candidates for a single `/gsd:quick` task ("kill workflow-detail stubs"). Once shipped, this entry closes.
+
+---
 
 **Where:**
 - `airaie_platform/frontend/src/pages/WorkflowDetailPage.tsx:514–520` — "Deactivate" button hard-disabled with `title="Deactivate is not yet wired to the backend"`.
@@ -389,7 +420,36 @@ Clicking "Approve All" doesn't clear the inline card's pending approvals, and vi
 
 ---
 
-### G.4.15 Five kernel run endpoints with no UI consumer [MED]
+### G.4.15 Five kernel run endpoints with no UI consumer [RESOLVED — 2026-04-30, split into G.4.15a–e]
+
+**Triage outcome (Phase 4B, 2026-04-30):** Per-endpoint decisions below. One mislabel correction (`/events` is in fact consumed). One real feature gap (`/resume`). Three "keep backend, defer UI to P2." One investigated this session, kept.
+
+#### G.4.15a `POST /v0/runs/{id}/resume` — surface in UI [P1] ⏳
+- **Where:** `airaie-kernel/internal/handler/handler.go:189`. Real handler.
+- **Action:** Add a "Resume" button on the Run detail page that appears when run.status is `paused` (or whatever the paused-gate state is named). Wire to the endpoint.
+- **Why P1:** `doc/implementation/new_design/AIRAIE_TECHNICAL_ARCHITECTURE.md §5.2` lists `PAUSED (gate waiting)` as a first-class run state. Without a Resume affordance, paused runs are stuck UI-side. This is missing UI, not over-built backend.
+- **Effort:** ~30 min UI work + a paused-state seed for QA.
+
+#### G.4.15b `GET /v0/runs/{id}/checkpoints` — keep backend, defer UI [P2 — backlog] ⏳
+- **Where:** `handler.go:190`.
+- **Decision:** Backend stays. No immediate UI work. File a 999.x "Run checkpoint timeline UI" entry for future debug-tooling work. Useful for time-travel debugging, no day-one user need.
+
+#### G.4.15c `GET /v0/runs/{id}/trace` — keep backend, defer UI [P2 — backlog] ⏳
+- **Where:** `handler.go:194`.
+- **Decision:** Same as 15b. Backend useful for ops/debug; user-facing UI not needed yet. File 999.x "Run trace tab" entry for future.
+
+#### G.4.15d `GET /v0/runs/{id}/events` — already consumed; drop "missing UI" framing [NO ACTION] ✓
+- **Where:** `handler.go:192`.
+- **Decision:** **Mislabeled in original entry.** This is the SSE stream consumed by `useRunSSE`. RunLogs already surfaces the stream content. A separate "Trace tab" UI would be duplicative. Closing this sub-item.
+
+#### G.4.15e `POST /v0/workflows/plan` — keep backend, defer UI [P2 — backlog] ⏳
+- **Where:** `handler.go:202` → `internal/handler/workflows.go:313` (`PlanWorkflow`).
+- **Investigation result (2026-04-30):** Real, useful endpoint — returns workflow AST as a structured plan summary (`{node_count, execution_order, nodes[id, tool_ref, dependencies, priority, critical, timeout], inputs, config}`). NOT an AI planner; pure introspection. Good fit for a "Plan preview" UI before Run, or a Plan-vs-Plan diff view paired with G.4.14b.
+- **Decision:** Backend stays. File a 999.x "Workflow plan preview UI" entry (likely paired with the version-diff feature in G.4.14b — both want the same DSL/AST structural reasoning).
+
+**Net actionable from G.4.15:** one P1 (Resume button) + three 999.x backlog entries (checkpoints UI, trace UI, plan preview UI). The /events sub-item was a mislabel.
+
+---
 
 **Where (kernel):** `airaie-kernel/internal/handler/handler.go`:
 - L189 `POST /v0/runs/{id}/resume` — unused
@@ -548,6 +608,46 @@ The following items were resolved either before this backlog existed (during Pha
 - ✅ HttpOnly cookie auth + cookie-first refresh — F-RBAC
 - ✅ JetStream durable consumer — F-NATS
 - ✅ Runner memory-limit enforcement test — F-Resource
+
+---
+
+## 999.x — Deferred features (parked from Phase 4B triage 2026-04-30)
+
+These are real-value features that surfaced during Phase 4B triage but don't justify near-term execution. Each is a candidate for a future phase or milestone.
+
+### 999.1 Workflow version structural diff [DEFERRED — ~3-day phase]
+
+**Source:** Phase 4B triage of G.4.14b (2026-04-30).
+
+**What:** "Compare with current" version-diff UI on the workflow detail page. Compares two workflow versions by walking the DSL graph (nodes, edges, config diffs, port changes) and rendering a structural diff.
+
+**Why parked:** Real value (helps users understand what changed between draft and published). Non-trivial — needs DSL graph diff algorithm, layout for added/removed/changed nodes, edge-change detection. ~3-day effort. Not blocking near-term work.
+
+**Pairs with:** 999.3 (plan preview UI) — both want similar AST/DSL structural reasoning.
+
+### 999.2 Run checkpoint timeline UI [DEFERRED — debug tooling]
+
+**Source:** Phase 4B triage of G.4.15b (2026-04-30).
+
+**What:** Surface `GET /v0/runs/{id}/checkpoints` as a timeline / step-back debug UI on the Run detail page. Lets users inspect intermediate run state.
+
+**Why parked:** Backend is real and useful for ops/debug. No day-one user need. Pursue when debug tooling becomes a focus.
+
+### 999.3 Run trace tab UI [DEFERRED — debug tooling]
+
+**Source:** Phase 4B triage of G.4.15c (2026-04-30).
+
+**What:** Surface `GET /v0/runs/{id}/trace` as a structured trace tab on Run detail. Distinct from the existing RunLogs (which consumes `/events` SSE) — trace is post-hoc, structured, queryable.
+
+**Why parked:** Same as 999.2.
+
+### 999.4 Workflow plan preview UI [DEFERRED — pairs with 999.1]
+
+**Source:** Phase 4B triage of G.4.15e (2026-04-30).
+
+**What:** "Preview plan" affordance before Start Run that calls `POST /v0/workflows/plan` and shows the AST summary (node count, execution order, dependency graph, declared inputs). Useful as both a pre-run sanity check and a building block for the version-diff in 999.1.
+
+**Why parked:** Backend already returns useful structured data; UI work is bite-sized once 999.1's DSL-rendering primitives exist. Treat as a follow-on.
 
 ---
 
