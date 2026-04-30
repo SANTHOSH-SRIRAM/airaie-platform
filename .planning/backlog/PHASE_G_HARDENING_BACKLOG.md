@@ -381,26 +381,16 @@ Clicking "Approve All" doesn't clear the inline card's pending approvals, and vi
 
 **Triage outcome (Phase 4B, 2026-04-30):** Three sub-decisions, each filed below with concrete scope.
 
-#### G.4.14a Hide "Deactivate" button until kernel state machine designed [LOW] ⏳
-- **Where:** `frontend/src/pages/WorkflowDetailPage.tsx:514–520`
-- **Action:** Remove the disabled `<Deactivate>` button and its `title="...not yet wired..."` chrome. Don't hide via CSS — delete the JSX.
-- **Why:** No kernel endpoint, no published state machine, and unclear product semantics (delete + re-publish covers the use case today). Don't ship UI promising a feature we haven't designed.
-- **If/when product wants it:** design `POST /v0/workflows/{id}/deactivate` + state machine first, then re-add the button.
-- **Effort:** ~10 min. Quick task candidate.
+#### G.4.14a Hide "Deactivate" button [LOW] ✅ SHIPPED 2026-04-30 (commit `def07a9`)
+Removed the disabled `<Deactivate>` button and its "not yet wired to the backend" title chrome from `WorkflowDetailPage.tsx`.
 
-#### G.4.14b Hide "Compare with current" version-diff button + file 999.x feature [LOW + DEFERRED] ⏳
-- **Where:** `frontend/src/components/workflows/VersionList.tsx:122–125`
-- **Immediate action:** Remove the disabled "(coming soon)" diff button. Same delete-not-CSS-hide rule.
-- **Deferred feature:** File a 999.x backlog entry "Workflow version structural diff" — DSL graph diff over node/edge sets, ~3-day phase. Real value, just not bite-sized.
-- **Effort (immediate):** ~5 min.
+#### G.4.14b Hide "Compare with current" version-diff button [LOW] ✅ SHIPPED 2026-04-30 (commit `dc56621`)
+Removed the disabled "(coming soon)" button + the now-unused GitCompare lucide import from `VersionList.tsx`. Real feature parked as 999.1.
 
-#### G.4.14c Kill "Pin output" stub entirely [LOW] ⏳
-- **Where:** `frontend/src/components/workflows/ndv/OutputPanel.tsx:14–17`
-- **Action:** Delete the `console.log(...)` handler and the button. Don't hide — remove.
-- **Why:** Original "pin to Card input" semantics likely orphaned by Phase 11's card-canvas work. UX intent ambiguous. Cheaper to remove than redefine; if future work needs pin semantics, design fresh.
-- **Effort:** ~5 min.
+#### G.4.14c Kill "Pin output" stub [LOW] ✅ SHIPPED 2026-04-30 (commit `42ad6a2`)
+Removed the console.log-only Pin Output button and unused useCallback/Pin imports from `OutputPanel.tsx`.
 
-**Combined effort:** ~20 min. All three are good candidates for a single `/gsd:quick` task ("kill workflow-detail stubs"). Once shipped, this entry closes.
+**G.4.14 closed.** All three sub-items shipped in three atomic commits.
 
 ---
 
@@ -424,11 +414,11 @@ Clicking "Approve All" doesn't clear the inline card's pending approvals, and vi
 
 **Triage outcome (Phase 4B, 2026-04-30):** Per-endpoint decisions below. One mislabel correction (`/events` is in fact consumed). One real feature gap (`/resume`). Three "keep backend, defer UI to P2." One investigated this session, kept.
 
-#### G.4.15a `POST /v0/runs/{id}/resume` — surface in UI [P1] ⏳
-- **Where:** `airaie-kernel/internal/handler/handler.go:189`. Real handler.
-- **Action:** Add a "Resume" button on the Run detail page that appears when run.status is `paused` (or whatever the paused-gate state is named). Wire to the endpoint.
-- **Why P1:** `doc/implementation/new_design/AIRAIE_TECHNICAL_ARCHITECTURE.md §5.2` lists `PAUSED (gate waiting)` as a first-class run state. Without a Resume affordance, paused runs are stuck UI-side. This is missing UI, not over-built backend.
-- **Effort:** ~30 min UI work + a paused-state seed for QA.
+#### G.4.15a `POST /v0/runs/{id}/resume` — surface in UI [P1] ✅ SHIPPED 2026-05-01 (commit `872cd6a`)
+- New `resumeRun(runId, checkpointId?)` API + `useResumeRun()` mutation hook
+- `RunActionBar` PAUSED branch now renders a Resume button (existing chip stays alongside)
+- Endpoint verified live: POST → 404 RUN_NOT_FOUND for missing run; GET → 405 confirms route registered
+- Live click-test deferred — needs a paused run in dev DB. Wiring shape mirrors G.4.12 retry; risk is low.
 
 #### G.4.15b `GET /v0/runs/{id}/checkpoints` — keep backend, defer UI [P2 — backlog] ⏳
 - **Where:** `handler.go:190`.
