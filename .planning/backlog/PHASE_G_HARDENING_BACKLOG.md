@@ -478,7 +478,7 @@ Clicking "Approve All" doesn't clear the inline card's pending approvals, and vi
 
 ---
 
-### G.4.17 WorkflowDetailPage `actionError` state never commits [HIGH]
+### G.4.17 React commit phase blocked across multiple components in dev [HIGH — broader than initial diagnosis]
 
 **Surfaced:** Live UAT of G.4.13 trio fix on 2026-04-30 (Phase 4A). Documented in `.planning/research/phase-4a-uat-2026-04-30.md`.
 
@@ -512,6 +512,40 @@ Clicking "Approve All" doesn't clear the inline card's pending approvals, and vi
 - If still nothing → bisect by removing parent wrappers (Suspense, ErrorBoundary, etc) one by one.
 
 **Severity HIGH** because the trio's headline acceptance ("inline notification on run-start failure") is unverifiable until this resolves. The user-visible regression risk is **LOW** because `window.alert` is removed; users see nothing on failure rather than a blocking modal — silent failure is still strictly better UX than the prior baseline.
+
+---
+
+#### Update — 2026-04-30 18:24Z (post-commit `842eb93`):
+
+**Architectural fix did NOT resolve the issue, but sharpened the diagnosis.**
+
+Migrated `actionError` from `WorkflowDetailPage` local `useState` to a `uiStore.globalNotification` zustand slot rendered by a new `<GlobalNotification/>` mounted at AppShell root. Goal: decouple the notification render from this one page.
+
+**Result:** Same exact commit pattern reproduces in the new `GlobalNotification` component:
+- Direct probe via `store.getState().setGlobalNotification({...})` updates the store correctly (verified by reading `store.getState().globalNotification` after — value is set)
+- `<GlobalNotification/>` re-renders on the workInProgress (alternate) fiber: `alternate.lanes: 2`, `alternate.memoizedState[2]` holds the new value
+- `current` fiber stays at `null` forever — render never commits
+- DOM never updates; user never sees the toast
+
+**This rules out:**
+- ~~Vite Fast Refresh corruption~~ (rejected earlier)
+- ~~WorkflowDetailPage-specific issue~~ (NEW — reproduces in GlobalNotification mounted at AppShell root)
+- ~~Hook scoping / per-call onError microtask issue~~ (also reproduces with synchronous direct dispatch)
+- ~~Lane priority / scheduling~~ (`flushSync` and `setTimeout(0)` both failed earlier)
+
+**This implicates the entire dev-mode render pipeline** — multiple unrelated components cannot complete a commit. The render phase succeeds, the alternate fiber holds the new value, but commit never promotes alternate → current.
+
+**Refined hypotheses:**
+1. **Some always-running render somewhere is preempting commit** — a query auto-refetching, an SSE stream pumping a useState, a useEffect with bad deps causing infinite render. The one component we know mounts on every page is `AppShell` itself or one of its children (`Header`, `Sidebar`, `BottomBar`, `StatusBar`). Likely candidate: the `/v0/tools` 401 retry loop (we see the 401 throughout every session) might be triggering React Query's retry-with-backoff in a tight loop.
+2. **An ErrorBoundary is silently catching renders and rolling back** — getDerivedStateFromError + componentDidCatch could swallow render errors. Less likely because no React error logs.
+3. **Production build works but dev build is broken** — needs `npm run build && npm run preview` test to rule in/out.
+
+**Next debug steps (not for this session):**
+- Pause Vite, run `npm run build && npm run preview`, click Start Run on the production build. If the toast renders → it's a dev-mode issue (Strict Mode, HMR, or some dev-only middleware).
+- If still broken → instrument React's commit phase by patching `performWorkOnRoot` or using React DevTools Profiler to see what's blocking commits.
+- Check whether the `/v0/tools` 401 is causing a tight retry loop in React Query (look for default retries on `useTools` hooks). If yes, fix the auth issue first; the commit blocker may evaporate.
+
+**The trio's `window.alert` removal still stands.** Code is correct; only the render side is unverifiable. Architecture (global toast) is now in place for whenever the commit issue is resolved.
 
 ---
 
