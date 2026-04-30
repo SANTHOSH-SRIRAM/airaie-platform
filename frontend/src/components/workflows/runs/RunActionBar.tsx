@@ -1,5 +1,7 @@
 import { Play, Square, RotateCcw, Plus, Wifi, WifiOff } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useRunWorkflow } from '@hooks/useRunWorkflow';
+import { useRetryRun } from '@hooks/useRuns';
 import { useExecutionStore } from '@store/executionStore';
 
 export interface RunActionBarProps {
@@ -7,12 +9,32 @@ export interface RunActionBarProps {
 }
 
 export default function RunActionBar({ workflowId = '' }: RunActionBarProps) {
+  const navigate = useNavigate();
   const { isStarting, isCompleted, connected, error, start, cancel, reset } =
     useRunWorkflow(workflowId);
 
   const runStatus = useExecutionStore((s) => s.runStatus);
   const nodeStates = useExecutionStore((s) => s.nodeStates);
   const sseConnected = useExecutionStore((s) => s.sseConnected);
+  const activeRunId = useExecutionStore((s) => s.activeRunId);
+
+  // G.4.12 — retry the prior run with its original inputs (kernel
+  // POST /v0/runs/{id}/retry). Falls back to fresh start if there's
+  // no activeRunId (shouldn't happen post-isCompleted, but defensive).
+  const retryMutation = useRetryRun();
+  const onRetry = () => {
+    if (!activeRunId) {
+      start();
+      return;
+    }
+    retryMutation.mutate(activeRunId, {
+      onSuccess: (resp) => {
+        if (resp?.run?.id) {
+          navigate(`/workflow-runs/${resp.run.id}`);
+        }
+      },
+    });
+  };
 
   // Count completed/total nodes for progress display
   const totalNodes = nodeStates.size;
@@ -100,11 +122,13 @@ export default function RunActionBar({ workflowId = '' }: RunActionBarProps) {
           </span>
           <button
             type="button"
-            onClick={start}
-            className="flex h-[36px] items-center gap-2 rounded-[12px] border border-[#bdb7b0] px-4 text-[12px] font-medium text-[#6b6b6b] transition-colors hover:bg-gray-50"
+            onClick={onRetry}
+            disabled={retryMutation.isPending}
+            title="Retry this run with the same inputs"
+            className="flex h-[36px] items-center gap-2 rounded-[12px] border border-[#bdb7b0] px-4 text-[12px] font-medium text-[#6b6b6b] transition-colors hover:bg-gray-50 disabled:opacity-50"
           >
             <RotateCcw size={12} />
-            Retry
+            {retryMutation.isPending ? 'Retrying…' : 'Retry'}
           </button>
           <button
             type="button"

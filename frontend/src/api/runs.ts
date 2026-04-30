@@ -264,8 +264,22 @@ export async function fetchRunArtifacts(runId: string): Promise<RunArtifact[]> {
 export const cancelRun = (runId: string): Promise<void> =>
   api(`/v0/runs/${runId}/cancel`, { method: 'POST' });
 
-// retryRun is intentionally NOT exported. Kernel /v0/runs/{id}/retry is not registered (404).
-// Restart-style retry is handled by RunActionBar via useRunWorkflow.start (POST /v0/workflows/{id}/run).
+/* ---------- Retry ----------
+ *
+ * POST /v0/runs/{id}/retry — kernel handler at
+ * `airaie-kernel/internal/handler/runs.go:516–575`. Loads the prior run,
+ * pulls its `workflow_id`/`tool_ref` + `inputs_json`, and starts a fresh
+ * run with the same inputs. Returns the new run row.
+ *
+ * Phase-04 acceptance (`phases/04-workflow-runs/04-01-PLAN.md:180,187`).
+ * Re-exported 2026-04-30 (G.4.12) — the prior "intentionally NOT exported"
+ * comment was based on a 404 the kernel does not actually return.
+ */
+export interface RetryRunResponse {
+  run: { id: string; status?: string };
+}
+export const retryRun = (runId: string): Promise<RetryRunResponse> =>
+  api(`/v0/runs/${runId}/retry`, { method: 'POST' });
 
 /* ---------- Real backend run detail (used by playground outputs panel) ---------- */
 // PRESERVED for src/components/agents/InlineToolCallCard.tsx and

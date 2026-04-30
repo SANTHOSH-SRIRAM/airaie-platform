@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchRunList, fetchRunDetail, fetchRunLogs, cancelRun, fetchRunArtifacts } from '@api/runs';
+import { fetchRunList, fetchRunDetail, fetchRunLogs, cancelRun, retryRun, fetchRunArtifacts } from '@api/runs';
+import type { RetryRunResponse } from '@api/runs';
 
 export const runKeys = {
   all: ['runs'] as const,
@@ -41,6 +42,28 @@ export function useCancelRun() {
     mutationFn: (runId: string) => cancelRun(runId),
     onSuccess: (_, runId) => {
       qc.invalidateQueries({ queryKey: runKeys.detail(runId) });
+    },
+  });
+}
+
+/**
+ * Retry a finished/failed run with the prior run's inputs (G.4.12).
+ *
+ * Hits `POST /v0/runs/{id}/retry`. The kernel returns a NEW run row;
+ * callers typically navigate to it. Invalidates the prior run's detail
+ * (so the run list refresh picks up the new sibling row) and the all-
+ * runs list query.
+ */
+export function useRetryRun() {
+  const qc = useQueryClient();
+  return useMutation<RetryRunResponse, Error, string>({
+    mutationFn: (runId: string) => retryRun(runId),
+    onSuccess: (resp, priorRunId) => {
+      qc.invalidateQueries({ queryKey: runKeys.detail(priorRunId) });
+      qc.invalidateQueries({ queryKey: runKeys.all });
+      if (resp?.run?.id) {
+        qc.invalidateQueries({ queryKey: runKeys.detail(resp.run.id) });
+      }
     },
   });
 }
