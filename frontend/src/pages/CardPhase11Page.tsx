@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCard, useCardEvidence, useCreateCard, cardKeys } from '@hooks/useCards';
 import { useBoard } from '@hooks/useBoards';
 import { useIntent, useIntentTypePipelines, useUpdateIntent } from '@hooks/useIntents';
-import { useGeneratePlan, usePlan } from '@hooks/usePlans';
+import { useEditPlan, useGeneratePlan, usePlan } from '@hooks/usePlans';
 import { useAddCardEvidence, useApproveGate, useCardGates, useRejectGate } from '@hooks/useGates';
 import { useRunArtifacts, useRunDetail, runKeys } from '@hooks/useRuns';
 import { useRunSSE } from '@hooks/useSSE';
@@ -21,6 +21,7 @@ import CardTopBar from '@components/cards/CardTopBar';
 import CardActionBar from '@components/cards/CardActionBar';
 import ArtifactPickerDrawer from '@components/cards/ArtifactPickerDrawer';
 import BranchSweepDrawer, { type SweepSubmitPayload } from '@components/cards/BranchSweepDrawer';
+import EditParametersDrawer, { type EditParametersSubmitPayload } from '@components/cards/EditParametersDrawer';
 import CardChatDrawer from '@components/cards/CardChatDrawer';
 import ToolManifestDrawer from '@components/cards/ToolManifestDrawer';
 import ResultsSection from '@/renderers/ResultsSection';
@@ -33,6 +34,7 @@ import {
   EvidenceRow,
   GateBadge,
   SweepSampleRow,
+  SplitRenderer,
 } from '@components/cards/primitives';
 import type {
   ToolChainItem,
@@ -328,6 +330,7 @@ function MethodStage({
   latestRunId,
   onAskAi,
   onInspectTool,
+  onEditNode,
 }: {
   plan: ExecutionPlan | undefined;
   intent: IntentSpec | undefined;
@@ -335,6 +338,10 @@ function MethodStage({
   latestRunId: string | null;
   onAskAi: (prompt: string) => void;
   onInspectTool: (toolId: string) => void;
+  /** When set, each editable plan node renders an "✎ Edit parameters"
+   *  button below the tool chain. Gated by `useCardModeRules.canChangePipeline`
+   *  upstream — Study and Release modes hide it. */
+  onEditNode?: (nodeId: string) => void;
 }) {
   const status = methodStatus(plan);
   const { data: pipelineOptions } = useIntentTypePipelines(intent?.intent_type);
@@ -440,6 +447,35 @@ function MethodStage({
             </span>
           </span>
           <ToolChainCard tools={tools} onToolClick={(t) => onInspectTool(t.name)} />
+        </div>
+      ) : null}
+      {onEditNode && plan.nodes.some((n) => n.is_editable && Object.keys(n.parameters ?? {}).length > 0) ? (
+        <div className="flex flex-col gap-[6px]">
+          <span className="font-sans text-[12px] font-medium text-[#554433]">
+            Editable parameters
+            <span className="ml-[6px] font-sans text-[11px] font-normal text-[#554433]/55">
+              · adjust per-node config; saving resets the plan to draft
+            </span>
+          </span>
+          <div className="flex flex-wrap gap-[6px]">
+            {plan.nodes
+              .filter((n) => n.is_editable && Object.keys(n.parameters ?? {}).length > 0)
+              .map((n) => {
+                const count = Object.keys(n.parameters ?? {}).length;
+                return (
+                  <button
+                    key={n.node_id}
+                    type="button"
+                    onClick={() => onEditNode(n.node_id)}
+                    className="inline-flex items-center gap-[6px] rounded-[6px] border border-[#1976d2]/30 bg-white px-[10px] py-[5px] font-sans text-[11px] font-medium text-[#1976d2] transition-colors hover:bg-[#1976d2]/[0.06]"
+                  >
+                    <span aria-hidden="true">✎</span>
+                    {n.tool_id}
+                    <span className="font-mono text-[10px] text-[#1976d2]/70">{count}</span>
+                  </button>
+                );
+              })}
+          </div>
         </div>
       ) : null}
       {latestRunId ? (
@@ -1267,6 +1303,150 @@ function SweepReadStage({
   );
 }
 
+// ─── Stage 5 — Comparison variant ──────────────────────────────────────────
+
+interface ComparisonConfig {
+  card_ids?: string[];
+}
+
+function readComparisonConfig(card: Card): ComparisonConfig {
+  const cfg = (card.config ?? {}) as Record<string, unknown>;
+  if (Array.isArray(cfg.card_ids) && cfg.card_ids.every((x) => typeof x === 'string')) {
+    return { card_ids: cfg.card_ids as string[] };
+  }
+  return {};
+}
+
+function useSourceArtifacts(sourceCardId: string | undefined): {
+  artifacts: RunArtifact[];
+  latestRunId: string | null;
+} {
+  const enabled = !!sourceCardId;
+  const { data: runs } = useQuery({
+    queryKey: enabled
+      ? ([...cardKeys.detail(sourceCardId!), 'runs'] as const)
+      : (['cards', 'runs', 'noop'] as const),
+    queryFn: () => listCardRuns(sourceCardId!),
+    enabled,
+    staleTime: 5_000,
+  });
+  const latestRunId = useMemo(() => pickLatestRunId(runs), [runs]);
+  const { data: artifacts } = useRunArtifacts(latestRunId);
+  return { artifacts: artifacts ?? [], latestRunId };
+}
+
+function pairByNameThenIndex(
+  left: RunArtifact[],
+  right: RunArtifact[],
+): Array<{ left: RunArtifact | undefined; right: RunArtifact | undefined; name: string }> {
+  if (left.length === 0 && right.length === 0) return [];
+  // Pair artifacts that share a name across sides.
+  const rightByName = new Map<string, RunArtifact>();
+  for (const r of right) {
+    if (r.name) rightByName.set(r.name, r);
+  }
+  const used = new Set<string>();
+  const pairs: ReturnType<typeof pairByNameThenIndex> = [];
+  for (const l of left) {
+    if (l.name && rightByName.has(l.name)) {
+      const r = rightByName.get(l.name)!;
+      pairs.push({ left: l, right: r, name: l.name });
+      used.add(r.id);
+    } else {
+      pairs.push({ left: l, right: undefined, name: l.name ?? l.id });
+    }
+  }
+  for (const r of right) {
+    if (used.has(r.id)) continue;
+    pairs.push({ left: undefined, right: r, name: r.name ?? r.id });
+  }
+  return pairs;
+}
+
+function ComparisonReadStage({ card }: { card: Card }) {
+  const cfg = readComparisonConfig(card);
+  const ids = cfg.card_ids ?? [];
+  const leftId = ids[0];
+  const rightId = ids[1];
+
+  const { data: leftCard } = useCard(leftId);
+  const { data: rightCard } = useCard(rightId);
+  const { data: leftIntent } = useIntent(leftCard?.intent_spec_id);
+  const left = useSourceArtifacts(leftId);
+  const right = useSourceArtifacts(rightId);
+
+  if (ids.length < 2) {
+    return (
+      <StagePanel number={5} title="Read" status="INCOMPLETE" statusTone="warning">
+        <p className="font-sans text-[13px] text-[#554433]/70">
+          This comparison card needs two sibling card ids in{' '}
+          <span className="font-mono">config.card_ids</span>. Currently has{' '}
+          {ids.length}.
+        </p>
+      </StagePanel>
+    );
+  }
+
+  const pairs = pairByNameThenIndex(left.artifacts, right.artifacts);
+  const leftLabel = leftCard?.title ?? leftId ?? 'A';
+  const rightLabel = rightCard?.title ?? rightId ?? 'B';
+
+  return (
+    <StagePanel number={5} title="Read" status="COMPARING" statusTone="neutral">
+      <div className="flex items-center gap-[16px] rounded-[10px] bg-[#f5f5f0] px-[14px] py-[10px]">
+        <span className="font-mono text-[11px] uppercase tracking-wide text-[#554433]/70">
+          {leftLabel}  ⇄  {rightLabel}
+        </span>
+        <span className="font-mono text-[11px] text-[#554433]/70">
+          {pairs.length} artifact pair{pairs.length === 1 ? '' : 's'}
+        </span>
+        {leftId ? (
+          <Link
+            to={`/cards/${leftId}`}
+            className="ml-auto font-sans text-[11px] text-[#1976d2] hover:underline"
+          >
+            ← {leftLabel}
+          </Link>
+        ) : null}
+        {rightId ? (
+          <Link
+            to={`/cards/${rightId}`}
+            className="font-sans text-[11px] text-[#1976d2] hover:underline"
+          >
+            {rightLabel} →
+          </Link>
+        ) : null}
+      </div>
+      {pairs.length === 0 ? (
+        <p className="py-[16px] text-center font-sans text-[13px] text-[#554433]/70">
+          Neither source card has any artifacts yet. Run them first.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-[12px]">
+          {pairs.map((p, i) => (
+            <div key={`${p.name}-${i}`} className="flex flex-col gap-[6px]">
+              <span className="font-mono text-[11px] uppercase tracking-wide text-[#554433]/70">
+                {p.name}
+              </span>
+              <SplitRenderer
+                leftLabel={leftLabel}
+                rightLabel={rightLabel}
+                leftArtifact={p.left}
+                rightArtifact={p.right}
+                intent={leftIntent}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="font-sans text-[11px] text-[#554433]/55">
+        Axis-locked camera + shared color scale ships with the vtk.js renderers in
+        Plan B; CSV / metric / image pairs already render meaningfully without it.
+      </p>
+    </StagePanel>
+  );
+}
+
 // ─── Page assembly ─────────────────────────────────────────────────────────
 
 export default function CardPhase11Page() {
@@ -1281,6 +1461,7 @@ export default function CardPhase11Page() {
   const rules = useCardModeRules(card, board);
   const updateIntent = useUpdateIntent(intent?.id ?? '', card?.board_id);
   const createSweepCard = useCreateCard(card?.board_id ?? '');
+  const editPlanMutation = useEditPlan(card?.id ?? '');
 
   // Stage 2 input picker state — which input port the user is pinning.
   const [pickerInput, setPickerInput] = useState<IntentInput | null>(null);
@@ -1288,6 +1469,14 @@ export default function CardPhase11Page() {
   // Wave D — sweep branching drawer state.
   const [sweepOpen, setSweepOpen] = useState(false);
   const [sweepError, setSweepError] = useState<string | null>(null);
+
+  // Plan C2 — edit-parameters drawer state. Holds the node_id being edited.
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const editingNode = useMemo(() => {
+    if (!editingNodeId || !plan) return null;
+    return plan.nodes.find((n) => n.node_id === editingNodeId) ?? null;
+  }, [editingNodeId, plan]);
 
   // Wave D — Card chat drawer + optional pre-filled draft (e.g. from a
   // "diagnose this failure" button on Stage 4).
@@ -1323,6 +1512,24 @@ export default function CardPhase11Page() {
       const msg =
         (err as { message?: string })?.message ?? 'Could not create sweep card.';
       setSweepError(msg);
+    }
+  };
+
+  const handleEditParametersSubmit = async (payload: EditParametersSubmitPayload) => {
+    setEditError(null);
+    try {
+      await editPlanMutation.mutateAsync([
+        {
+          action: 'update_parameters',
+          node_id: payload.node_id,
+          parameters: payload.parameters,
+        },
+      ]);
+      setEditingNodeId(null);
+    } catch (err) {
+      setEditError(
+        (err as { message?: string })?.message ?? 'Could not save parameter edits.',
+      );
     }
   };
 
@@ -1422,6 +1629,14 @@ export default function CardPhase11Page() {
         latestRunId={latestRunId}
         onAskAi={openChatWith}
         onInspectTool={setInspectingTool}
+        onEditNode={
+          rules.canChangePipeline
+            ? (nodeId) => {
+                setEditError(null);
+                setEditingNodeId(nodeId);
+              }
+            : undefined
+        }
       />
       <RunStage
         run={minimalRun}
@@ -1437,6 +1652,8 @@ export default function CardPhase11Page() {
       />
       {card.card_type === 'sweep' ? (
         <SweepReadStage card={card} runs={cardRuns} />
+      ) : card.card_type === 'comparison' ? (
+        <ComparisonReadStage card={card} />
       ) : (
         <ReadStage
           evidence={evidence}
@@ -1479,6 +1696,17 @@ export default function CardPhase11Page() {
         open={inspectingTool !== null}
         toolId={inspectingTool}
         onClose={() => setInspectingTool(null)}
+      />
+      <EditParametersDrawer
+        open={editingNodeId !== null}
+        node={editingNode}
+        submitting={editPlanMutation.isPending}
+        errorMessage={editError}
+        onSubmit={handleEditParametersSubmit}
+        onClose={() => {
+          setEditingNodeId(null);
+          setEditError(null);
+        }}
       />
       <BranchSweepDrawer
         open={sweepOpen}

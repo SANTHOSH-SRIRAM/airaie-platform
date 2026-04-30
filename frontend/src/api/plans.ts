@@ -70,13 +70,23 @@ export async function getPlan(cardId: string): Promise<ExecutionPlan> {
 // Edit / compile / validate / execute
 // ---------------------------------------------------------------------------
 
+/**
+ * Edit a draft plan. Each edit MUST carry an `action` (the kernel's
+ * `service.PlanEdit` struct requires it — without it the action switch
+ * silently no-ops). Supported actions: 'update_parameters', 'swap_tool',
+ * 'add_node', 'remove_node'.
+ */
+export interface PlanEdit {
+  action: 'update_parameters' | 'swap_tool' | 'add_node' | 'remove_node';
+  node_id: string;
+  parameters?: Record<string, unknown>;
+  tool_id?: string;
+  tool_version?: string;
+}
+
 export async function editPlan(
   cardId: string,
-  edits: {
-    node_id: string;
-    parameters?: Record<string, unknown>;
-    tool_version?: string;
-  }[],
+  edits: PlanEdit[],
 ): Promise<ExecutionPlan> {
   const res = await apiClient.patch<{ plan: ExecutionPlan }>(
     `/v0/cards/${cardId}/plan`,

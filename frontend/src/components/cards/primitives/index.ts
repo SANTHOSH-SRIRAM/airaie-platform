@@ -10,3 +10,5 @@ export {
 export { default as EvidenceRow, type EvidenceEvaluation } from './EvidenceRow';
 export { default as GateBadge, type GateStatus } from './GateBadge';
 export { default as SweepSampleRow, type SweepSampleRowProps } from './SweepSampleRow';
+export { default as SplitRenderer } from './SplitRenderer';
+export { default as BlockLockChrome } from './BlockLockChrome';

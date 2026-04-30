@@ -7,9 +7,11 @@ import {
 import {
   getPlan,
   generatePlan,
+  editPlan,
   validatePlan,
   executePlan,
   type GeneratePlanRequest,
+  type PlanEdit,
 } from '@api/plans';
 import type { ExecutionPlan } from '@/types/plan';
 import { cardKeys } from './useCards';
@@ -71,6 +73,24 @@ export function useGeneratePlan(
   return useMutation({
     mutationFn: (body?: GeneratePlanRequest | void) =>
       generatePlan(cardId, (body as GeneratePlanRequest) ?? undefined),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: planKeys.detail(cardId) });
+    },
+  });
+}
+
+/**
+ * Apply edits to a draft plan. The most common edit is
+ * `{ action: 'update_parameters', node_id, parameters: { … } }`.
+ *
+ * Editing a validated plan resets it to draft (per kernel
+ * applyUpdateParameters), so consumers should re-run validate before
+ * letting the user execute again.
+ */
+export function useEditPlan(cardId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (edits: PlanEdit[]) => editPlan(cardId, edits),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: planKeys.detail(cardId) });
     },

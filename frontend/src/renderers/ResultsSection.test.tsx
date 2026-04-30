@@ -106,12 +106,14 @@ describe('planResults — layout mode (cfd_analysis with all 3 artifacts)', () =
     expect(plan.items[2].renderer?.id).toBe('json-metrics');
   });
 
-  it('falls through to fallback for the vtu slot (Phase 2c VTU renderer not yet shipped)', () => {
-    // The Phase 2a registry has no kind:'vtu' entry; pickRenderer returns the
-    // always-true fallback so the user gets a download link in the slot.
+  it('routes the field slot to vtk-polydata (Plan B — vtk.js shipped 2026-04-30)', () => {
+    // The cfd_analysis layout's field slot now has rendererId: 'vtk-polydata'
+    // and matches both vtp and vtu. VtpViewer reads .vtp directly; .vtu still
+    // falls through (vtk.js v35 has no UnstructuredGridReader) but the slot
+    // owner is the same so the fallback message lives inside VtpViewer.
     const plan = planResults([vtu, residuals, metrics], intent);
     if (plan.kind !== 'layout') throw new Error('expected layout plan');
-    expect(plan.items[0].renderer?.id).toBe('fallback');
+    expect(plan.items[0].renderer?.id).toBe('vtk-polydata');
   });
 });
 

@@ -81,6 +81,16 @@ export const registry: Renderer[] = [
     match: (c) => CAD_3D_KINDS.has(c.artifact_kind.toLowerCase()),
     component: lazy(() => import('./Cad3DViewer')),
   },
+  // Phase 11 Plan B — vtk.js-based viewer for VTK XML PolyData (.vtp). The
+  // dedicated `render-vtk` chunk (~2 MB gz) only ships when this component
+  // mounts. Spike finding: vtk.js v35 has no XMLUnstructuredGridReader, so
+  // .vtu artifacts need server-side conversion to .vtp (deformed surface
+  // mesh + scalar arrays) — see .planning/research/vtkjs-spike-2026-04-30.md.
+  {
+    id: 'vtk-polydata',
+    match: (c) => c.artifact_kind.toLowerCase() === 'vtp',
+    component: lazy(() => import('./VtpViewer')),
+  },
   // Task 7 — always-last fallback (download link + metadata). MUST be last
   // and `match: () => true` so the lookup never returns null.
   {

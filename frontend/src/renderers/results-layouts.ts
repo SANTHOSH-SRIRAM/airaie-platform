@@ -53,11 +53,12 @@ export type ResultsLayout = {
 
 // ---------------------------------------------------------------------------
 // Predicate helpers — keep `match` callbacks readable and reusable across
-// layouts. `byKind` is case-insensitive to match the kernel's actual
+// layouts. `byKind` (currently unused — left exported for future layouts) is case-insensitive to match the kernel's actual
 // emission (lowercase) without locking us out if something changes.
 // ---------------------------------------------------------------------------
 
-const byKind = (kind: string) => (a: RunArtifact) => a.type?.toLowerCase() === kind.toLowerCase();
+// `byKind` (unused — keep for future layouts that match by artifact kind):
+//   const byKind = (kind: string) => (a: RunArtifact) => a.type?.toLowerCase() === kind.toLowerCase();
 const byName = (name: string) => (a: RunArtifact) => a.name === name;
 
 // ---------------------------------------------------------------------------
@@ -67,13 +68,16 @@ const byName = (name: string) => (a: RunArtifact) => a.name === name;
 export const resultsLayouts: Record<string, ResultsLayout> = {
   cfd_analysis: {
     slots: [
-      // Field viewer (top-left, wide). Phase 2c ships the real cfd-vtu
-      // renderer; until then fallback gives a download link.
+      // Field viewer (top-left, wide). Plan B ships VtpViewer for .vtp
+      // (PolyData / surface mesh). vtk.js v35 has no XMLUnstructuredGridReader
+      // so .vtu artifacts still fall through — server-side post-process
+      // should emit .vtp alongside (or instead of) .vtu for inline render.
       {
         span: 8,
         height: 'expanded',
-        match: byKind('vtu'),
-        fallbackText: 'No field artifact (vtu) emitted by this run',
+        match: (a) => a.type === 'vtp' || a.type === 'vtu',
+        rendererId: 'vtk-polydata',
+        fallbackText: 'No field artifact (vtp/vtu) emitted by this run',
       },
       // Convergence chart (top-right) — residuals.csv with explicit
       // csv-chart override (intent_type cfd_analysis already routes csv to
@@ -96,13 +100,16 @@ export const resultsLayouts: Record<string, ResultsLayout> = {
 
   fea_static: {
     slots: [
-      // Result deck viewer (top-left, wide). Phase 2c ships fea-frd; until
-      // then fallback gives a download link.
+      // Result deck viewer (top-left, wide). Plan B: server-side conversion
+      // FRD → VTP (deformed surface + scalar arrays); VtpViewer handles the
+      // .vtp companion. Raw .frd still falls through to GenericArtifactRenderer
+      // until ccx2paraview lands in the CalculiX ATP image.
       {
         span: 8,
         height: 'expanded',
-        match: byKind('frd'),
-        fallbackText: 'No result deck (frd) emitted by this run',
+        match: (a) => a.type === 'vtp',
+        rendererId: 'vtk-polydata',
+        fallbackText: 'No surface mesh (vtp) emitted yet — raw .frd available below',
       },
       // Metrics card (top-right).
       {

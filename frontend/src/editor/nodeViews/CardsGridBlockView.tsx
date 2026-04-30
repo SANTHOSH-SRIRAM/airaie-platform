@@ -2,7 +2,9 @@ import { memo } from 'react';
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { Loader2, AlertCircle, LayoutGrid } from 'lucide-react';
 import { useCards } from '@hooks/useBoards';
+import { useBoardModeRules } from '@hooks/useBoardModeRules';
 import { useBoardCanvasContext } from '@/editor/boardCanvasContext';
+import { BlockLockChrome } from '@components/cards/primitives';
 import type { Card } from '@/types/card';
 
 // ---------------------------------------------------------------------------
@@ -30,6 +32,8 @@ function CardsGridBlockViewImpl({ node }: NodeViewProps) {
   const filter = (node.attrs as { filter: string | null }).filter ?? null;
   const ctx = useBoardCanvasContext();
   const { data: cards, isLoading, error } = useCards(ctx.boardId ?? '');
+  const modeRules = useBoardModeRules(ctx.board ?? undefined);
+  const locked = !modeRules.canEditBlocks;
 
   // Empty — no boardId in context (mounted outside BoardCanvasPage).
   if (!ctx.boardId) {
@@ -111,6 +115,7 @@ function CardsGridBlockViewImpl({ node }: NodeViewProps) {
       className="my-[8px] rounded-[10px] border border-[#e8e8e8] bg-white p-[12px]"
       contentEditable={false}
     >
+      <BlockLockChrome locked={locked} reason={modeRules.lockReason}>
       <div className="flex items-center gap-[8px]">
         <LayoutGrid size={14} className="text-[#1976d2] shrink-0" aria-hidden="true" />
         <span className="text-[12px] font-semibold text-[#1a1a1a]">Cards Grid</span>
@@ -150,6 +155,7 @@ function CardsGridBlockViewImpl({ node }: NodeViewProps) {
           );
         })}
       </div>
+      </BlockLockChrome>
     </NodeViewWrapper>
   );
 }

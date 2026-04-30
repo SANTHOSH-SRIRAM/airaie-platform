@@ -70,6 +70,13 @@ export default defineConfig({
           ) {
             return 'render-3d';
           }
+          // Phase 11 Plan B — vtk.js stack for VTU (and eventually FRD via
+          // server-side conversion). VtuViewer is React.lazy-imported, so
+          // this chunk only ships when a Card actually renders a VTK field
+          // artifact. ~2MB gz expected; deferred-load is essential.
+          if (id.includes('node_modules/@kitware/vtk.js/')) {
+            return 'render-vtk';
+          }
           if (
             id.includes('node_modules/react/') ||
             id.includes('node_modules/react-dom/') ||
@@ -80,11 +87,19 @@ export default defineConfig({
           if (id.includes('node_modules/@tanstack/react-query/')) {
             return 'query';
           }
-          if (
-            id.includes('node_modules/lucide-react/') ||
-            id.includes('node_modules/recharts/')
-          ) {
+          if (id.includes('node_modules/lucide-react/')) {
             return 'ui';
+          }
+          // recharts is only imported by CsvChartRenderer, which is already
+          // lazy-loaded via the renderer registry. Splitting it out of the
+          // eagerly-loaded `ui` chunk saves ~100KB gzipped on every page
+          // mount that doesn't render a CSV chart.
+          if (
+            id.includes('node_modules/recharts/') ||
+            id.includes('node_modules/d3-') ||
+            id.includes('node_modules/victory-vendor/')
+          ) {
+            return 'render-charts';
           }
           if (id.includes('node_modules/@xyflow/react/')) {
             return 'reactflow';

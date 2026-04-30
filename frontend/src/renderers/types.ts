@@ -52,6 +52,7 @@ export type RendererId =
   | 'csv-chart'
   | 'pdf'
   | 'cad-3d'
+  | 'vtk-polydata'
   | 'fallback';
 
 /**
