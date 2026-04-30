@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, Upload, Eye, GitCompare, Loader2 } from 'lucide-react';
+import { ChevronDown, Upload, Eye, Loader2 } from 'lucide-react';
 import { useWorkflowVersions, usePublishWorkflowVersion } from '@hooks/useWorkflow';
 import type { WorkflowVersion } from '@api/workflows';
 import { cn } from '@utils/cn';
@@ -117,13 +117,6 @@ export default function VersionList({ workflowId, currentVersion, onLoadVersion 
                         Publish
                       </button>
                     )}
-                    <button
-                      className="flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] font-medium text-[#8d8d8d] transition-colors hover:bg-[#efefef] hover:text-[#1a1a1a]"
-                      title="Compare with current (coming soon)"
-                      disabled
-                    >
-                      <GitCompare size={13} />
-                    </button>
                   </div>
                 </div>
               );
