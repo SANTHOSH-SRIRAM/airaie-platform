@@ -1,12 +1,12 @@
 # Phase G — Hardening Backlog
 
 > Generated 2026-04-26 from items deferred during Phases A–F of the AirAIE feature-completion plan.
-> Last updated: 2026-04-26 after Sprints 1+2.
+> Last updated: **2026-04-30** after workflow-surface audit (added G.4.12–G.4.16).
 > Each item carries a severity (BLOCK | HIGH | MED | LOW), the surface it lives on, the file/line where the gap is, and a fix sketch.
 
 ## Progress at a glance
 
-**9 of 30 items closed across Phase G Sprints 1+2:**
+**9 of 35 items closed across Phase G Sprints 1+2:**
 - ✅ G.1.1 CSRF middleware (Sprint 1A)
 - ✅ G.1.2 RBAC roles (Sprint 1A)
 - ✅ G.1.4 sanitizeBaseURL path-secret strip (Sprint 1A)
@@ -17,7 +17,7 @@
 - ✅ G.3.3 Session `last_active_at` (Sprint 2C — migration 030)
 - ✅ G.4.2 WorkflowDetailPage real data (Sprint 2B)
 
-**21 items remaining**, grouped by category below. The triage list is preserved as-is for context; completed items now carry a `✅ [Sprint X]` tag at the top of their section.
+**26 items remaining** (was 21; +5 from the 2026-04-30 workflow audit: G.4.12 retry regression, G.4.13 alert→toast, G.4.14 stub triage, G.4.15 unused run endpoints, G.4.16 6-vs-2 node-type informational). Completed items carry a `✅ [Sprint X]` tag at the top of their section.
 
 This is a triage list, not a phase plan. The natural next groupings:
 - **G.1 Security hardening** — CSRF ✅, RBAC roles ✅, WS auth, secret leakage ✅, registration ✅
@@ -347,6 +347,77 @@ Clicking "Approve All" doesn't clear the inline card's pending approvals, and vi
 
 ---
 
+### G.4.12 RunActionBar retry regressed off the kernel endpoint [HIGH]
+
+**Where:**
+- `airaie_platform/frontend/src/api/runs.ts:267` — comment claims *"retryRun is intentionally NOT exported. Kernel /v0/runs/{id}/retry is not registered (404)."*
+- `airaie_platform/frontend/src/components/workflows/runs/RunActionBar.tsx:101–108` — Retry button currently calls `start` (a fresh start), not retry semantics.
+- `airaie-kernel/internal/handler/handler.go:188` — `POST /v0/runs/{id}/retry` IS registered.
+- `airaie-kernel/internal/handler/runs.go:516–575` — handler is implemented, loads prior run's `workflow_id`/`tool_ref` + `inputs_json` and starts a new run with the same inputs.
+
+**Status:** Phase 04 regression. `phases/04-workflow-runs/04-01-PLAN.md:180,187` shipped `retryRun` as a deliverable + acceptance check (`grep "export function retryRun"`). The current code regressed away from this — the comment justifying removal cites a 404 that the kernel does not actually return. Result: the Retry button drops the prior run's inputs and prompts for fresh ones from the form, breaking the user's mental model ("retry this failed run with the same inputs").
+
+**Fix sketch:** Re-add `retryRun(runId)` → `POST /v0/runs/{id}/retry`; add `useRetryRun` hook; wire `RunActionBar` Retry button to `retryMutation.mutate(runId)` instead of `start()`. Delete the stale "intentionally NOT exported" comment. ~30 LOC + 1 hook + 1 component swap. **~30 minutes.** Acceptance: trigger a failing run → click Retry → kernel receives the same `inputs_json` the original run had.
+
+---
+
+### G.4.13 `window.alert` for run-start / delete errors [LOW]
+
+**Where:** `airaie_platform/frontend/src/pages/WorkflowDetailPage.tsx:389,401`.
+
+**Status:** Two `window.alert(msg)` calls for run-start failure and delete failure. The codebase has a `Notification` toast primitive (`src/components/ui/Notification.tsx`) but it isn't wired here.
+
+**Fix sketch:** Replace both `window.alert(msg)` calls with the toast primitive. Match the pattern used by other pages (e.g., where ToolDetailPage surfaces test-run errors). ~15 LOC. **~20 minutes.**
+
+---
+
+### G.4.14 Three workflow-detail affordances stubbed without plan [MED]
+
+**Where:**
+- `airaie_platform/frontend/src/pages/WorkflowDetailPage.tsx:514–520` — "Deactivate" button hard-disabled with `title="Deactivate is not yet wired to the backend"`.
+- `airaie_platform/frontend/src/components/workflows/VersionList.tsx:122–125` — "Compare with current (coming soon)" diff button hard-disabled.
+- `airaie_platform/frontend/src/components/workflows/ndv/OutputPanel.tsx:14–17` — "Pin output" handler is `console.log(...)` only (no API, no UI feedback).
+
+**Status:** Three frontend affordances promise functionality that doesn't exist anywhere — no kernel endpoint, no phase plan, no backlog entry. Each leaks "coming soon" UX into shipped UI.
+
+**Decision needed:** For each one — implement, hide, or document as not-promised. Not a single-author fix; needs product call.
+- **Deactivate:** kernel has no `POST /v0/workflows/{id}/deactivate` endpoint. Product question: should an unpublished workflow be "deactivated", or is that handled by deleting + re-publishing? If the former, design the endpoint + state machine first.
+- **Version compare:** non-trivial — version-diff requires a structural diff over the workflow DSL graph. Probably worth its own ~3-day effort if pursued.
+- **Pin output:** unclear UX intent. Pin-to-where? The Card-canvas era had pin semantics (pin an output to a Card's input); Phase 11 may have removed the original intent.
+
+**Fix sketch:** Schedule a 30-minute triage call. Drop affordances we don't intend to ship soon (cleanest); spawn focused tasks for the ones we do.
+
+---
+
+### G.4.15 Five kernel run endpoints with no UI consumer [MED]
+
+**Where (kernel):** `airaie-kernel/internal/handler/handler.go`:
+- L189 `POST /v0/runs/{id}/resume` — unused
+- L190 `GET /v0/runs/{id}/checkpoints` — unused
+- L194 `GET /v0/runs/{id}/trace` — unused
+- L192 `GET /v0/runs/{id}/events` — used internally by `useRunSSE` but no separate Trace tab
+- L202 `POST /v0/workflows/plan` — unused (workflow planner endpoint)
+
+**Status:** Backend capability shipped without frontend surfaces. Either the UI promised these (and regressed) or the backend over-built. Worth verifying intent before either deleting or surfacing.
+
+**Fix sketch:** Read each handler to confirm it's real (not a stub). For the real ones, decide whether to surface in the Run detail tabs (Trace tab, Checkpoints sidebar) or document as API-only and move on. The `resume` path looks particularly load-bearing for paused gate-waiting runs — concept doc `AIRAIE_TECHNICAL_ARCHITECTURE.md §5.2` explicitly lists `PAUSED (gate waiting)` as a run state, but no UI exists to resume it. **Suggest treating `resume` as P1, others as P2.**
+
+---
+
+### G.4.16 6-node-type architecture vs 2-node-type kernel runtime [TRACKED — informational]
+
+**Where:**
+- `airaie-kernel/internal/workflow/types.go:38–41` — kernel `NodeType` only has `tool` and `agent`.
+- `airaie_platform/frontend/src/utils/workflowDsl.ts:152–188` — frontend serializes 7 kinds (trigger, tool, agent, gate, logic, data, stickyNote).
+
+**Status:** Architecture target in `doc/implementation/new_design/AIRAIE_TECHNICAL_ARCHITECTURE.md §2 "The Unified Canvas — 6 Node Types"` describes all 6 as executable. Implementation status in `doc/implementation/new_design/WORKFLOW_DSL.md:50–54` is honest: *"The kernel today only models tool and agent natively… The remaining frontend-only kinds (trigger, gate, logic, data, stickyNote) are persisted in the DSL and round-trip through edits; the compiler treats them as scaffolding until backend support lands."*
+
+**Not a regression — documented future work.** Listed here so future maintainers don't re-flag it as a defect. Closure path is a substantial multi-week effort: scheduler dispatch for in-process nodes (gate evaluator, logic IF/Switch/Merge, data transform/store) + per-type result handlers + DSL validator updates. Not bite-sized.
+
+**Until then:** consider hiding non-functional palette items in the WorkflowEditor `NodePalette` and exposing them as "design-time annotations" with explicit chrome (matches StickyNote's existing semantics), so users don't drop them on the canvas expecting execution. ~1 hour palette edit if pursued before backend implementation.
+
+---
+
 ## G.5 — Workflow-runs lineage parity
 
 ### G.5.1 Workflow runs short-circuit before `recordRunLineage` [HIGH] ✅ [Sprint 1B]
@@ -372,7 +443,14 @@ Clicking "Approve All" doesn't clear the inline card's pending approvals, and vi
 2. **G.2.1 + G.2.2** JetStream operator UX — persist advisory subscriber output to `audit_events`; make stream/consumer names env-driven
 3. **G.4.4 + G.4.5** ToolDetailPage real data — replace hardcoded "47 runs / 96% / 15s / $23.50" analytics block with `tool.usageCount` etc.; replace decorative dashed div for artifact-port test-run with a working `<input type="text">`
 
-**Suggested Sprint 4 (cleanup batch — 1-2 small agents):**
+**Suggested Sprint 4 — Workflow surface honesty (next session priority — small, high-leverage):**
+1. **G.4.12** [HIGH, ~30 min] Retry regression — re-export `retryRun`, add `useRetryRun`, wire `RunActionBar` Retry button to it. Phase-04 acceptance regression. Single-file scope.
+2. **G.4.13** [LOW, ~20 min] Replace `window.alert` calls in `WorkflowDetailPage.tsx:389,401` with the existing `Notification` toast.
+3. **G.4.15** [P1 of MED] Surface `POST /v0/runs/{id}/resume` in the Run detail UI for paused gate-waiting runs (concept doc explicitly lists `PAUSED` as a run state). The other unused endpoints (`/checkpoints`, `/trace`, `/workflows/plan`) — decide separately whether to surface or document as API-only.
+4. **G.4.14** [MED, decision-first] 30-min triage on Deactivate / Compare versions / Pin output stubs. Drop the affordances we don't intend to ship soon.
+5. **G.4.16** [informational] Optional 1-hour palette edit to hide non-executable node types (gate / logic / data) until kernel runtime support lands — prevents users from dropping non-functional nodes on the canvas.
+
+**Suggested Sprint 5 (cleanup batch — 1-2 small agents):**
 - **G.2.3** AckWait × MaxDeliver poison-message latency tuning
 - **G.2.4** Cost rollup 10000-run cap UI banner / pagination
 - **G.2.5** AuthContext consecutive-failure guard for backgrounded tabs
