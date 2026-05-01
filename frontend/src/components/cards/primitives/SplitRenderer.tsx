@@ -1,5 +1,6 @@
 import { memo, Suspense, useMemo, type ReactElement } from 'react';
 import { pickRenderer } from '@/renderers';
+import { SharedViewStateProvider } from '@/renderers/sharedViewState';
 import { useArtifactDownloadUrl } from '@hooks/useArtifacts';
 import type { RunArtifact } from '@api/runs';
 import type { IntentSpec } from '@/types/intent';
@@ -9,16 +10,16 @@ import type { IntentSpec } from '@/types/intent';
 // via the global renderer registry. Backs the comparison card UX (Phase 11
 // Plan C1).
 //
-// Per `concepts/04-RENDERER-REGISTRY.md` §"Comparison" the eventual API is
-// `<SplitRenderer left={…} right={…} axisLocked />` where `axisLocked`
-// shares camera + color scale + axis ranges between the children. That
-// requires the 3D viewers from Plan B (vtk.js) — they need to forward a
-// shared view-state ref. Until then this primitive renders the two
-// renderers independently; CSV charts, JSON metrics, and image artifacts
-// already compose meaningfully without shared state.
+// Per `concepts/04-RENDERER-REGISTRY.md` §"Comparison" the API is
+// `<SplitRenderer left={…} right={…} axisLocked />`. With axisLocked=true,
+// children render inside a <SharedViewStateProvider> so 3D / VTP viewers
+// can publish/subscribe to a shared camera + scalar range.
 //
-// `axisLocked` is accepted but currently no-op; it's wired now so call
-// sites don't need to change once Plan B lands.
+// Phase 9 Plan 09-02 §2C.1 (2026-05-01) — closed the no-op axisLocked
+// prop. Cad3DViewer + VtpViewer now consult `useSharedViewState()`; when
+// the provider is present, they bind their internal camera to it.
+// Renderers that don't care about shared state (CSV, JSON metrics, images)
+// ignore the context — no side effects.
 // ---------------------------------------------------------------------------
 
 interface SplitRendererProps {
@@ -27,7 +28,11 @@ interface SplitRendererProps {
   leftArtifact: RunArtifact | undefined;
   rightArtifact: RunArtifact | undefined;
   intent?: IntentSpec | undefined;
-  /** Reserved for the post-Plan-B 3D path; ignored today. */
+  /**
+   * When true, wraps children in a <SharedViewStateProvider> so 3D / VTP
+   * viewers share their camera + scalar range. Renderers without that
+   * concept (CSV, JSON, images) silently ignore the provider.
+   */
   axisLocked?: boolean;
 }
 
@@ -107,13 +112,15 @@ function SplitRendererImpl({
   leftArtifact,
   rightArtifact,
   intent,
+  axisLocked,
 }: SplitRendererProps) {
-  return (
+  const grid = (
     <div className="grid grid-cols-1 gap-[12px] md:grid-cols-2">
       <Pane label={leftLabel} artifact={leftArtifact} intent={intent} />
       <Pane label={rightLabel} artifact={rightArtifact} intent={intent} />
     </div>
   );
+  return axisLocked ? <SharedViewStateProvider>{grid}</SharedViewStateProvider> : grid;
 }
 
 export const SplitRenderer = memo(SplitRendererImpl);

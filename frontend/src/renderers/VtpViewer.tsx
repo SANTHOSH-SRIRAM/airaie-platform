@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { useSharedViewState, type CameraSnapshot, camerasEqual } from './sharedViewState';
 import type { RendererProps } from './types';
 
 // ---------------------------------------------------------------------------
@@ -28,7 +29,12 @@ import type { RendererProps } from './types';
 //   - Screenshot button.
 //   - Camera state persistence.
 //   - Color scale / legend.
-//   - axisLocked / shared view-state for SplitRenderer.
+//   - Color scale / legend.
+//
+// Phase 9 Plan 09-02 §2C.1 (2026-05-01) — wired to <SharedViewStateProvider>
+// for axis-locked SplitRenderer comparison. When mounted under that provider
+// the active camera publishes/subscribes to shared state so two VTP viewers
+// (or one VTP + one Cad3D) rotate in sync.
 // ---------------------------------------------------------------------------
 
 export default function VtpViewer({ artifact, downloadUrl }: RendererProps) {
@@ -36,6 +42,18 @@ export default function VtpViewer({ artifact, downloadUrl }: RendererProps) {
   const renderWindowRef = useRef<{ delete: () => void } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const shared = useSharedViewState();
+  const instanceId = useId();
+  // Refs so the shared subscriber created during VTK mount can stay
+  // current with React state without retriggering the heavy mount effect.
+  const sharedRef = useRef(shared);
+  const instanceIdRef = useRef(instanceId);
+  useEffect(() => {
+    sharedRef.current = shared;
+  }, [shared]);
+  useEffect(() => {
+    instanceIdRef.current = instanceId;
+  }, [instanceId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,8 +139,47 @@ export default function VtpViewer({ artifact, downloadUrl }: RendererProps) {
         renderer.resetCamera();
         renderWindow.render();
 
+        // 2C.1 — bind active camera to the SharedViewStateProvider when
+        // mounted under <SplitRenderer axisLocked>. No-op otherwise.
+        const camera = renderer.getActiveCamera();
+        const lastApplied = { value: null as CameraSnapshot | null };
+
+        const snapshotCamera = (): CameraSnapshot => ({
+          position: camera.getPosition() as [number, number, number],
+          target: camera.getFocalPoint() as [number, number, number],
+          up: camera.getViewUp() as [number, number, number],
+        });
+
+        const onCamModified = () => {
+          const s = sharedRef.current;
+          if (!s) return;
+          const cur = snapshotCamera();
+          if (lastApplied.value && camerasEqual(cur, lastApplied.value)) return; // echo guard
+          s.publish('camera', cur, instanceIdRef.current);
+        };
+
+        const applyIncoming = (incoming: CameraSnapshot) => {
+          lastApplied.value = incoming;
+          camera.setPosition(...incoming.position);
+          camera.setFocalPoint(...incoming.target);
+          camera.setViewUp(...incoming.up);
+          renderer.resetCameraClippingRange();
+          renderWindow.render();
+        };
+
+        // If a sibling already published, hydrate immediately.
+        if (sharedRef.current?.camera) applyIncoming(sharedRef.current.camera);
+
+        const camSub = camera.onModified(onCamModified);
+        let sharedUnsub: (() => void) | null = null;
+        if (sharedRef.current) {
+          sharedUnsub = sharedRef.current.subscribeCamera(instanceIdRef.current, applyIncoming);
+        }
+
         renderWindowRef.current = renderWindow;
         teardownFns = [
+          () => camSub.unsubscribe?.(),
+          () => sharedUnsub?.(),
           () => interactor.unbindEvents(),
           () => actor.delete(),
           () => mapper.delete(),

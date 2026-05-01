@@ -1,11 +1,13 @@
-import { Suspense, useMemo } from 'react';
-import { Canvas, useLoader } from '@react-three/fiber';
+import { Suspense, useEffect, useId, useMemo, useRef } from 'react';
+import { Canvas, useLoader, useThree } from '@react-three/fiber';
 import { Bounds, Center, Environment, Grid, OrbitControls } from '@react-three/drei';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { Box } from 'lucide-react';
+import { useSharedViewState, type CameraSnapshot, camerasEqual } from './sharedViewState';
 import type { RendererProps } from './types';
 
 // ---------------------------------------------------------------------------
@@ -67,8 +69,65 @@ function ModelByKind({ url, kind }: { url: string; kind: ReturnType<typeof infer
   return <StlMesh url={url} />;
 }
 
+// Inside-Canvas sync component (must live as a child of <Canvas> to access
+// the R3F context via useThree). Reads the OrbitControls instance via R3F's
+// state.controls and binds it to the SharedViewStateProvider above the
+// SplitRenderer. No-op when no provider is mounted (the common case — single
+// viewer outside a SplitRenderer axisLocked).
+//
+// Phase 9 Plan 09-02 §2C.1.
+function SharedCameraSync({ instanceId }: { instanceId: string }) {
+  const shared = useSharedViewState();
+  const camera = useThree((s) => s.camera);
+  const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
+
+  // Track the last camera we *applied from* shared state, so the change
+  // event we fire afterwards doesn't re-publish it (echo loop).
+  const lastAppliedRef = useRef<CameraSnapshot | null>(null);
+
+  useEffect(() => {
+    if (!shared || !controls) return;
+
+    const snapshot = (): CameraSnapshot => ({
+      position: [camera.position.x, camera.position.y, camera.position.z],
+      target: [controls.target.x, controls.target.y, controls.target.z],
+      up: [camera.up.x, camera.up.y, camera.up.z],
+    });
+
+    const onChange = () => {
+      const cur = snapshot();
+      if (lastAppliedRef.current && camerasEqual(cur, lastAppliedRef.current)) {
+        return; // we just applied this from shared state — don't echo back
+      }
+      shared.publish('camera', cur, instanceId);
+    };
+
+    const apply = (incoming: CameraSnapshot) => {
+      lastAppliedRef.current = incoming;
+      camera.position.set(incoming.position[0], incoming.position[1], incoming.position[2]);
+      camera.up.set(incoming.up[0], incoming.up[1], incoming.up[2]);
+      controls.target.set(incoming.target[0], incoming.target[1], incoming.target[2]);
+      controls.update();
+    };
+
+    // On mount: if a previous viewer already published a camera, hydrate to it.
+    if (shared.camera) apply(shared.camera);
+
+    controls.addEventListener('change', onChange);
+    const unsub = shared.subscribeCamera(instanceId, apply);
+
+    return () => {
+      controls.removeEventListener('change', onChange);
+      unsub();
+    };
+  }, [shared, controls, camera, instanceId]);
+
+  return null;
+}
+
 export default function Cad3DViewer({ artifact, downloadUrl }: RendererProps) {
   const kind = useMemo(() => inferKind(artifact.name, artifact.type), [artifact.name, artifact.type]);
+  const instanceId = useId(); // unique per Cad3DViewer instance for shared-view publisher tagging
 
   return (
     <div className="overflow-hidden rounded-[8px] border border-[#e8e8e8] bg-[#1a1c19]">
@@ -96,6 +155,7 @@ export default function Cad3DViewer({ artifact, downloadUrl }: RendererProps) {
           infiniteGrid
         />
         <OrbitControls makeDefault enableDamping dampingFactor={0.08} />
+        <SharedCameraSync instanceId={instanceId} />
       </Canvas>
       <div className="flex items-center justify-between border-t border-[#e8e8e8] bg-white px-[12px] py-[6px] text-[11px] text-[#6b6b6b]">
         <span className="flex items-center gap-[6px]">
