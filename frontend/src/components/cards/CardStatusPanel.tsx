@@ -191,7 +191,12 @@ export default function CardStatusPanel({
             <h3 className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[#6b6b6b] mb-[8px]">
               Results
             </h3>
-            <ResultsSection runArtifacts={runArtifacts ?? []} intent={intent} />
+            <ResultsSection
+              runArtifacts={runArtifacts ?? []}
+              intent={intent}
+              runId={latestRunId ?? undefined}
+              viewState={runDetail?.viewState}
+            />
           </div>
 
           {/* Right: Evidence rows (one per acceptance criterion) */}

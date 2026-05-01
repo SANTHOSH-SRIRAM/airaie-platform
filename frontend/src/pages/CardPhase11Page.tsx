@@ -1086,6 +1086,7 @@ function ReadStage({
   card,
   onAskAi,
   runArtifacts,
+  latestRunId,
 }: {
   evidence: CardEvidence[] | undefined;
   gates: Gate[] | undefined;
@@ -1096,6 +1097,7 @@ function ReadStage({
   card: Card;
   onAskAi: (prompt: string) => void;
   runArtifacts: RunArtifact[];
+  latestRunId: string | null;
 }) {
   const status = readStatus(evidence, gates);
   const evs = evidence ?? [];
@@ -1124,7 +1126,11 @@ function ReadStage({
       {runArtifacts.length > 0 ? (
         <div className="flex flex-col gap-[8px]">
           <span className="font-sans text-[12px] font-medium text-[#554433]">Results</span>
-          <ResultsSection runArtifacts={runArtifacts} intent={intent} />
+          <ResultsSection
+            runArtifacts={runArtifacts}
+            intent={intent}
+            runId={latestRunId ?? undefined}
+          />
         </div>
       ) : null}
       {evs.length > 0 ? (
@@ -1665,6 +1671,7 @@ export default function CardPhase11Page() {
           card={card}
           onAskAi={openChatWith}
           runArtifacts={runArtifacts ?? []}
+          latestRunId={latestRunId}
         />
       )}
       <CardActionBar

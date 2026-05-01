@@ -1,11 +1,13 @@
-import { Suspense } from 'react';
+import { Suspense, useCallback } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { useArtifactDownloadUrl } from '@hooks/useArtifacts';
+import { useUpdateRunViewState } from '@hooks/useRuns';
 import { pickRenderer, registry } from './registry';
 import { getLayoutForIntent } from './results-layouts';
-import type { Renderer } from './types';
+import type { BoardMode, Renderer } from './types';
 import type { ResultsSlot } from './results-layouts';
 import type { RunArtifact } from '@api/runs';
+import type { RunViewState } from '@/types/run';
 import type { IntentSpec } from '@/types/intent';
 
 // ---------------------------------------------------------------------------
@@ -91,6 +93,17 @@ export function planResults(
 interface ResultsSectionProps {
   runArtifacts: RunArtifact[];
   intent: IntentSpec | undefined;
+  /**
+   * Optional Phase 9 §2F context. When provided, viewers (Cad3DViewer,
+   * VtpViewer) hydrate from `viewState` on mount, debounce-persist to
+   * the kernel via the runId mutation, and lock the camera in Release
+   * mode. Call sites that don't carry this context get the prior
+   * Explore-mode behaviour with no persistence (renderer defaults to
+   * its own reset-to-bounds).
+   */
+  runId?: string;
+  boardMode?: BoardMode;
+  viewState?: import('@/types/run').RunViewState;
 }
 
 const COL_SPAN_CLASS: Record<number, string> = {
@@ -109,8 +122,25 @@ const HEIGHT_CLASS: Record<string, string> = {
   expanded: 'min-h-[400px]',
 };
 
-export default function ResultsSection({ runArtifacts, intent }: ResultsSectionProps) {
+export default function ResultsSection({
+  runArtifacts,
+  intent,
+  runId,
+  boardMode,
+  viewState,
+}: ResultsSectionProps) {
   const plan = planResults(runArtifacts, intent);
+  // §2F.1 — one mutation per ResultsSection mount; the bound callback is
+  // shared across all renderer slots. When runId is undefined, the callback
+  // is a no-op so the renderers still render but don't try to persist.
+  const updateMut = useUpdateRunViewState();
+  const onViewStateChange = useCallback(
+    (vs: RunViewState) => {
+      if (!runId) return;
+      updateMut.mutate({ runId, viewState: vs });
+    },
+    [runId, updateMut],
+  );
 
   if (plan.kind === 'empty') {
     return (
@@ -130,6 +160,9 @@ export default function ResultsSection({ runArtifacts, intent }: ResultsSectionP
             artifact={item.artifact}
             renderer={item.renderer}
             intent={intent}
+            boardMode={boardMode}
+            viewState={viewState}
+            onViewStateChange={runId ? onViewStateChange : undefined}
           />
         ))}
       </div>
@@ -145,6 +178,9 @@ export default function ResultsSection({ runArtifacts, intent }: ResultsSectionP
             renderer={item.renderer}
             artifact={item.artifact}
             intent={intent}
+            boardMode={boardMode}
+            viewState={viewState}
+            onViewStateChange={runId ? onViewStateChange : undefined}
           />
         </div>
       ))}
@@ -163,11 +199,17 @@ function SlotMount({
   artifact,
   renderer,
   intent,
+  boardMode,
+  viewState,
+  onViewStateChange,
 }: {
   slot: ResultsSlot;
   artifact: RunArtifact | null;
   renderer: Renderer | null;
   intent: IntentSpec | undefined;
+  boardMode?: BoardMode;
+  viewState?: RunViewState;
+  onViewStateChange?: (vs: RunViewState) => void;
 }) {
   const className = `${COL_SPAN_CLASS[slot.span] ?? 'col-span-12'} ${
     HEIGHT_CLASS[slot.height ?? 'auto'] ?? ''
@@ -183,7 +225,14 @@ function SlotMount({
 
   return (
     <div className={className}>
-      <RendererBoundary renderer={renderer} artifact={artifact} intent={intent} />
+      <RendererBoundary
+        renderer={renderer}
+        artifact={artifact}
+        intent={intent}
+        boardMode={boardMode}
+        viewState={viewState}
+        onViewStateChange={onViewStateChange}
+      />
     </div>
   );
 }
@@ -198,10 +247,16 @@ function RendererBoundary({
   renderer,
   artifact,
   intent,
+  boardMode,
+  viewState,
+  onViewStateChange,
 }: {
   renderer: Renderer | null;
   artifact: RunArtifact;
   intent: IntentSpec | undefined;
+  boardMode?: BoardMode;
+  viewState?: RunViewState;
+  onViewStateChange?: (vs: RunViewState) => void;
 }) {
   const { data: downloadUrl, isLoading, error } = useArtifactDownloadUrl(artifact.id);
 
@@ -233,7 +288,14 @@ function RendererBoundary({
 
   return (
     <Suspense fallback={<RendererSkeleton label="Loading renderer…" />}>
-      <Component artifact={artifact} downloadUrl={downloadUrl} intent={intent} />
+      <Component
+        artifact={artifact}
+        downloadUrl={downloadUrl}
+        intent={intent}
+        boardMode={boardMode}
+        viewState={viewState}
+        onViewStateChange={onViewStateChange}
+      />
     </Suspense>
   );
 }
