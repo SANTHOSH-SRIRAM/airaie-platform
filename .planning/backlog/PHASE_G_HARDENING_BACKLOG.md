@@ -539,6 +539,54 @@ Migrated `actionError` from `WorkflowDetailPage` local `useState` to a `uiStore.
 
 ---
 
+#### Update — 2026-05-01: production-build test BLOCKED by separate regression
+
+Attempted the recommended `npm run build && npm run preview` test. Build succeeds but the preview server serves a bundle that throws on init:
+
+```
+TypeError: Cannot set properties of undefined (setting 'Activity')
+  at Py (vendor-BeGaxp3A.js:1:5492)
+  at xc (vendor-BeGaxp3A.js:1:8587)
+  at Du (editor-RwbRxdMz.js:1:1743)
+  at Iu (editor-RwbRxdMz.js:1:2558)
+```
+
+Editor chunk (Tiptap) is initializing the vendor chunk's `Activity` symbol before vendor is ready — a CJS↔ESM cyclic-init issue baked into the chunk-split. Page renders blank; no React component mounts. Not introduced by today's plan 09-02 work — `Activity` is used in 5+ existing files (ToolDetailSidebar, RunsTab, ProfileSidebar, ActiveRunsWidget, plus today's StreamingResidualsChart).
+
+**This blocks the original G.4.17 test entirely.** Until prod-build init succeeds, we can't observe whether the dev-mode commit-blocker repros in production.
+
+**New filed: G.4.20 [HIGH-blocker]** — "Production build init throws (vendor/editor chunk cycle on Activity symbol)". Likely fix: bisect recent commits to find which one shifted lucide-react's tree-shaking output, OR add lucide-react to a dedicated `manualChunks` entry so Tiptap's editor chunk doesn't pull it through vendor. ~30 min bisect + chunk-config fix.
+
+**Side effect:** added a `preview` block with `/v0` proxy to `vite.config.ts` so future prod-build smoke tests can reach the kernel without CORS pain. Safe permanent addition.
+
+---
+
+### G.4.20 Production build init fails — vendor/editor chunk cycle [HIGH — blocks G.4.17 test]
+
+**Surfaced:** 2026-05-01 during attempted G.4.17 production-build test.
+
+**Where:** Vite's manualChunks splits `lucide-react` (and possibly other shared libs) such that the `editor` chunk (Tiptap) attempts to set `vendor.Activity = ...` before vendor is initialized. The thrown TypeError aborts module init, leaving the page blank.
+
+**Reproduce:**
+```bash
+cd airaie_platform/frontend
+npm run build && npm run preview
+# navigate to http://localhost:4173/workflows/<any-id>
+# Console shows the Activity TypeError; page is blank
+```
+
+**Hypotheses:**
+1. **Vite manualChunks miscategorisation** — `lucide-react` should be in a stable shared chunk (e.g. `vendor`) ahead of consumers. Currently it falls through Vite's default vendor bucketing which can race with editor.
+2. **Recent code shifted bundle composition** — adding StreamingResidualsChart.tsx pulled `Activity` into a different chunk path. Verify by bisecting around commits 6d0807a (residuals) and f8ce318 (Lock icon in viewers).
+
+**Fix sketch:**
+- Add `lucide-react` to a dedicated `lucide` manualChunks entry in `frontend/vite.config.ts` so it loads independent of vendor/editor. ~5 lines.
+- Verify with `npm run build && npm run preview` then click around — no console errors, all pages render.
+
+**Why HIGH:** Blocks production deploys + blocks G.4.17 root-cause investigation. The prod-build test was the cheapest way to determine if G.4.17 is dev-only or universal; without it, G.4.17 is stuck.
+
+---
+
 ### G.4.18 ToolRegistry "Use in Workflow" navigates to broken URL [MED] ✅ SHIPPED 2026-05-01 (commit `891646e` — HIDE)
 
 **Surfaced:** Phase 5/6 acceptance audit on 2026-05-01.

@@ -19,6 +19,16 @@ export default defineConfig({
       '@contexts': path.resolve(__dirname, './src/contexts'),
     },
   },
+  // `vite preview` doesn't inherit `server.proxy` by default — duplicate
+  // the kernel proxy here so production-build smoke-tests can reach the
+  // backend without CORS pain. Plan 09-02 G.4.17 debug entrypoint.
+  preview: {
+    port: 4173,
+    proxy: {
+      '/api': { target: 'http://localhost:8080', changeOrigin: true },
+      '/v0': { target: 'http://localhost:8080', changeOrigin: true },
+    },
+  },
   server: {
     port: 3000,
     proxy: {
