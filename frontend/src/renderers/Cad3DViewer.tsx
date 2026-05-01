@@ -6,9 +6,10 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import { Box } from 'lucide-react';
+import { Box, Lock } from 'lucide-react';
 import { useSharedViewState, type CameraSnapshot, camerasEqual } from './sharedViewState';
-import type { RendererProps } from './types';
+import type { BoardMode, RendererProps } from './types';
+import type { RunViewState } from '@/types/run';
 
 // ---------------------------------------------------------------------------
 // Cad3DViewer — STL / GLTF / GLB / OBJ inline 3D preview.
@@ -70,37 +71,43 @@ function ModelByKind({ url, kind }: { url: string; kind: ReturnType<typeof infer
 }
 
 // Inside-Canvas sync component (must live as a child of <Canvas> to access
-// the R3F context via useThree). Reads the OrbitControls instance via R3F's
-// state.controls and binds it to the SharedViewStateProvider above the
-// SplitRenderer. No-op when no provider is mounted (the common case — single
-// viewer outside a SplitRenderer axisLocked).
+// the R3F context via useThree). Handles three concerns:
+//   1. SharedViewStateProvider (axis-locked SplitRenderer)  —  Plan 09-02 §2C.1
+//   2. Initial hydration from `props.viewState` (Release-mode reproducibility) — §2F.1
+//   3. Debounced persistence via onViewStateChange — §2F.1
 //
-// Phase 9 Plan 09-02 §2C.1.
-function SharedCameraSync({ instanceId }: { instanceId: string }) {
+// In Release mode (boardMode === 'release'), persistence is SKIPPED — the user
+// can rotate locally for inspection but their rotation doesn't change the
+// canonical view; on re-mount the locked camera returns. §2F.2.
+function SharedCameraSync({
+  instanceId,
+  boardMode,
+  initialViewState,
+  onViewStateChange,
+}: {
+  instanceId: string;
+  boardMode?: BoardMode;
+  initialViewState?: RunViewState;
+  onViewStateChange?: (viewState: RunViewState) => void;
+}) {
   const shared = useSharedViewState();
   const camera = useThree((s) => s.camera);
   const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
 
-  // Track the last camera we *applied from* shared state, so the change
-  // event we fire afterwards doesn't re-publish it (echo loop).
+  // Track the last camera we *applied from* shared/initial state, so the
+  // change event we fire afterwards doesn't re-publish it (echo loop).
   const lastAppliedRef = useRef<CameraSnapshot | null>(null);
+  // Debounce timer for persistence callback.
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!shared || !controls) return;
+    if (!controls) return;
 
     const snapshot = (): CameraSnapshot => ({
       position: [camera.position.x, camera.position.y, camera.position.z],
       target: [controls.target.x, controls.target.y, controls.target.z],
       up: [camera.up.x, camera.up.y, camera.up.z],
     });
-
-    const onChange = () => {
-      const cur = snapshot();
-      if (lastAppliedRef.current && camerasEqual(cur, lastAppliedRef.current)) {
-        return; // we just applied this from shared state — don't echo back
-      }
-      shared.publish('camera', cur, instanceId);
-    };
 
     const apply = (incoming: CameraSnapshot) => {
       lastAppliedRef.current = incoming;
@@ -110,27 +117,62 @@ function SharedCameraSync({ instanceId }: { instanceId: string }) {
       controls.update();
     };
 
-    // On mount: if a previous viewer already published a camera, hydrate to it.
-    if (shared.camera) apply(shared.camera);
+    // Hydration order on mount (highest precedence first):
+    //   1. shared (a sibling pane already rotated — axis-lock follows them)
+    //   2. initialViewState (persisted from a prior session)
+    if (shared?.camera) {
+      apply(shared.camera);
+    } else if (initialViewState?.camera) {
+      apply(initialViewState.camera);
+    }
+
+    const onChange = () => {
+      const cur = snapshot();
+      if (lastAppliedRef.current && camerasEqual(cur, lastAppliedRef.current)) {
+        return; // we just applied this — don't echo back
+      }
+      // §2C.1 — broadcast to axis-lock siblings (always, even in Release).
+      shared?.publish('camera', cur, instanceId);
+
+      // §2F.1 — persist via onViewStateChange, but ONLY in Explore/Study.
+      // §2F.2 — Release mode swallows persistence; the original view stays
+      // canonical even though the user can pan/rotate locally.
+      if (boardMode !== 'release' && onViewStateChange) {
+        if (persistTimerRef.current != null) clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = setTimeout(() => {
+          onViewStateChange({
+            camera: { position: cur.position, target: cur.target, up: cur.up },
+          });
+        }, 1000);
+      }
+    };
 
     controls.addEventListener('change', onChange);
-    const unsub = shared.subscribeCamera(instanceId, apply);
+    const unsub = shared?.subscribeCamera(instanceId, apply);
 
     return () => {
       controls.removeEventListener('change', onChange);
-      unsub();
+      unsub?.();
+      if (persistTimerRef.current != null) clearTimeout(persistTimerRef.current);
     };
-  }, [shared, controls, camera, instanceId]);
+  }, [shared, controls, camera, instanceId, boardMode, initialViewState, onViewStateChange]);
 
   return null;
 }
 
-export default function Cad3DViewer({ artifact, downloadUrl }: RendererProps) {
+export default function Cad3DViewer({
+  artifact,
+  downloadUrl,
+  boardMode,
+  viewState,
+  onViewStateChange,
+}: RendererProps) {
   const kind = useMemo(() => inferKind(artifact.name, artifact.type), [artifact.name, artifact.type]);
   const instanceId = useId(); // unique per Cad3DViewer instance for shared-view publisher tagging
+  const isReleaseLocked = boardMode === 'release';
 
   return (
-    <div className="overflow-hidden rounded-[8px] border border-[#e8e8e8] bg-[#1a1c19]">
+    <div className="relative overflow-hidden rounded-[8px] border border-[#e8e8e8] bg-[#1a1c19]">
       <Canvas
         camera={{ position: [0, 0, 4], fov: 45 }}
         className="block h-[480px] w-full"
@@ -155,8 +197,22 @@ export default function Cad3DViewer({ artifact, downloadUrl }: RendererProps) {
           infiniteGrid
         />
         <OrbitControls makeDefault enableDamping dampingFactor={0.08} />
-        <SharedCameraSync instanceId={instanceId} />
+        <SharedCameraSync
+          instanceId={instanceId}
+          boardMode={boardMode}
+          initialViewState={viewState}
+          onViewStateChange={onViewStateChange}
+        />
       </Canvas>
+      {isReleaseLocked ? (
+        <div
+          className="absolute right-2 top-2 z-10 inline-flex items-center gap-[4px] rounded-md bg-amber-100/95 px-[6px] py-[2px] text-[10px] font-medium text-amber-800 backdrop-blur-sm"
+          title="Release-mode view: camera is canonical for this run; local rotation isn't persisted"
+        >
+          <Lock size={10} />
+          Release-locked
+        </div>
+      ) : null}
       <div className="flex items-center justify-between border-t border-[#e8e8e8] bg-white px-[12px] py-[6px] text-[11px] text-[#6b6b6b]">
         <span className="flex items-center gap-[6px]">
           <Box size={12} aria-hidden="true" />

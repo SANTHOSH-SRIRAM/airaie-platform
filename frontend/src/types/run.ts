@@ -53,6 +53,23 @@ export interface RunLogLine {
   message: string;
 }
 
+/**
+ * Persisted view-state for a run (Release-mode reproducibility, Phase 9
+ * Plan 09-02 §2F.1). The kernel stores this as opaque JSONB; the renderers
+ * (Cad3DViewer, VtpViewer) own the shape.
+ */
+export interface RunViewState {
+  camera?: {
+    position: [number, number, number];
+    target: [number, number, number];
+    up: [number, number, number];
+  };
+  scalarRange?: {
+    min: number;
+    max: number;
+  };
+}
+
 export interface RunDetail {
   id: string;
   workflowId: string;
@@ -66,6 +83,8 @@ export interface RunDetail {
   nodesTotal: number;
   triggeredBy: string;
   nodes: RunNodeDetail[];
+  /** Persisted camera + scalar range from prior viewer session, if any. */
+  viewState?: RunViewState;
 }
 
 export interface RunListParams {

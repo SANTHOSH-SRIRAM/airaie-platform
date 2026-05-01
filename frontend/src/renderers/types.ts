@@ -29,14 +29,38 @@ export type RendererCtx = {
 };
 
 /**
+ * Board mode the renderer is mounted under. Phase 9 Plan 09-02 §2F.2 —
+ * Release-mode locks the camera to the persisted view_state and skips
+ * write-back; Explore allows free interaction with debounced persistence.
+ * Study sits between (interaction allowed, persistence allowed).
+ *
+ * `study` and `release` (lowercase) match the kernel's board-mode strings.
+ * If a renderer is mounted outside any Card surface, boardMode is undefined
+ * and renderers should treat it as Explore.
+ */
+export type BoardMode = 'explore' | 'study' | 'release';
+
+/**
  * Props every renderer component receives. Renderers fetch their bytes from
  * `downloadUrl` (presigned MinIO URL) — the kernel does not proxy artifact
  * bytes through gateway routes.
+ *
+ * Phase 9 Plan 09-02 §2F:
+ *   - `boardMode` lets viewers branch between Explore (free) and Release
+ *     (camera-locked) presentations.
+ *   - `viewState` provides initial camera + scalar range from a prior
+ *     session; viewers hydrate from this on mount.
+ *   - `onViewStateChange` is the persistence callback invoked from the
+ *     viewer's debounced interaction-end handler. Renderers MUST suppress
+ *     this when boardMode === 'release'.
  */
 export type RendererProps = {
   artifact: RunArtifact;
   downloadUrl: string;
   intent?: IntentSpec;
+  boardMode?: BoardMode;
+  viewState?: import('@/types/run').RunViewState;
+  onViewStateChange?: (viewState: import('@/types/run').RunViewState) => void;
 };
 
 /**

@@ -6,6 +6,7 @@ import type {
   RunNodeMetrics,
   RunStatus,
   RunNodeStatus,
+  RunViewState,
 } from '@/types/run';
 import { api } from '@api/client';
 
@@ -107,6 +108,7 @@ interface RunEnvelope {
     actor?: string;
     cost_actual?: number;
     completed_at?: string;
+    view_state?: import('@/types/run').RunViewState;
   };
   node_runs?: RawNodeRun[];
   artifacts?: unknown[]; // unused here; kept for shape parity
@@ -135,6 +137,7 @@ export function mapRunEnvelopeToRunDetail(envelope: RunEnvelope): RunDetail {
     nodesTotal: nodes.length,
     triggeredBy: run.actor ?? 'system',
     nodes,
+    viewState: run.view_state,
   };
 }
 
@@ -309,6 +312,23 @@ export const resumeRun = (runId: string, checkpointId?: string): Promise<ResumeR
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(checkpointId ? { checkpoint_id: checkpointId } : {}),
+  });
+
+/* ---------- View state ----------
+ *
+ * PATCH /v0/runs/{id}/view-state — Plan 09-02 §2F.1. Persists the
+ * camera + scalar range a renderer last published. Allowed only on
+ * terminal runs; in-progress writes get 409 VIEW_STATE_NOT_EDITABLE.
+ *
+ * Renderers (Cad3DViewer, VtpViewer) call this from a 1-second debounce
+ * after the user stops interacting. On Release-mode boards the renderer
+ * SKIPS this call — see RendererProps.boardMode.
+ */
+export const updateRunViewState = (runId: string, viewState: RunViewState): Promise<{ status: string }> =>
+  api(`/v0/runs/${runId}/view-state`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ view_state: viewState }),
   });
 
 /* ---------- Real backend run detail (used by playground outputs panel) ---------- */

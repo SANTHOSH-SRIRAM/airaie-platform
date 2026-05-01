@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { Lock } from 'lucide-react';
 import { useSharedViewState, type CameraSnapshot, camerasEqual } from './sharedViewState';
 import type { RendererProps } from './types';
 
@@ -37,23 +38,42 @@ import type { RendererProps } from './types';
 // (or one VTP + one Cad3D) rotate in sync.
 // ---------------------------------------------------------------------------
 
-export default function VtpViewer({ artifact, downloadUrl }: RendererProps) {
+export default function VtpViewer({
+  artifact,
+  downloadUrl,
+  boardMode,
+  viewState,
+  onViewStateChange,
+}: RendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const renderWindowRef = useRef<{ delete: () => void } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const shared = useSharedViewState();
   const instanceId = useId();
+  const isReleaseLocked = boardMode === 'release';
   // Refs so the shared subscriber created during VTK mount can stay
   // current with React state without retriggering the heavy mount effect.
   const sharedRef = useRef(shared);
   const instanceIdRef = useRef(instanceId);
+  const boardModeRef = useRef(boardMode);
+  const initialViewStateRef = useRef(viewState);
+  const onViewStateChangeRef = useRef(onViewStateChange);
   useEffect(() => {
     sharedRef.current = shared;
   }, [shared]);
   useEffect(() => {
     instanceIdRef.current = instanceId;
   }, [instanceId]);
+  useEffect(() => {
+    boardModeRef.current = boardMode;
+  }, [boardMode]);
+  useEffect(() => {
+    initialViewStateRef.current = viewState;
+  }, [viewState]);
+  useEffect(() => {
+    onViewStateChangeRef.current = onViewStateChange;
+  }, [onViewStateChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -139,24 +159,18 @@ export default function VtpViewer({ artifact, downloadUrl }: RendererProps) {
         renderer.resetCamera();
         renderWindow.render();
 
-        // 2C.1 — bind active camera to the SharedViewStateProvider when
-        // mounted under <SplitRenderer axisLocked>. No-op otherwise.
+        // 2C.1 + 2F — bind active camera to SharedViewStateProvider (axis
+        // lock for SplitRenderer) AND to optional view-state hydration +
+        // debounced persistence (Release-mode reproducibility).
         const camera = renderer.getActiveCamera();
         const lastApplied = { value: null as CameraSnapshot | null };
+        let persistTimer: ReturnType<typeof setTimeout> | null = null;
 
         const snapshotCamera = (): CameraSnapshot => ({
           position: camera.getPosition() as [number, number, number],
           target: camera.getFocalPoint() as [number, number, number],
           up: camera.getViewUp() as [number, number, number],
         });
-
-        const onCamModified = () => {
-          const s = sharedRef.current;
-          if (!s) return;
-          const cur = snapshotCamera();
-          if (lastApplied.value && camerasEqual(cur, lastApplied.value)) return; // echo guard
-          s.publish('camera', cur, instanceIdRef.current);
-        };
 
         const applyIncoming = (incoming: CameraSnapshot) => {
           lastApplied.value = incoming;
@@ -167,8 +181,29 @@ export default function VtpViewer({ artifact, downloadUrl }: RendererProps) {
           renderWindow.render();
         };
 
-        // If a sibling already published, hydrate immediately.
-        if (sharedRef.current?.camera) applyIncoming(sharedRef.current.camera);
+        // Hydration: shared sibling beats persisted view_state.
+        if (sharedRef.current?.camera) {
+          applyIncoming(sharedRef.current.camera);
+        } else if (initialViewStateRef.current?.camera) {
+          applyIncoming(initialViewStateRef.current.camera);
+        }
+
+        const onCamModified = () => {
+          const cur = snapshotCamera();
+          if (lastApplied.value && camerasEqual(cur, lastApplied.value)) return; // echo guard
+          // Axis-lock broadcast (always, even in Release).
+          sharedRef.current?.publish('camera', cur, instanceIdRef.current);
+          // §2F.1 — debounced persistence via onViewStateChange. §2F.2 —
+          // Release mode swallows persistence so the canonical view stays.
+          if (boardModeRef.current !== 'release' && onViewStateChangeRef.current) {
+            if (persistTimer != null) clearTimeout(persistTimer);
+            persistTimer = setTimeout(() => {
+              onViewStateChangeRef.current?.({
+                camera: { position: cur.position, target: cur.target, up: cur.up },
+              });
+            }, 1000);
+          }
+        };
 
         const camSub = camera.onModified(onCamModified);
         let sharedUnsub: (() => void) | null = null;
@@ -178,6 +213,9 @@ export default function VtpViewer({ artifact, downloadUrl }: RendererProps) {
 
         renderWindowRef.current = renderWindow;
         teardownFns = [
+          () => {
+            if (persistTimer != null) clearTimeout(persistTimer);
+          },
           () => camSub.unsubscribe?.(),
           () => sharedUnsub?.(),
           () => interactor.unbindEvents(),
@@ -223,6 +261,15 @@ export default function VtpViewer({ artifact, downloadUrl }: RendererProps) {
         className="h-[360px] w-full overflow-hidden rounded-[8px] bg-[#f5f5f0]"
         aria-label={`VTP viewer for ${artifact.name ?? artifact.id}`}
       />
+      {isReleaseLocked ? (
+        <div
+          className="absolute right-2 top-2 z-10 inline-flex items-center gap-[4px] rounded-md bg-amber-100/95 px-[6px] py-[2px] text-[10px] font-medium text-amber-800 backdrop-blur-sm"
+          title="Release-mode view: camera is canonical; local rotation isn't persisted"
+        >
+          <Lock size={10} />
+          Release-locked
+        </div>
+      ) : null}
       {loading ? (
         <div className="absolute inset-0 flex items-center justify-center bg-[#f5f5f0]/80">
           <span className="font-sans text-[12px] text-[#554433]/70">

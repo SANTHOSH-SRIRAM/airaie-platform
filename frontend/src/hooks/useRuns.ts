@@ -1,6 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchRunList, fetchRunDetail, fetchRunLogs, cancelRun, retryRun, resumeRun, fetchRunArtifacts } from '@api/runs';
+import {
+  fetchRunList,
+  fetchRunDetail,
+  fetchRunLogs,
+  cancelRun,
+  retryRun,
+  resumeRun,
+  updateRunViewState,
+  fetchRunArtifacts,
+} from '@api/runs';
 import type { RetryRunResponse, ResumeRunResponse } from '@api/runs';
+import type { RunViewState } from '@/types/run';
 
 export const runKeys = {
   all: ['runs'] as const,
@@ -64,6 +74,25 @@ export function useRetryRun() {
       if (resp?.run?.id) {
         qc.invalidateQueries({ queryKey: runKeys.detail(resp.run.id) });
       }
+    },
+  });
+}
+
+/**
+ * Persist a run's view-state (camera + scalar range) — Plan 09-02 §2F.1.
+ *
+ * Hits `PATCH /v0/runs/{id}/view-state`. Renderers call this from a 1s
+ * debounce after the user stops interacting. Only allowed on terminal
+ * runs; in-progress writes return 409 VIEW_STATE_NOT_EDITABLE which
+ * surfaces as an inline error here. Invalidates the run detail so the
+ * next fetch sees the updated view_state.
+ */
+export function useUpdateRunViewState() {
+  const qc = useQueryClient();
+  return useMutation<{ status: string }, Error, { runId: string; viewState: RunViewState }>({
+    mutationFn: ({ runId, viewState }) => updateRunViewState(runId, viewState),
+    onSuccess: (_, { runId }) => {
+      qc.invalidateQueries({ queryKey: runKeys.detail(runId) });
     },
   });
 }
